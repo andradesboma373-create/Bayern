@@ -38,9 +38,14 @@ export class RoundEngine {
     
     MapSystem.initializeMap(state.mapId);
     
-    // Give bomb to random T
+    // Give bomb to non-sniper T
     const tPlayers = Object.values(state.players).filter(p => p && state.teams[p.teamId]?.side === 'T');
-    const bombCarrier = tPlayers.length > 0 ? tPlayers[Math.floor(CombatSystem.random() * tPlayers.length)] : null;
+    const nonSniperTs = tPlayers.filter(p => {
+        const r = (p.role || '').toLowerCase();
+        return r !== 'sniper' && r !== 'awper' && r !== 'awp' && r !== 'снайпер';
+    });
+    const candidates = nonSniperTs.length > 0 ? nonSniperTs : tPlayers;
+    const bombCarrier = candidates.length > 0 ? candidates[Math.floor(CombatSystem.random() * candidates.length)] : null;
     state.bomb = {
         state: 'CARRIED',
         position: null,

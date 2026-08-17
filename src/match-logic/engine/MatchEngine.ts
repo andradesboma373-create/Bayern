@@ -77,36 +77,38 @@ export class MatchEngine {
       const skillVal = rating < 10 ? rating * 75 : rating;
       
       let speedBonus = 0;
-      let reactionBonus = 0;
-      let aimBonus = 0;
+      let aim = skillVal;
+      let reaction = skillVal;
+      let iq = skillVal;
       
       const roleLower = role.toLowerCase().trim();
       if (roleLower === 'entry' || roleLower === 'opener' || roleLower === 'энтри' || roleLower === 'открывающий') {
           speedBonus = 0.08; 
-          reactionBonus = 3;
-          aimBonus = 2;
+          reaction = skillVal * 1.10 + 5;
+          aim = skillVal * 1.05 + 4;
       } else if (roleLower === 'sniper' || roleLower === 'awper' || roleLower === 'awp' || roleLower === 'снайпер' || roleLower === 'авапер') {
-          speedBonus = -0.05;
-          reactionBonus = 7;
-          if (typeof process === 'undefined' || process?.env?.NO_SNIPER_BONUS !== 'true') {
-              aimBonus = 12;
-          }
+          speedBonus = -0.04;
+          reaction = skillVal * 1.12 + 6;
+          aim = skillVal * 1.18 + 10;
       } else if (roleLower === 'support' || roleLower === 'саппорт' || roleLower === 'помощник') {
           speedBonus = -0.02;
-          reactionBonus = 0;
-          aimBonus = -1;
+          reaction = skillVal * 0.94;
+          aim = skillVal * 0.90 - 2;
+          iq = skillVal * 1.15;
       } else if (roleLower === 'lurker' || roleLower === 'люркер') {
-          speedBonus = 0.02;
-          reactionBonus = 2;
-          aimBonus = 4;
+          speedBonus = 0.04;
+          reaction = skillVal * 1.06 + 3;
+          aim = skillVal * 1.08 + 4;
       } else if (roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader') {
-          speedBonus = -0.05;
-          reactionBonus = -2;
-          aimBonus = -8;
+          speedBonus = -0.04;
+          reaction = skillVal * 0.85 - 3;
+          aim = skillVal * 0.76 - 8;
+          iq = skillVal * 1.35;
       } else {
           // Default Rifler / стрелок
-          aimBonus = 4;
-          reactionBonus = 1;
+          aim = skillVal * 1.10 + 6;
+          reaction = skillVal * 1.05 + 3;
+          speedBonus = 0.02;
       }
       
       const p: Player = {
@@ -116,10 +118,10 @@ export class MatchEngine {
         side: state.teams[teamId].side,
         role,
         rating,
-        aim: skillVal + aimBonus,
-        iq: skillVal,
+        aim: Math.max(20, aim),
+        iq: Math.max(20, iq),
         movement: skillVal,
-        reaction: skillVal + reactionBonus,
+        reaction: Math.max(20, reaction),
         roleSkill: skillVal,
         hp: 100,
         armor: 0,

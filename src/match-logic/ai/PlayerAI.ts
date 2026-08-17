@@ -152,7 +152,12 @@ export class PlayerAI {
             if (team.strategy === 'EXECUTE_B' || team.strategy === 'FAST_B') targetSite = 'b_site';
             
             const pRoleLower = (p.role || '').toLowerCase();
-            if ((pRoleLower === 'lurker' || pRoleLower === 'люркер') && CombatSystem.random() > 0.5) {
+            const isSniper = pRoleLower === 'sniper' || pRoleLower === 'awper' || pRoleLower === 'awp' || pRoleLower === 'снайпер';
+            const isLurker = pRoleLower === 'lurker' || pRoleLower === 'люркер';
+            
+            if (isSniper && state.tick < 75 && p.currentNodeId !== 'mid') {
+                targetSite = 'mid';
+            } else if (isLurker && CombatSystem.random() > 0.5) {
                 targetSite = targetSite === 'a_site' ? 'b_site' : 'a_site';
             }
             
@@ -187,13 +192,24 @@ export class PlayerAI {
                 p.state = 'HOLDING';
                 p.actionTimer = state.tick + 100;
             } else {
-                const myIdx = team && team.players ? team.players.indexOf(p.id) : 0;
+                const rLower = (p.role || '').toLowerCase();
+                const teamPlayers = team?.players ? team.players.map((id: string) => state.players[id]).filter(Boolean) : [];
+                const myIdx = team?.players ? team.players.indexOf(p.id) : 0;
+                
                 let siteToHold = 'a_site';
-                if (myIdx === 0) siteToHold = 'mid';
-                else if (myIdx === 1) siteToHold = 'b_site';
-                else if (myIdx === 2) siteToHold = 'a_site';
-                else if (myIdx === 3) siteToHold = 'b_site';
-                else if (myIdx === 4) siteToHold = 'a_site';
+                if (rLower === 'sniper' || rLower === 'awper' || rLower === 'awp' || rLower === 'снайпер') {
+                    siteToHold = 'mid';
+                } else if (rLower === 'entry' || rLower === 'opener' || rLower === 'энтри') {
+                    siteToHold = myIdx % 2 === 0 ? 'a_site' : 'b_site';
+                } else if (rLower === 'lurker' || rLower === 'люркер') {
+                    siteToHold = 'b_site';
+                } else if (rLower === 'support' || rLower === 'саппорт') {
+                    siteToHold = myIdx % 2 === 0 ? 'b_site' : 'a_site';
+                } else if (rLower === 'igl' || rLower === 'captain' || rLower === 'капитан') {
+                    siteToHold = 'a_site';
+                } else {
+                    siteToHold = (myIdx === 0 || myIdx === 2 || myIdx === 4) ? 'a_site' : 'b_site';
+                }
                 
                 this.routeTo(p, siteToHold);
             }
