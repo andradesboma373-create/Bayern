@@ -5,6 +5,11 @@ import { MapSystem } from './MapSystem';
 export class CombatSystem {
   static update(state: MatchState) {
     const alivePlayers = Object.values(state.players).filter(p => p.alive);
+    // Shuffle deterministically so no team or player slot has unfair first-action advantage in ticks
+    for (let i = alivePlayers.length - 1; i > 0; i--) {
+        const j = Math.floor(this.random() * (i + 1));
+        [alivePlayers[i], alivePlayers[j]] = [alivePlayers[j], alivePlayers[i]];
+    }
     
     for (const p of alivePlayers) {
       if (!p.alive) continue; // Fix: player might have been killed earlier in the same tick
@@ -53,17 +58,25 @@ export class CombatSystem {
     shooter.statistics.shots++;
     const dist = MapSystem.getDistance(MapSystem.getNode(shooter.currentNodeId), MapSystem.getNode(target.currentNodeId));
     
-    let hitChance = 0.12 + (0.78 * (shooter.aim / 100) * (shooter.aimProgress || 0.5));
+    // Normalize aim and reaction into 0-100 scale
+    const normAim = Math.min(95, Math.max(20, shooter.aim));
+    const aimFactor = normAim / 100;
+    const progress = Math.min(1.0, Math.max(0.2, shooter.aimProgress || 0.5));
+    
+    let hitChance = 0.15 + 0.65 * aimFactor * progress;
     if (weapon.type === 'SNIPER') {
-        hitChance = 0.25 + (0.72 * (shooter.aim / 100) * Math.max(0.6, shooter.aimProgress || 0.5));
+        hitChance = 0.30 + 0.55 * aimFactor * Math.max(0.5, progress);
     }
     hitChance *= (weapon.accuracy / 100);
-    hitChance *= Math.max(0.2, 1 - (dist / (weapon.range * 1.2))); 
+    hitChance *= Math.max(0.3, 1 - (dist / (weapon.range * 1.5))); 
     
     if (shooter.state === 'MOVING') {
-        hitChance *= weapon.type === 'SNIPER' ? 0.05 : 0.25;
+        hitChance *= weapon.type === 'SNIPER' ? 0.15 : 0.40;
     }
-    if (target.state === 'MOVING') hitChance *= 0.85; 
+    if (target.state === 'MOVING') hitChance *= 0.85;
+    
+    // Cap hit chance to realistic CS2 limits
+    hitChance = Math.min(0.88, Math.max(0.08, hitChance)); 
     
     const roll = this.random();
     this.createSoundEvent(state, shooter.currentNodeId, shooter.id);

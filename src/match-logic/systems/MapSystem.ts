@@ -42,7 +42,7 @@ export class MapSystem {
   }
 
   static getSpawns(side: 'CT' | 'T'): string[] {
-    return side === 'CT' ? ['ct_spawn', 'a_site', 'b_site'] : ['t_spawn', 't_ramp', 'mid_t_entrance', 'b_apps_entrance'];
+    return side === 'CT' ? ['ct_spawn'] : ['t_spawn'];
   }
   
   static getSiteNodes(site: 'A' | 'B'): string[] {
