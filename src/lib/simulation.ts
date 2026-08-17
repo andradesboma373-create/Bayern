@@ -64,21 +64,21 @@ export function getSubclassObj(roleId: string, subclassId?: string): RoleSubclas
 }
 
 export const DEFAULT_ROLES_S2 = [
-    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.20, skillMultiplier: 1.15, impact: 1.20, deathMultiplier: 0.95, assistMultiplier: 1.0 },
-    { id: 'sniper', name: 'Снайпер', killMultiplier: 1.35, skillMultiplier: 1.25, impact: 1.40, deathMultiplier: 0.82, assistMultiplier: 0.7 },
-    { id: 'lurker', name: 'Люркер', killMultiplier: 1.15, skillMultiplier: 1.10, impact: 1.15, deathMultiplier: 0.88, assistMultiplier: 0.9 },
-    { id: 'opener', name: 'Опенер', killMultiplier: 1.25, skillMultiplier: 1.15, impact: 1.32, deathMultiplier: 1.12, assistMultiplier: 1.05 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 0.92, skillMultiplier: 0.98, impact: 0.95, deathMultiplier: 0.95, assistMultiplier: 1.45 },
-    { id: 'captain', name: 'Капитан', killMultiplier: 0.80, skillMultiplier: 0.90, impact: 0.90, deathMultiplier: 1.05, assistMultiplier: 1.40 }
+    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.15, skillMultiplier: 1.10, impact: 1.15, deathMultiplier: 0.95, assistMultiplier: 1.0 },
+    { id: 'sniper', name: 'Снайпер', killMultiplier: 1.25, skillMultiplier: 1.20, impact: 1.30, deathMultiplier: 0.85, assistMultiplier: 0.75 },
+    { id: 'lurker', name: 'Люркер', killMultiplier: 1.15, skillMultiplier: 1.12, impact: 1.15, deathMultiplier: 0.90, assistMultiplier: 0.95 },
+    { id: 'opener', name: 'Опенер', killMultiplier: 1.20, skillMultiplier: 1.12, impact: 1.30, deathMultiplier: 1.10, assistMultiplier: 1.05 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 1.05, skillMultiplier: 1.05, impact: 1.05, deathMultiplier: 0.95, assistMultiplier: 1.25 },
+    { id: 'captain', name: 'Капитан', killMultiplier: 0.88, skillMultiplier: 0.94, impact: 0.95, deathMultiplier: 1.02, assistMultiplier: 1.25 }
 ];
 
 export const DEFAULT_ROLES_CS2 = [
-    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.20, skillMultiplier: 1.15, impact: 1.20, deathMultiplier: 0.95, assistMultiplier: 1.0 },
-    { id: 'sniper', name: 'AWPer', killMultiplier: 1.35, skillMultiplier: 1.25, impact: 1.40, deathMultiplier: 0.82, assistMultiplier: 0.7 },
-    { id: 'lurker', name: 'Люркер', killMultiplier: 1.15, skillMultiplier: 1.10, impact: 1.15, deathMultiplier: 0.88, assistMultiplier: 0.9 },
-    { id: 'opener', name: 'Entry', killMultiplier: 1.25, skillMultiplier: 1.15, impact: 1.32, deathMultiplier: 1.12, assistMultiplier: 1.05 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 0.92, skillMultiplier: 0.98, impact: 0.95, deathMultiplier: 0.95, assistMultiplier: 1.45 },
-    { id: 'captain', name: 'IGL', killMultiplier: 0.80, skillMultiplier: 0.90, impact: 0.90, deathMultiplier: 1.05, assistMultiplier: 1.40 }
+    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.15, skillMultiplier: 1.10, impact: 1.15, deathMultiplier: 0.95, assistMultiplier: 1.0 },
+    { id: 'sniper', name: 'AWPer', killMultiplier: 1.25, skillMultiplier: 1.20, impact: 1.30, deathMultiplier: 0.85, assistMultiplier: 0.75 },
+    { id: 'lurker', name: 'Люркер', killMultiplier: 1.15, skillMultiplier: 1.12, impact: 1.15, deathMultiplier: 0.90, assistMultiplier: 0.95 },
+    { id: 'opener', name: 'Entry', killMultiplier: 1.20, skillMultiplier: 1.12, impact: 1.30, deathMultiplier: 1.10, assistMultiplier: 1.05 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 1.05, skillMultiplier: 1.05, impact: 1.05, deathMultiplier: 0.95, assistMultiplier: 1.25 },
+    { id: 'captain', name: 'IGL', killMultiplier: 0.88, skillMultiplier: 0.94, impact: 0.95, deathMultiplier: 1.02, assistMultiplier: 1.25 }
 ];
 
 export const MAP_POOL_CS2 = [

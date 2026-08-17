@@ -4,16 +4,16 @@ export class BombSystem {
   static update(state: MatchState) {
     if (state.bomb.state === 'PLANTING') {
        if (state.tick >= state.bomb.timer) {
+           const planter = Object.values(state.players).find(p => p.state === 'PLANTING');
            state.bomb.state = 'PLANTED';
            state.bomb.explosionTimer = state.tick + 350; // 35 seconds
            state.bomb.carrierId = null;
-           state.events.push({ type: 'BOMB_PLANTED', tick: state.tick, data: { nodeId: state.bomb.nodeId } });
-           
-           const planter = Object.values(state.players).find(p => p.state === 'PLANTING');
            if (planter) {
+               state.bomb.nodeId = planter.currentNodeId;
                planter.state = 'IDLE';
                planter.statistics.plants++;
            }
+           state.events.push({ type: 'BOMB_PLANTED', tick: state.tick, data: { nodeId: state.bomb.nodeId } });
        } else {
            const planter = Object.values(state.players).find(p => p.state === 'PLANTING');
            if (!planter || !planter.alive) {

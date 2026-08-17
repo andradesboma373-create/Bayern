@@ -123,8 +123,11 @@ export class EconomySystem {
         }
         
         if (type === 'FULL_BUY' && budget >= 600) {
-            p.grenades = ['smoke', 'flash', 'molotov'];
+            p.grenades = ['smoke', 'flash', 'he', 'molotov'];
             budget -= Math.min(budget, 600);
+        } else if ((type === 'FORCE_BUY' || type === 'HALF_BUY') && budget >= 300) {
+            p.grenades = ['he', 'flash'];
+            budget -= 300;
         }
         
         p.money = budget;

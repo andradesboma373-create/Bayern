@@ -77,18 +77,39 @@ export class PlayerAI {
        }
     }
     
-    if (p.state === 'PLANTING' || p.state === 'DEFUSING') return;
+    // If planting or defusing
+    if (p.state === 'PLANTING') {
+        // If an enemy enters direct line of sight within close range and shoots, abort plant to fight
+        for (const [enemyId, mem] of p.knownEnemies.entries()) {
+            if (mem.confidence > 0.8) {
+                const enemy = state.players[enemyId];
+                if (enemy && enemy.alive && MapSystem.hasLineOfSight(p.currentNodeId, enemy.currentNodeId)) {
+                    p.state = 'IDLE';
+                    state.bomb.state = 'CARRIED';
+                    break;
+                }
+            }
+        }
+        if (p.state === 'PLANTING') return;
+    }
+    if (p.state === 'DEFUSING') return;
 
     // Check for direct combat targets with high confidence in line of sight
     let bestEnemyId: string | null = null;
     let minScore = Infinity;
+    const isSupport = (p.role || '').toLowerCase().includes('support') || (p.role || '').toLowerCase().includes('саппорт');
+
     for (const [enemyId, mem] of p.knownEnemies.entries()) {
-       if (mem.confidence > 0.7) {
+       if (mem.confidence > 0.6) {
           const enemy = state.players[enemyId];
           if (enemy && enemy.alive && MapSystem.hasLineOfSight(p.currentNodeId, enemy.currentNodeId)) {
-              const dist = MapSystem.getDistance(MapSystem.getNode(p.currentNodeId), MapSystem.getNode(enemy.currentNodeId));
-              if (dist < minScore) {
-                  minScore = dist;
+              let score = MapSystem.getDistance(MapSystem.getNode(p.currentNodeId), MapSystem.getNode(enemy.currentNodeId));
+              // Priority 1: Trade / Refrag bonus - if this enemy is currently fighting a teammate, immediately focus them!
+              if (enemy.targetEnemyId && state.players[enemy.targetEnemyId]?.teamId === p.teamId) {
+                  score -= isSupport ? 300 : 150;
+              }
+              if (score < minScore) {
+                  minScore = score;
                   bestEnemyId = enemyId;
               }
           }
@@ -100,26 +121,34 @@ export class PlayerAI {
        const pRole = (p.role || '').toLowerCase();
        const isEntry = pRole.includes('entry') || pRole.includes('opener') || pRole.includes('энтри');
        const isLurker = pRole.includes('lurker') || pRole.includes('люркер');
+       const isSniper = pRole.includes('sniper') || pRole.includes('awp') || pRole.includes('снайпер');
        
        p.state = 'ENGAGING';
        p.targetEnemyId = bestEnemyId;
        p.path = [];
        p.targetNodeId = null;
        
-       // Pre-aim & crosshair placement: Entry & holding defenders have instant high aim readiness
+       // Pre-aim & crosshair placement
        if (wasHolding) {
-           p.aimProgress = 0.85;
+           p.aimProgress = 0.90;
        } else if (isEntry) {
-           p.aimProgress = 0.75; // Pro entry pre-aims common angles
+           p.aimProgress = 0.85; // Pro entry pre-aims common angles
        } else if (isLurker) {
-           p.aimProgress = 0.70;
+           p.aimProgress = 0.85; // Lurker crosshair placement
+       } else if (isSupport) {
+           p.aimProgress = 0.85; // Support refragger instant trade aim
+       } else if (isSniper) {
+           p.aimProgress = 0.88;
        } else {
-           p.aimProgress = 0.50;
+           p.aimProgress = 0.82;
        }
        
-       let delay = 2.0 - (p.reaction / 100);
-       if (wasHolding) delay -= 0.5;
-       if (isEntry) delay -= 0.4; // Peeker's advantage
+       let delay = 1.7 - (p.reaction / 100);
+       if (wasHolding) delay -= 0.45;
+       if (isEntry) delay -= 0.35; // Peeker's advantage
+       if (isLurker) delay -= 0.35; // Lurker trigger readiness
+       if (isSupport) delay -= 0.35; // Support trade timing
+       if (isSniper) delay -= 0.40;
        
        p.reactionTimer = state.tick + Math.max(1, delay); 
        return;
@@ -153,17 +182,18 @@ export class PlayerAI {
   static checkRotationTrigger(state: MatchState, p: Player, team: any): boolean {
     if (p.side === 'CT') {
       if (team.strategy === 'RETAKE') return true;
-      // If enemies spotted on a known site that is different from current node
+      if (state.bomb.state === 'PLANTED' || state.bomb.state === 'PLANTING') return true;
+      
       let knownEnemiesOnA = 0;
       let knownEnemiesOnB = 0;
       for (const [, mem] of p.knownEnemies.entries()) {
-        if (mem.confidence > 0.6) {
-          if (mem.nodeId === 'a_site' || mem.nodeId === 'a_main' || mem.nodeId === 't_ramp') knownEnemiesOnA++;
-          if (mem.nodeId === 'b_site' || mem.nodeId === 'b_apps' || mem.nodeId === 'b_apps_entrance') knownEnemiesOnB++;
+        if (mem.confidence > 0.5) {
+          if (mem.nodeId === 'a_site' || mem.nodeId === 'a_main' || mem.nodeId === 't_ramp' || mem.nodeId === 'connector') knownEnemiesOnA++;
+          if (mem.nodeId === 'b_site' || mem.nodeId === 'b_apps' || mem.nodeId === 'b_apps_entrance' || mem.nodeId === 'short') knownEnemiesOnB++;
         }
       }
-      if (knownEnemiesOnA >= 2 && (p.currentNodeId === 'b_site' || p.currentNodeId === 'short')) return true;
-      if (knownEnemiesOnB >= 2 && (p.currentNodeId === 'a_site' || p.currentNodeId === 'connector')) return true;
+      if (knownEnemiesOnA >= 1 && (p.currentNodeId === 'b_site' || p.currentNodeId === 'short')) return true;
+      if (knownEnemiesOnB >= 1 && (p.currentNodeId === 'a_site' || p.currentNodeId === 'connector' || p.currentNodeId === 'jungle')) return true;
     }
     return false;
   }
@@ -184,12 +214,28 @@ export class PlayerAI {
      if (p.side === 'T') {
         // Bomb carrier logic
         if (state.bomb.state === 'CARRIED' && state.bomb.carrierId === p.id) {
-            let targetSite = (team.strategy === 'EXECUTE_B' || team.strategy === 'FAST_B') ? 'b_site' : 'a_site';
+            let targetSite = (team.strategy === 'EXECUTE_B' || team.strategy === 'FAST_B' || team.strategy === 'MID_SPLIT_B') ? 'b_site' : 'a_site';
             
             if (p.currentNodeId === targetSite) {
-                p.state = 'PLANTING';
-                state.bomb.state = 'PLANTING';
-                state.bomb.timer = state.tick + 35; 
+                let siteHasEnemies = false;
+                for (const [enemyId, mem] of p.knownEnemies.entries()) {
+                    if (mem.confidence > 0.6) {
+                        const enemy = state.players[enemyId];
+                        if (enemy && enemy.alive && MapSystem.hasLineOfSight(p.currentNodeId, enemy.currentNodeId)) {
+                            siteHasEnemies = true;
+                            break;
+                        }
+                    }
+                }
+                if (!siteHasEnemies) {
+                    p.state = 'PLANTING';
+                    state.bomb.state = 'PLANTING';
+                    state.bomb.nodeId = targetSite;
+                    state.bomb.timer = state.tick + 35; 
+                } else {
+                    p.state = 'HOLDING';
+                    p.actionTimer = state.tick + 10;
+                }
             } else {
                 this.routeTo(p, targetSite);
             }
@@ -226,36 +272,42 @@ export class PlayerAI {
         }
 
         // Main T attack tactics
-        if (isLurker) {
-            // Intelligent Lurker AI:
-            // Early phase (tick < 70): Hold opposite flank or mid entrance to catch aggressive CT pushes
-            // Mid phase (tick >= 70): Flank CT through mid/connector/jungle to catch CT rotators in back!
-            if (state.tick < 70) {
-                const lurkHoldNode = (team.strategy === 'EXECUTE_B' || team.strategy === 'MID_SPLIT_B' || team.strategy === 'FAST_B') ? 'a_main' : 'b_apps';
-                if (p.currentNodeId === lurkHoldNode) {
-                    p.state = 'HOLDING';
-                    p.actionTimer = state.tick + 40;
-                } else {
-                    this.routeTo(p, lurkHoldNode);
-                }
-            } else {
-                const flankTarget = (team.strategy === 'EXECUTE_B' || team.strategy === 'MID_SPLIT_B' || team.strategy === 'FAST_B') ? 'short' : 'jungle';
-                if (p.currentNodeId === flankTarget || p.currentNodeId === 'a_site' || p.currentNodeId === 'b_site') {
+        const shouldLurkThisRound = (state.round % 2 !== 0) && team.strategy !== 'FAST_A' && team.strategy !== 'FAST_B';
+        const anyTeammateFightingOrDead = teamPlayers.some((mate: Player) => mate.id !== p.id && (!mate.alive || mate.state === 'ENGAGING'));
+        const bombIsPlantedOrPlanting = state.bomb.state === 'PLANTED' || state.bomb.state === 'PLANTING';
+
+        if (isLurker && shouldLurkThisRound) {
+            // Tactical Lurker AI:
+            // 1. If fighting has begun on the map, bomb is planted, or mid-round reached (tick >= 45),
+            // the lurker immediately pushes forward through the flank / connector / jungle / short to pinch CTs!
+            if (anyTeammateFightingOrDead || bombIsPlantedOrPlanting || state.tick >= 45) {
+                const flankTarget = (team.strategy === 'EXECUTE_B' || team.strategy === 'MID_SPLIT_B') ? 'b_site' : 'a_site';
+                if (p.currentNodeId === flankTarget) {
                     p.state = 'HOLDING';
                     p.actionTimer = state.tick + 40;
                 } else {
                     this.routeTo(p, flankTarget);
                 }
+                return;
+            } else {
+                // Early phase (tick < 45): control opposite flank or mid entrance to catch aggressive CT pushes
+                const lurkHoldNode = (team.strategy === 'EXECUTE_B' || team.strategy === 'MID_SPLIT_B') ? 'a_main' : 'b_apps';
+                if (p.currentNodeId === lurkHoldNode) {
+                    p.state = 'HOLDING';
+                    p.actionTimer = state.tick + 25;
+                } else {
+                    this.routeTo(p, lurkHoldNode);
+                }
+                return;
             }
-            return;
         }
 
         if (isSniper) {
             // Sniper controls mid first, or supports site push from range
-            if (state.tick < 80) {
+            if (state.tick < 65) {
                 if (p.currentNodeId === 'mid') {
                     p.state = 'HOLDING';
-                    p.actionTimer = state.tick + 50;
+                    p.actionTimer = state.tick + 40;
                 } else {
                     this.routeTo(p, 'mid');
                 }
@@ -272,7 +324,7 @@ export class PlayerAI {
         }
 
         if (team.strategy === 'MID_SPLIT_A') {
-            if (isEntry || pRoleLower.includes('support') || pRoleLower.includes('саппорт')) {
+            if (isEntry || pRoleLower.includes('support') || pRoleLower.includes('саппорт') || isLurker) {
                 const targetSite = p.currentNodeId === 'connector' ? 'a_site' : (p.currentNodeId === 'mid' ? 'connector' : 'mid');
                 if (p.currentNodeId === 'a_site') {
                     p.state = 'HOLDING';
@@ -292,7 +344,7 @@ export class PlayerAI {
         }
 
         if (team.strategy === 'MID_SPLIT_B') {
-            if (isEntry || pRoleLower.includes('support') || pRoleLower.includes('саппорт')) {
+            if (isEntry || pRoleLower.includes('support') || pRoleLower.includes('саппорт') || isLurker) {
                 const targetSite = p.currentNodeId === 'short' ? 'b_site' : (p.currentNodeId === 'mid' ? 'short' : 'mid');
                 if (p.currentNodeId === 'b_site') {
                     p.state = 'HOLDING';
@@ -347,45 +399,39 @@ export class PlayerAI {
         let enemiesOnB = 0;
         for (const [, mem] of p.knownEnemies.entries()) {
             if (mem.confidence > 0.5) {
-                if (mem.nodeId === 'a_site' || mem.nodeId === 'a_main' || mem.nodeId === 't_ramp') enemiesOnA++;
-                if (mem.nodeId === 'b_site' || mem.nodeId === 'b_apps' || mem.nodeId === 'b_apps_entrance') enemiesOnB++;
+                if (mem.nodeId === 'a_site' || mem.nodeId === 'a_main' || mem.nodeId === 't_ramp' || mem.nodeId === 'connector') enemiesOnA++;
+                if (mem.nodeId === 'b_site' || mem.nodeId === 'b_apps' || mem.nodeId === 'b_apps_entrance' || mem.nodeId === 'short') enemiesOnB++;
             }
         }
 
-        // Rotate CT if enemy pressure on opposite site
-        if (enemiesOnA >= 1 && p.currentNodeId === 'window') {
-            this.routeTo(p, 'jungle');
-            return;
-        }
-        if (enemiesOnB >= 1 && p.currentNodeId === 'window') {
-            this.routeTo(p, 'short');
-            return;
-        }
-        if (enemiesOnA >= 2 && p.currentNodeId !== 'a_site' && p.currentNodeId !== 'jungle' && p.currentNodeId !== 'connector') {
+        // Fast CT Rotation if pressure is spotted
+        if (enemiesOnA >= 1 && (p.currentNodeId === 'b_site' || p.currentNodeId === 'short' || p.currentNodeId === 'window' || p.currentNodeId === 'jungle' || p.currentNodeId === 'connector')) {
             this.routeTo(p, 'a_site');
             return;
         }
-        if (enemiesOnB >= 2 && p.currentNodeId !== 'b_site' && p.currentNodeId !== 'short') {
+        if (enemiesOnB >= 1 && (p.currentNodeId === 'a_site' || p.currentNodeId === 'jungle' || p.currentNodeId === 'connector' || p.currentNodeId === 'window' || p.currentNodeId === 'short')) {
             this.routeTo(p, 'b_site');
             return;
         }
 
-        // Default CT Defense positions
+        // Default CT Defense positions (Balanced 2 A, 1 Mid, 2 B)
         if (p.currentNodeId === 'a_site' || p.currentNodeId === 'b_site' || p.currentNodeId === 'window' || p.currentNodeId === 'jungle' || p.currentNodeId === 'connector' || p.currentNodeId === 'short') {
             p.state = 'HOLDING';
             p.actionTimer = state.tick + 40;
         } else {
             let siteToHold = 'a_site';
             if (isSniper) {
-                siteToHold = 'window';
-            } else if (isEntry) {
-                siteToHold = 'short';
+                siteToHold = 'window'; // Mid sniper
             } else if (isLurker) {
-                siteToHold = 'b_site';
+                siteToHold = 'b_site'; // B anchor
+            } else if (isEntry) {
+                siteToHold = 'a_site'; // A anchor
+            } else if (pRoleLower.includes('support') || pRoleLower.includes('саппорт')) {
+                siteToHold = 'jungle'; // A support crossfire
             } else if (isIGL) {
-                siteToHold = 'connector';
+                siteToHold = 'connector'; // Mid / A rotator
             } else {
-                siteToHold = myIdx % 2 === 0 ? 'a_site' : 'jungle';
+                siteToHold = (myIdx % 2 === 0) ? 'short' : 'a_site';
             }
             
             this.routeTo(p, siteToHold);

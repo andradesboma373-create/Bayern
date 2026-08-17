@@ -93,15 +93,18 @@ export class CombatSystem {
     
     if (!target.damageTaken) target.damageTaken = new Map();
     
-    // Simulate utility damage before first bullet engagement
-    if (!target.damageTaken.has(shooter.id) && this.random() < 0.4) {
-        const nadeDamage = Math.floor(15 + this.random() * 25);
-        const actualNade = Math.min(target.hp - 1, nadeDamage);
-        if (actualNade > 0) {
-            target.hp -= actualNade;
-            shooter.statistics.damage += actualNade;
-            shooter.statistics.utilityDamage = (shooter.statistics.utilityDamage || 0) + actualNade;
-            target.damageTaken.set(shooter.id, actualNade);
+    // Realistic utility: if shooter carries an HE grenade, use it on first clash in contested node
+    if (shooter.grenades && shooter.grenades.includes('he') && !target.damageTaken.has(shooter.id)) {
+        shooter.grenades = shooter.grenades.filter(g => g !== 'he');
+        if (this.random() < 0.35) {
+            const nadeDamage = Math.floor(10 + this.random() * 18);
+            const actualNade = Math.min(target.hp - 1, nadeDamage);
+            if (actualNade > 0) {
+                target.hp -= actualNade;
+                shooter.statistics.damage += actualNade;
+                shooter.statistics.utilityDamage = (shooter.statistics.utilityDamage || 0) + actualNade;
+                target.damageTaken.set(shooter.id, (target.damageTaken.get(shooter.id) || 0) + actualNade);
+            }
         }
     }
     

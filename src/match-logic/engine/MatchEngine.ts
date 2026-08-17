@@ -86,31 +86,31 @@ export class MatchEngine {
           speedBonus = 0.04; 
           reaction = skillVal * 1.05 + 2;
           aim = skillVal * 1.04 + 2;
-          iq = skillVal * 0.98;
+          iq = skillVal * 0.99;
       } else if (roleLower === 'sniper' || roleLower === 'awper' || roleLower === 'awp' || roleLower === 'снайпер' || roleLower === 'авапер') {
-          speedBonus = -0.02;
+          speedBonus = -0.01;
           reaction = skillVal * 1.05 + 2;
           aim = skillVal * 1.06 + 3;
           iq = skillVal * 1.02;
       } else if (roleLower === 'support' || roleLower === 'саппорт' || roleLower === 'помощник') {
+          speedBonus = 0.01;
+          reaction = skillVal * 1.01;
+          aim = skillVal * 1.01;
+          iq = skillVal * 1.05;
+      } else if (roleLower === 'lurker' || roleLower === 'люркер') {
+          speedBonus = 0.03;
+          reaction = skillVal * 1.04 + 2;
+          aim = skillVal * 1.04 + 2;
+          iq = skillVal * 1.05;
+      } else if (roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader') {
           speedBonus = -0.01;
           reaction = skillVal * 0.98;
           aim = skillVal * 0.98;
-          iq = skillVal * 1.06;
-      } else if (roleLower === 'lurker' || roleLower === 'люркер') {
-          speedBonus = 0.02;
-          reaction = skillVal * 1.03 + 1;
-          aim = skillVal * 1.03 + 1;
-          iq = skillVal * 1.04;
-      } else if (roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader') {
-          speedBonus = -0.02;
-          reaction = skillVal * 0.96;
-          aim = skillVal * 0.96;
-          iq = skillVal * 1.12;
+          iq = skillVal * 1.10;
       } else {
           // Default Rifler / стрелок
-          aim = skillVal * 1.01;
-          reaction = skillVal * 1.01;
+          aim = skillVal * 1.02;
+          reaction = skillVal * 1.02;
           iq = skillVal * 1.00;
           speedBonus = 0.01;
       }
