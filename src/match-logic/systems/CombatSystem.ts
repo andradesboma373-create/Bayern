@@ -53,12 +53,17 @@ export class CombatSystem {
     shooter.statistics.shots++;
     const dist = MapSystem.getDistance(MapSystem.getNode(shooter.currentNodeId), MapSystem.getNode(target.currentNodeId));
     
-    let hitChance = 0.1 + (0.75 * (shooter.aim / 100) * shooter.aimProgress);
+    let hitChance = 0.12 + (0.78 * (shooter.aim / 100) * (shooter.aimProgress || 0.5));
+    if (weapon.type === 'SNIPER') {
+        hitChance = 0.25 + (0.72 * (shooter.aim / 100) * Math.max(0.6, shooter.aimProgress || 0.5));
+    }
     hitChance *= (weapon.accuracy / 100);
-    hitChance *= Math.max(0.1, 1 - (dist / weapon.range)); 
+    hitChance *= Math.max(0.2, 1 - (dist / (weapon.range * 1.2))); 
     
-    if (shooter.state === 'MOVING') hitChance *= 0.2;
-    if (target.state === 'MOVING') hitChance *= 0.8; 
+    if (shooter.state === 'MOVING') {
+        hitChance *= weapon.type === 'SNIPER' ? 0.05 : 0.25;
+    }
+    if (target.state === 'MOVING') hitChance *= 0.85; 
     
     const roll = this.random();
     this.createSoundEvent(state, shooter.currentNodeId, shooter.id);

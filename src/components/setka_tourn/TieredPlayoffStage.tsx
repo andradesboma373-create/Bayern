@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Tournament, Match, Team } from './types';
 import TeamLogo from '../TeamLogo';
-import { advanceTieredPlayoffMatch } from './gslLogic';
+import { advanceTieredPlayoffMatch, getGslGroupStandings } from './gslLogic';
 import { Trophy, Award, Shield } from 'lucide-react';
 import { getBoxStyle } from './boxStyles';
 
@@ -19,8 +19,38 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
   const boxCls = getBoxStyle(settings.boxStyle || 'dark', settings.cardThemeColor, settings.btnStyle);
   const accentColor = settings.cardThemeColor || '#ff8f00';
 
+  // Extract only teams that actually advanced/qualified to this tiered playoff stage
+  const eligiblePlayoffTeams = useMemo(() => {
+    const map = new Map<string, Team>();
+
+    // 1. Teams advancing from GSL Group stage (1st, 2nd, 3rd, 4th place)
+    if (tournament.gslGroups && tournament.gslGroups.length > 0) {
+      tournament.gslGroups.forEach(g => {
+        const st = getGslGroupStandings(g);
+        if (st.first && st.first.id !== 'BYE') map.set(st.first.id, st.first);
+        if (st.second && st.second.id !== 'BYE') map.set(st.second.id, st.second);
+        if (st.third && st.third.id !== 'BYE') map.set(st.third.id, st.third);
+        if (st.fourth && st.fourth.id !== 'BYE') map.set(st.fourth.id, st.fourth);
+      });
+    }
+
+    // 2. Teams present in any match across all tiered playoff rounds
+    (tournament.tieredBracketRounds || []).forEach(round => {
+      round.forEach(m => {
+        if (m.team1 && m.team1.id !== 'BYE') map.set(m.team1.id, m.team1);
+        if (m.team2 && m.team2.id !== 'BYE') map.set(m.team2.id, m.team2);
+      });
+    });
+
+    // Fallback: If no group stage or bracket matches populated yet, use full tournament teams
+    if (map.size === 0) {
+      return tournament.teams || [];
+    }
+    return Array.from(map.values());
+  }, [tournament.gslGroups, tournament.tieredBracketRounds, tournament.teams]);
+
   const handleSwapTeam = (rIdx: number, mIdx: number, teamNum: 1 | 2, teamId: string) => {
-    let team = tournament.teams.find(t => t.id === teamId) || null;
+    let team = eligiblePlayoffTeams.find(t => t.id === teamId) || tournament.teams.find(t => t.id === teamId) || null;
     if (teamId === 'BYE') team = { id: 'BYE', name: 'BYE' };
 
     const newRounds = JSON.parse(JSON.stringify(rounds)) as Match[][];
@@ -157,7 +187,7 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
                                 >
                                   <option value="">TBD</option>
                                   <option value="BYE" className="text-emerald-400">BYE</option>
-                                  {tournament.teams.map(t => (
+                                  {eligiblePlayoffTeams.map(t => (
                                     <option key={t.id} value={t.id}>{t.name}</option>
                                   ))}
                                 </select>
@@ -205,7 +235,7 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
                                 >
                                   <option value="">TBD</option>
                                   <option value="BYE" className="text-emerald-400">BYE</option>
-                                  {tournament.teams.map(t => (
+                                  {eligiblePlayoffTeams.map(t => (
                                     <option key={t.id} value={t.id}>{t.name}</option>
                                   ))}
                                 </select>

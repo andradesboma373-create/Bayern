@@ -83,10 +83,10 @@ export class PlayerAI {
        p.targetEnemyId = bestEnemyId;
        p.path = [];
        p.targetNodeId = null;
-       p.aimProgress = 0; 
+       p.aimProgress = wasHolding ? 0.85 : 0.2; 
        
        let delay = 3.0 - (p.reaction / 100);
-       if (wasHolding) delay -= 0.5;
+       if (wasHolding) delay -= 0.8;
        
        p.reactionTimer = state.tick + Math.max(1, delay); 
        return;
@@ -151,7 +151,8 @@ export class PlayerAI {
             let targetSite = 'a_site';
             if (team.strategy === 'EXECUTE_B' || team.strategy === 'FAST_B') targetSite = 'b_site';
             
-            if (p.role === 'Lurker' && CombatSystem.random() > 0.5) {
+            const pRoleLower = (p.role || '').toLowerCase();
+            if ((pRoleLower === 'lurker' || pRoleLower === 'люркер') && CombatSystem.random() > 0.5) {
                 targetSite = targetSite === 'a_site' ? 'b_site' : 'a_site';
             }
             

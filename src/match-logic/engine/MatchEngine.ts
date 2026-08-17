@@ -80,22 +80,33 @@ export class MatchEngine {
       let reactionBonus = 0;
       let aimBonus = 0;
       
-      const roleLower = role.toLowerCase();
-      if (roleLower === 'entry') {
-          speedBonus = 0.05; 
-          reactionBonus = 1;
-          aimBonus = -2;
-      } else if (roleLower === 'sniper') {
-          speedBonus = -0.1;
-          reactionBonus = 5;
-          if (typeof process === 'undefined' || process?.env?.NO_SNIPER_BONUS !== 'true') {
-              aimBonus = 10;
-          }
-      } else if (roleLower === 'support') {
+      const roleLower = role.toLowerCase().trim();
+      if (roleLower === 'entry' || roleLower === 'opener' || roleLower === 'энтри' || roleLower === 'открывающий') {
+          speedBonus = 0.08; 
+          reactionBonus = 3;
+          aimBonus = 2;
+      } else if (roleLower === 'sniper' || roleLower === 'awper' || roleLower === 'awp' || roleLower === 'снайпер' || roleLower === 'авапер') {
           speedBonus = -0.05;
-      } else if (roleLower === 'igl' || roleLower === 'captain') {
-          speedBonus = -0.15;
-          aimBonus = -5;
+          reactionBonus = 7;
+          if (typeof process === 'undefined' || process?.env?.NO_SNIPER_BONUS !== 'true') {
+              aimBonus = 12;
+          }
+      } else if (roleLower === 'support' || roleLower === 'саппорт' || roleLower === 'помощник') {
+          speedBonus = -0.02;
+          reactionBonus = 0;
+          aimBonus = -1;
+      } else if (roleLower === 'lurker' || roleLower === 'люркер') {
+          speedBonus = 0.02;
+          reactionBonus = 2;
+          aimBonus = 4;
+      } else if (roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader') {
+          speedBonus = -0.05;
+          reactionBonus = -2;
+          aimBonus = -8;
+      } else {
+          // Default Rifler / стрелок
+          aimBonus = 4;
+          reactionBonus = 1;
       }
       
       const p: Player = {

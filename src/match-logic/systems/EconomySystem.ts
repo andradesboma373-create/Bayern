@@ -124,7 +124,8 @@ export class EconomySystem {
     if (buyType === 'ECO') return side === 'T' ? 'glock' : 'usp';
     if (buyType === 'FORCE_BUY') return 'deagle';
     if (buyType === 'HALF_BUY') return side === 'T' ? 'galil' : 'famas';
-    if (role === 'Sniper' || role === 'AWPer' || role === 'снайпер') return 'awp';
+    const rLower = (role || '').toLowerCase().trim();
+    if (rLower === 'sniper' || rLower === 'awper' || rLower === 'awp' || rLower === 'снайпер' || rLower === 'авапер') return 'awp';
     return side === 'T' ? 'ak47' : 'm4a1s';
   }
 }

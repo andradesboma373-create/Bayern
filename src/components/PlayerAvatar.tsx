@@ -11,60 +11,26 @@ export interface PlayerAvatarProps {
   avatarUrl?: string; // Прямая ссылка или Base64 строка
 }
 
-export function PlayerAvatar({ 
-  playerName, 
-  sizeClassName = "w-8 h-8", 
-  className = '', 
-  style,
-  avatarUrl,
-  game
-}: PlayerAvatarProps) {
-  const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null);
-  const [isSearching, setIsSearching] = useState(true);
+// In-memory global caches for player avatars
+const avatarCache = new Map<string, string | null>();
+const pendingAvatarPromises = new Map<string, Promise<string | null>>();
 
-  const cleanName = playerName ? playerName.trim() : "";
-  const lowerName = cleanName.toLowerCase();
+let cachedLocalPlayers: any[] | null = null;
+let lastPlayersCacheTime = 0;
 
-  useEffect(() => {
-    let active = true;
-    setIsSearching(true);
-    setResolvedAvatar(null);
-
-    if (!cleanName) {
-      setIsSearching(false);
-      return;
-    }
-
-    const underscoreName = lowerName.replace(/\s+/g, '_');
-    const hyphenName = lowerName.replace(/\s+/g, '-');
-    const noSpacesName = lowerName.replace(/\s+/g, '');
-    
-    const candidates: string[] = [];
-
-    // 1. URL from prop
-    if (avatarUrl) {
-      candidates.push(avatarUrl);
-      setResolvedAvatar(avatarUrl);
-      setIsSearching(false);
-      return;
-    }
-
-    // 2. Direct cache in localStorage
-    const directKey = `player_avatar_${lowerName}`;
-    const directVal = localStorage.getItem(directKey);
-    if (directVal && !candidates.includes(directVal)) candidates.push(directVal);
-
-    // 3. Lists of players and teams in localStorage
+function getLocalPlayers(): any[] {
+  if (cachedLocalPlayers && Date.now() - lastPlayersCacheTime < 10000) {
+    return cachedLocalPlayers;
+  }
+  const allPlayers: any[] = [];
+  try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && key.startsWith('players_')) {
         try {
           const players = JSON.parse(localStorage.getItem(key) || '[]');
           if (Array.isArray(players)) {
-            const found = players.find((p: any) => p.nickname && p.nickname.trim().toLowerCase() === lowerName);
-            if (found && found.avatarUrl && !candidates.includes(found.avatarUrl)) {
-              candidates.push(found.avatarUrl);
-            }
+            allPlayers.push(...players);
           }
         } catch (e) {}
       } else if (key && key.startsWith('teams_')) {
@@ -73,19 +39,56 @@ export function PlayerAvatar({
           if (Array.isArray(teams)) {
             teams.forEach((t: any) => {
               if (t.players && Array.isArray(t.players)) {
-                const found = t.players.find((p: any) => p.nickname && p.nickname.trim().toLowerCase() === lowerName);
-                if (found && found.avatarUrl && !candidates.includes(found.avatarUrl)) {
-                  candidates.push(found.avatarUrl);
-                }
+                allPlayers.push(...t.players);
               }
             });
           }
         } catch(e) {}
       }
     }
+  } catch (e) {}
+  cachedLocalPlayers = allPlayers;
+  lastPlayersCacheTime = Date.now();
+  return allPlayers;
+}
 
-    // 4. Static paths in /avatars/
-    const extensions = ['png', 'jpg', 'jpeg', 'svg', 'webp'];
+function resolvePlayerAvatar(
+  cleanName: string,
+  lowerName: string,
+  game?: 'cs2' | 's2',
+  explicitAvatarUrl?: string
+): Promise<string | null> {
+  if (explicitAvatarUrl) {
+    return Promise.resolve(explicitAvatarUrl);
+  }
+  if (!cleanName) {
+    return Promise.resolve(null);
+  }
+
+  const cacheKey = `${game || 'all'}_${lowerName}`;
+  if (avatarCache.has(cacheKey)) {
+    return Promise.resolve(avatarCache.get(cacheKey) || null);
+  }
+  if (pendingAvatarPromises.has(cacheKey)) {
+    return pendingAvatarPromises.get(cacheKey)!;
+  }
+
+  const promise = new Promise<string | null>((resolve) => {
+    const underscoreName = lowerName.replace(/\s+/g, '_');
+    const hyphenName = lowerName.replace(/\s+/g, '-');
+    const noSpacesName = lowerName.replace(/\s+/g, '');
+    
+    const candidates: string[] = [];
+
+    // 1. Lists of players and teams in local state
+    const localPlayers = getLocalPlayers();
+    const found = localPlayers.find((p: any) => p.nickname && p.nickname.trim().toLowerCase() === lowerName);
+    if (found && found.avatarUrl && !candidates.includes(found.avatarUrl)) {
+      candidates.push(found.avatarUrl);
+    }
+
+    // 2. Static paths in /avatars/
+    const extensions = ['png', 'jpg', 'webp'];
     const nameVariations = [lowerName, underscoreName, hyphenName, noSpacesName];
 
     for (const ext of extensions) {
@@ -101,38 +104,90 @@ export function PlayerAvatar({
       }
     }
 
-    // 4. UI-Avatars fallback candidate
+    // 3. UI-Avatars fallback candidate
     candidates.push(`https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=222338&color=ff8f00&bold=true`);
 
-    const tryLoad = (index: number) => {
-      if (!active) return;
+    const tryCandidate = (index: number) => {
       if (index >= candidates.length) {
-        setIsSearching(false);
+        avatarCache.set(cacheKey, null);
+        pendingAvatarPromises.delete(cacheKey);
+        resolve(null);
         return;
       }
 
       const url = candidates[index];
+      if (url.startsWith('data:') || url.startsWith('blob:')) {
+        avatarCache.set(cacheKey, url);
+        pendingAvatarPromises.delete(cacheKey);
+        resolve(url);
+        return;
+      }
+
       const img = new Image();
       img.src = url;
       img.onload = () => {
-        if (!active) return;
-        setResolvedAvatar(url);
-        setIsSearching(false);
-        // Cache successful result only if not a huge base64 data URL
-        if (!url.startsWith('data:') && !localStorage.getItem(directKey)) {
-           try { localStorage.setItem(directKey, url); } catch (e) {}
-        }
+        avatarCache.set(cacheKey, url);
+        pendingAvatarPromises.delete(cacheKey);
+        resolve(url);
       };
       img.onerror = () => {
-        if (!active) return;
-        tryLoad(index + 1);
+        tryCandidate(index + 1);
       };
     };
 
-    tryLoad(0);
+    tryCandidate(0);
+  });
+
+  pendingAvatarPromises.set(cacheKey, promise);
+  return promise;
+}
+
+export function PlayerAvatar({ 
+  playerName, 
+  sizeClassName = "w-8 h-8", 
+  className = '', 
+  style,
+  avatarUrl,
+  game
+}: PlayerAvatarProps) {
+  const cleanName = playerName ? playerName.trim() : "";
+  const lowerName = cleanName.toLowerCase();
+  const cacheKey = `${game || 'all'}_${lowerName}`;
+
+  const initialAvatar = avatarUrl || (cleanName ? avatarCache.get(cacheKey) : null) || null;
+  const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(initialAvatar);
+  const [isSearching, setIsSearching] = useState<boolean>(!initialAvatar && !!cleanName);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!cleanName) {
+      setResolvedAvatar(null);
+      setIsSearching(false);
+      return;
+    }
+
+    if (avatarUrl) {
+      setResolvedAvatar(avatarUrl);
+      setIsSearching(false);
+      return;
+    }
+
+    if (avatarCache.has(cacheKey)) {
+      setResolvedAvatar(avatarCache.get(cacheKey) || null);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    resolvePlayerAvatar(cleanName, lowerName, game, avatarUrl).then((url) => {
+      if (!active) return;
+      setResolvedAvatar(url);
+      setIsSearching(false);
+    });
 
     return () => { active = false; };
-  }, [playerName, avatarUrl, lowerName, game]);
+  }, [playerName, avatarUrl, lowerName, game, cacheKey]);
 
   if (isSearching) {
     return (
@@ -157,6 +212,10 @@ export function PlayerAvatar({
           src={resolvedAvatar}
           alt={playerName}
           referrerPolicy="no-referrer"
+          onError={() => {
+            avatarCache.set(cacheKey, null);
+            setResolvedAvatar(null);
+          }}
           className="w-full h-full object-contain"
         />
       </div>

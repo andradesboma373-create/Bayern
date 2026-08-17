@@ -154,8 +154,8 @@ export const cleanupTournamentStorageQuota = (userId?: string) => {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
-      // Remove temporary heavy avatar base64 caches
-      if (k.startsWith('player_avatar_')) {
+      // Remove temporary heavy logo & avatar caches stored in localStorage
+      if (k.startsWith('player_avatar_') || k.startsWith('team_logo_')) {
         keysToRemove.push(k);
       }
       // If specific user given, remove redundant monolithic duplicate keys
