@@ -1,0 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+}
+
+[data-exporting="true"] .overflow-x-auto {
+    overflow: visible !important;
+    width: max-content !important;
+}
+[data-exporting="true"] {
+    width: max-content !important;
+    min-width: 100% !important;
+}
