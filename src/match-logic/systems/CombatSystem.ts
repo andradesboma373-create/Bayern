@@ -59,24 +59,29 @@ export class CombatSystem {
     const dist = MapSystem.getDistance(MapSystem.getNode(shooter.currentNodeId), MapSystem.getNode(target.currentNodeId));
     
     // Normalize aim and reaction into 0-100 scale
-    const normAim = Math.min(95, Math.max(20, shooter.aim));
+    const normAim = Math.min(99, Math.max(20, (shooter.aim || 100) * 0.8));
     const aimFactor = normAim / 100;
     const progress = Math.min(1.0, Math.max(0.2, shooter.aimProgress || 0.5));
     
-    let hitChance = 0.15 + 0.65 * aimFactor * progress;
+    let hitChance = 0.20 + 0.65 * aimFactor * progress;
     if (weapon.type === 'SNIPER') {
-        hitChance = 0.30 + 0.55 * aimFactor * Math.max(0.5, progress);
+        // High accuracy for scoped snipers
+        hitChance = 0.60 + 0.38 * aimFactor * Math.max(0.7, progress);
+        hitChance *= (weapon.accuracy / 100);
+        // Minimal distance falloff for snipers
+        hitChance *= Math.max(0.85, 1 - (dist / (weapon.range * 4)));
+    } else {
+        hitChance *= (weapon.accuracy / 100);
+        hitChance *= Math.max(0.35, 1 - (dist / (weapon.range * 1.2)));
     }
-    hitChance *= (weapon.accuracy / 100);
-    hitChance *= Math.max(0.3, 1 - (dist / (weapon.range * 1.5))); 
     
     if (shooter.state === 'MOVING') {
-        hitChance *= weapon.type === 'SNIPER' ? 0.15 : 0.40;
+        hitChance *= weapon.type === 'SNIPER' ? 0.20 : 0.45;
     }
     if (target.state === 'MOVING') hitChance *= 0.85;
     
-    // Cap hit chance to realistic CS2 limits
-    hitChance = Math.min(0.88, Math.max(0.08, hitChance)); 
+    // Realistic CS2 hit chance caps
+    hitChance = weapon.type === 'SNIPER' ? Math.min(0.96, Math.max(0.25, hitChance)) : Math.min(0.88, Math.max(0.10, hitChance)); 
     
     const roll = this.random();
     this.createSoundEvent(state, shooter.currentNodeId, shooter.id);

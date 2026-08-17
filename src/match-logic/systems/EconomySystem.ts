@@ -80,7 +80,39 @@ export class EconomySystem {
         }
         
         let budget = p.money;
+        const rLower = (p.role || '').toLowerCase().trim();
+        const isSniper = rLower === 'sniper' || rLower === 'awper' || rLower === 'awp' || rLower === 'снайпер' || rLower === 'авапер';
         
+        if (!keepWeapon) {
+            let desiredWeapon = this.decideWeapon(p.role, type, team.side, budget);
+            let cost = WEAPONS[desiredWeapon]?.price || 0;
+            if (budget >= cost) {
+                p.primaryWeaponId = desiredWeapon;
+                budget -= cost;
+            } else {
+                // Fallback weapons hierarchy
+                const fallbacks = team.side === 'T' ? ['galil', 'ak47', 'mac10', 'deagle', 'p250'] : ['famas', 'm4a1s', 'mp9', 'deagle', 'p250'];
+                let bought = false;
+                for (const fb of fallbacks) {
+                    const fbCost = WEAPONS[fb]?.price || 0;
+                    if (budget >= fbCost) {
+                        if (WEAPONS[fb]?.type === 'PISTOL') {
+                            p.secondaryWeaponId = fb;
+                        } else {
+                            p.primaryWeaponId = fb;
+                        }
+                        budget -= fbCost;
+                        bought = true;
+                        break;
+                    }
+                }
+                if (!bought) {
+                    p.secondaryWeaponId = team.side === 'T' ? 'glock' : 'usp';
+                }
+            }
+        }
+        
+        // Buy armor after primary weapon
         if (type !== 'ECO') {
             if (budget >= 1000 && p.armor < 2) { p.armor = 2; budget -= 1000; }
             else if (budget >= 650 && p.armor < 1) { p.armor = 1; budget -= 650; }
@@ -90,28 +122,9 @@ export class EconomySystem {
             p.hasDefuseKit = true; budget -= 400;
         }
         
-        if (!keepWeapon) {
-            let desiredWeapon = this.decideWeapon(p.role, type, team.side);
-            let cost = WEAPONS[desiredWeapon]?.price || 0;
-            if (budget >= cost) {
-                p.primaryWeaponId = desiredWeapon;
-                budget -= cost;
-            } else {
-                desiredWeapon = p.side === 'T' ? 'mac10' : 'mp9';
-                cost = WEAPONS[desiredWeapon]?.price || 0;
-                if (budget >= cost) {
-                    p.primaryWeaponId = desiredWeapon;
-                    budget -= cost;
-                } else {
-                    p.secondaryWeaponId = 'p250';
-                    budget -= 300;
-                }
-            }
-        }
-        
-        if (type === 'FULL_BUY' && budget >= 1000) {
+        if (type === 'FULL_BUY' && budget >= 600) {
             p.grenades = ['smoke', 'flash', 'molotov'];
-            budget -= 900;
+            budget -= Math.min(budget, 600);
         }
         
         p.money = budget;
@@ -120,12 +133,35 @@ export class EconomySystem {
     }
   }
   
-  static decideWeapon(role: string, buyType: string, side: string): string {
+  static decideWeapon(role: string, buyType: string, side: string, budget: number): string {
     if (buyType === 'ECO') return side === 'T' ? 'glock' : 'usp';
-    if (buyType === 'FORCE_BUY') return 'deagle';
-    if (buyType === 'HALF_BUY') return side === 'T' ? 'galil' : 'famas';
+    if (buyType === 'FORCE_BUY') {
+        if (budget >= 2700 && side === 'T') return 'ak47';
+        if (budget >= 2900 && side === 'CT') return 'm4a1s';
+        if (budget >= 1800 && side === 'T') return 'galil';
+        if (budget >= 2050 && side === 'CT') return 'famas';
+        if (budget >= 1700) return 'ssg08';
+        if (budget >= 1250 && side === 'CT') return 'mp9';
+        if (budget >= 1050 && side === 'T') return 'mac10';
+        return 'deagle';
+    }
+    if (buyType === 'HALF_BUY') {
+        if (budget >= 2700 && side === 'T') return 'ak47';
+        if (budget >= 2900 && side === 'CT') return 'm4a1s';
+        return side === 'T' ? 'galil' : 'famas';
+    }
+    
     const rLower = (role || '').toLowerCase().trim();
-    if (rLower === 'sniper' || rLower === 'awper' || rLower === 'awp' || rLower === 'снайпер' || rLower === 'авапер') return 'awp';
+    const isSniper = rLower === 'sniper' || rLower === 'awper' || rLower === 'awp' || rLower === 'снайпер' || rLower === 'авапер';
+    
+    if (isSniper) {
+        if (budget >= 4750) return 'awp';
+        if (budget >= 2700 && side === 'T') return 'ak47';
+        if (budget >= 2900 && side === 'CT') return 'm4a1s';
+        if (budget >= 1700) return 'ssg08';
+        return side === 'T' ? 'galil' : 'famas';
+    }
+    
     return side === 'T' ? 'ak47' : 'm4a1s';
   }
 }

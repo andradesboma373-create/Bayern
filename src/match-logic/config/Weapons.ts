@@ -24,6 +24,7 @@ export const WEAPONS: Record<string, Weapon> = {
   ak47: { id: 'ak47', name: 'AK-47', type: 'RIFLE', price: 2700, damage: 36, headshotMultiplier: 4, armorPenetration: 0.77, fireRate: 10, accuracy: 88, range: 80 },
   m4a4: { id: 'm4a4', name: 'M4A4', type: 'RIFLE', price: 3100, damage: 33, headshotMultiplier: 4, armorPenetration: 0.7, fireRate: 11, accuracy: 88, range: 80 },
   m4a1s: { id: 'm4a1s', name: 'M4A1-S', type: 'RIFLE', price: 2900, damage: 38, headshotMultiplier: 4, armorPenetration: 0.7, fireRate: 10, accuracy: 90, range: 80 },
+  ssg08: { id: 'ssg08', name: 'SSG 08', type: 'SNIPER', price: 1700, damage: 88, headshotMultiplier: 4, armorPenetration: 0.85, fireRate: 1.25, accuracy: 95, range: 120 },
   awp: { id: 'awp', name: 'AWP', type: 'SNIPER', price: 4750, damage: 115, headshotMultiplier: 4, armorPenetration: 0.97, fireRate: 0.9, accuracy: 99, range: 150 },
 };
 
