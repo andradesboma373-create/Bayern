@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { TeamAutocompleteInput } from '../TeamAutocompleteInput';
 import { TournamentSettings, Team } from './types';
-import { Trash2, ChevronUp, ChevronDown, Upload, Folder, X, HelpCircle, Check } from 'lucide-react';
+import { Trash2, ChevronUp, ChevronDown, Upload, Folder, X, HelpCircle, Check, Shuffle, ArrowRightLeft, ArrowRight, Plus, Layers, Grid } from 'lucide-react';
+import TeamLogo from '../TeamLogo';
 import MatchCard from './MatchCard';
 
 interface Props {
@@ -53,11 +54,56 @@ export default function TournamentSettingsForm({
   });
   const [teams, setTeams] = useState<Team[]>(initialTeams);
   const [newTeamName, setNewTeamName] = useState("");
+  const [targetAddGroupId, setTargetAddGroupId] = useState<string>("auto");
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [editingTeamName, setEditingTeamName] = useState("");
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [hasCustomized, setHasCustomized] = useState(false);
   const [error, setError] = useState('');
+
+  const isGroupFormat = settings.stage1Type === 'gsl_groups' || settings.stage1Type === 'groups';
+  const numGroups = Math.max(1, settings.numberOfGroups || 2);
+
+  const [groupAssignments, setGroupAssignments] = useState<Record<string, string[]>>(() => {
+    if (initialSettings?.groupAssignments && Object.keys(initialSettings.groupAssignments).length > 0) {
+      return initialSettings.groupAssignments;
+    }
+    const initialAssigned: Record<string, string[]> = {};
+    const gCount = initialSettings?.numberOfGroups || 2;
+    for (let i = 0; i < gCount; i++) {
+      initialAssigned[`gsl-group-${i}`] = [];
+    }
+    initialTeams.forEach((t, idx) => {
+      initialAssigned[`gsl-group-${idx % gCount}`].push(t.id);
+    });
+    return initialAssigned;
+  });
+
+  // Ensure groupAssignments has keys for all configured groups
+  useEffect(() => {
+    if (isGroupFormat) {
+      setGroupAssignments(prev => {
+        const next: Record<string, string[]> = {};
+        const gCount = settings.numberOfGroups || 2;
+        const allAssignedIds: string[] = [];
+        
+        for (let i = 0; i < gCount; i++) {
+          const key = `gsl-group-${i}`;
+          next[key] = (prev[key] || []).filter(id => teams.some(t => t.id === id));
+          allAssignedIds.push(...next[key]);
+        }
+        
+        // Add any unassigned teams
+        teams.forEach((t, idx) => {
+          if (!allAssignedIds.includes(t.id)) {
+            const targetKey = `gsl-group-${idx % gCount}`;
+            next[targetKey] = [...(next[targetKey] || []), t.id];
+          }
+        });
+        return next;
+      });
+    }
+  }, [settings.numberOfGroups, settings.stage1Type]);
 
   const [globalTeams, setGlobalTeams] = useState<any[]>([]);
   useEffect(() => {
@@ -69,18 +115,60 @@ export default function TournamentSettingsForm({
     }
   }, [user]);
 
-  const handleAddTeam = (optionalName?: string) => {
+  const handleAddTeam = (optionalName?: string, specificGroupId?: string) => {
     const nameToAdd = typeof optionalName === 'string' && optionalName.trim() ? optionalName : newTeamName;
     if (nameToAdd.trim()) {
-      setTeams([...teams, { id: Date.now().toString(), name: nameToAdd.trim() }]);
+      const newId = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 4);
+      const newTeam: Team = { id: newId, name: nameToAdd.trim() };
+      const updatedTeams = [...teams, newTeam];
+      setTeams(updatedTeams);
       setNewTeamName("");
+
+      if (isGroupFormat) {
+        setGroupAssignments(prev => {
+          const next = { ...prev };
+          const gCount = settings.numberOfGroups || 2;
+          for (let i = 0; i < gCount; i++) {
+            if (!next[`gsl-group-${i}`]) next[`gsl-group-${i}`] = [];
+          }
+
+          let assignedG = specificGroupId || (targetAddGroupId !== 'auto' ? targetAddGroupId : null);
+          if (!assignedG || !next[assignedG]) {
+            // Find group with fewest teams
+            let minLen = Infinity;
+            let minG = `gsl-group-0`;
+            for (let i = 0; i < gCount; i++) {
+              const gKey = `gsl-group-${i}`;
+              if ((next[gKey]?.length || 0) < minLen) {
+                minLen = next[gKey]?.length || 0;
+                minG = gKey;
+              }
+            }
+            assignedG = minG;
+          }
+
+          next[assignedG] = [...(next[assignedG] || []), newId];
+          return next;
+        });
+      }
     }
   };
 
-  const handleAddGlobalTeam = (globalTeam: any) => {
+  const handleAddGlobalTeam = (globalTeam: any, specificGroupId?: string) => {
     if (!teams.find(t => t.name === globalTeam.name)) {
-      setTeams([...teams, { id: Date.now().toString(), name: globalTeam.name }]);
+      handleAddTeam(globalTeam.name, specificGroupId);
     }
+  };
+
+  const handleRemoveTeam = (teamId: string) => {
+    setTeams(teams.filter(ct => ct.id !== teamId));
+    setGroupAssignments(prev => {
+      const next: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        next[k] = v.filter(id => id !== teamId);
+      }
+      return next;
+    });
   };
 
   const handleUpdateTeam = (id: string) => {
@@ -88,6 +176,75 @@ export default function TournamentSettingsForm({
       setTeams(teams.map(t => t.id === id ? { ...t, name: editingTeamName.trim() } : t));
     }
     setEditingTeamId(null);
+  };
+
+  const handleRandomizeGroups = () => {
+    const gCount = settings.numberOfGroups || 2;
+    const next: Record<string, string[]> = {};
+    for (let i = 0; i < gCount; i++) {
+      next[`gsl-group-${i}`] = [];
+    }
+    const shuffled = [...teams].sort(() => Math.random() - 0.5);
+    shuffled.forEach((team, idx) => {
+      next[`gsl-group-${idx % gCount}`].push(team.id);
+    });
+    setGroupAssignments(next);
+  };
+
+  const handleSequentialGroups = () => {
+    const gCount = settings.numberOfGroups || 2;
+    const next: Record<string, string[]> = {};
+    for (let i = 0; i < gCount; i++) {
+      next[`gsl-group-${i}`] = [];
+    }
+    teams.forEach((team, idx) => {
+      next[`gsl-group-${idx % gCount}`].push(team.id);
+    });
+    setGroupAssignments(next);
+  };
+
+  const handleMoveTeamToGroup = (teamId: string, targetGroupId: string) => {
+    setGroupAssignments(prev => {
+      const next: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        next[k] = v.filter(id => id !== teamId);
+      }
+      next[targetGroupId] = [...(next[targetGroupId] || []), teamId];
+      return next;
+    });
+  };
+
+  const handleSwapGroupTeams = (sourceGroupId: string, slotIdx: number, newTeamId: string) => {
+    setGroupAssignments(prev => {
+      const next = { ...prev };
+      const currentList = [...(next[sourceGroupId] || [])];
+      const oldTeamId = currentList[slotIdx];
+      if (oldTeamId === newTeamId) return prev;
+
+      // Check if newTeamId is currently in another group
+      let otherGroupId: string | null = null;
+      let otherSlotIdx = -1;
+      for (const [gK, list] of Object.entries(next)) {
+        const idx = list.indexOf(newTeamId);
+        if (idx !== -1) {
+          otherGroupId = gK;
+          otherSlotIdx = idx;
+          break;
+        }
+      }
+
+      if (otherGroupId && otherGroupId !== sourceGroupId) {
+        const otherList = [...(next[otherGroupId] || [])];
+        otherList[otherSlotIdx] = oldTeamId;
+        currentList[slotIdx] = newTeamId;
+        next[sourceGroupId] = currentList;
+        next[otherGroupId] = otherList;
+      } else {
+        currentList[slotIdx] = newTeamId;
+        next[sourceGroupId] = currentList;
+      }
+      return next;
+    });
   };
 
   const moveTeamUp = (index: number) => {
@@ -149,11 +306,36 @@ export default function TournamentSettingsForm({
       setTimeout(() => setError(''), 3000);
       return;
     }
+
+    let finalTeams = [...teams];
+    if (isGroupFormat) {
+      const gCount = settings.numberOfGroups || 2;
+      const teamMap = new Map(teams.map(t => [t.id, t]));
+      const ordered: Team[] = [];
+      const usedIds = new Set<string>();
+      for (let i = 0; i < gCount; i++) {
+        const gKey = `gsl-group-${i}`;
+        (groupAssignments[gKey] || []).forEach(tId => {
+          const t = teamMap.get(tId);
+          if (t && !usedIds.has(t.id)) {
+            ordered.push(t);
+            usedIds.add(t.id);
+          }
+        });
+      }
+      // Add any unassigned teams
+      teams.forEach(t => {
+        if (!usedIds.has(t.id)) ordered.push(t);
+      });
+      finalTeams = ordered;
+    }
+
     const finalSettings: TournamentSettings = {
       ...settings,
-      seedingType: settings.seedingType === 'random' ? 'random' : 'manual'
+      seedingType: settings.seedingType === 'random' ? 'random' : 'manual',
+      groupAssignments: isGroupFormat ? groupAssignments : undefined
     };
-    onSave(name, finalSettings, teams, logoUrl, prizePool);
+    onSave(name, finalSettings, finalTeams, logoUrl, prizePool);
   };
 
   return (
@@ -535,104 +717,351 @@ export default function TournamentSettingsForm({
               )}
           </div>
       </div>
+      {/* Seeding & Team Management */}
       <div>
           <label className="block text-white/50 font-bold mb-2">Тип жеребьевки</label>
           <div className="flex gap-2">
               <button 
-                onClick={() => setSettings({...settings, seedingType: 'random'})}
+                onClick={() => {
+                  setSettings({...settings, seedingType: 'random'});
+                  if (isGroupFormat) handleRandomizeGroups();
+                }}
                 className={`flex-1 p-3 rounded-xl border ${settings.seedingType === 'random' ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
               >
-                  Рандомно (Случайно)
+                  🎲 Рандомно (Случайно)
               </button>
               <button 
                 onClick={() => setSettings({...settings, seedingType: 'manual'})}
                 className={`flex-1 p-3 rounded-xl border ${(settings.seedingType !== 'random') ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
               >
-                  Вручную (По списку)
+                  ✍️ Вручную (По группам / списку)
               </button>
           </div>
-          {settings.seedingType !== 'random' && (
-              <p className="text-white/40 text-xs mt-2">
-                  Команды будут распределены в сетку в том порядке, в котором они указаны в списке.
-                  Для настройки нужных матчей перемещайте команды вверх/вниз в списке ниже.
+          <p className="text-white/40 text-xs mt-2">
+              {isGroupFormat 
+                ? 'Вы можете распределять команды по группам вручную, перемещать их между группами или воспользоваться случайным посевом.'
+                : 'Команды будут распределены в сетку в том порядке, в котором они указаны в списке. Для настройки пар используйте конструктор ниже.'}
+          </p>
+      </div>
+
+      {isGroupFormat ? (
+        /* ================= GROUP FORMAT MANAGEMENT (GSL / ROUND-ROBIN) ================= */
+        <div className="bg-black/30 p-5 rounded-2xl border border-white/10 flex flex-col gap-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div>
+              <h4 className="text-base font-black text-[#ff8f00] uppercase tracking-wider flex items-center gap-2">
+                <Grid className="w-5 h-5 text-[#ff8f00]" />
+                Формирование групп ({numGroups} {numGroups === 1 ? 'группа' : numGroups < 5 ? 'группы' : 'групп'})
+              </h4>
+              <p className="text-xs text-white/50 mt-1">
+                Всего команд: <span className="text-white font-bold">{teams.length}</span>. Добавляйте команды напрямую в нужную группу или перемещайте между ними.
               </p>
-          )}
-      </div>
-
-      <div>
-          <label className="block text-white/50 font-bold mb-2">Команды</label>
-          <div className="flex gap-2 mb-4">
-              <TeamAutocompleteInput 
-                value={newTeamName}
-                onChange={setNewTeamName}
-                onSelect={handleAddTeam}
-                className="bg-black border border-white/10 px-4 py-2 rounded-xl text-white outline-none flex-1"
-                placeholder="Название команды..."
-              />
-              <button 
-                onClick={() => handleAddTeam()}
-                className="bg-[#333] hover:bg-[#444] px-4 rounded-xl font-bold transition-colors"
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRandomizeGroups}
+                className="px-3 py-1.5 bg-[#ff8f00]/10 hover:bg-[#ff8f00]/20 border border-[#ff8f00]/30 rounded-xl text-xs font-bold text-[#ff8f00] transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Случайно перемешать и распределить команды по группам"
               >
-                  Добавить
+                <Shuffle className="w-3.5 h-3.5" />
+                Рандом по группам
               </button>
+              <button
+                type="button"
+                onClick={handleSequentialGroups}
+                className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Равномерно раскидать команды по группам"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                По порядку (Змейка)
+              </button>
+            </div>
           </div>
-          {globalTeams.length > 0 && (
-             <div className="mt-4 border-t border-white/10 pt-4">
-                <p className="text-xs font-bold text-white/50 mb-2 uppercase">Или добавьте из ваших команд:</p>
-                <div className="flex flex-wrap gap-2">
-                   {globalTeams.filter(gt => !teams.find(t => t.name === gt.name)).map(gt => (
-                      <button 
-                        key={gt.id} 
-                        onClick={() => handleAddGlobalTeam(gt)}
-                        className="bg-black/30 hover:bg-black/60 border border-white/5 hover:border-blue-500/50 px-3 py-1.5 rounded-lg text-sm text-white/80 transition-colors flex items-center gap-2"
-                      >
-                         <span className="text-[10px]">➕</span> {gt.name}
-                      </button>
-                   ))}
-                </div>
-             </div>
-          )}
-          <div className="flex flex-col gap-2">
-              {teams.map((t, idx) => (
-                  <div key={t.id} className="bg-white/5 px-3 py-2 rounded-lg flex items-center gap-2 border border-white/10">
-                      {settings.seedingType === 'manual' && (
-                          <div className="flex flex-col gap-1 mr-2">
-                              <button onClick={() => moveTeamUp(idx)} disabled={idx === 0} className="text-white/30 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
-                                  <ChevronUp className="w-4 h-4" />
-                              </button>
-                              <button onClick={() => moveTeamDown(idx)} disabled={idx === teams.length - 1} className="text-white/30 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
-                                  <ChevronDown className="w-4 h-4" />
-                              </button>
-                          </div>
-                      )}
-                      
-                      <span className="text-white/20 font-mono text-xs w-6">{idx + 1}.</span>
-                      
-                      {editingTeamId === t.id ? (
-                          <div className="flex gap-2 flex-1">
-                              <TeamAutocompleteInput value={editingTeamName} onChange={setEditingTeamName} onSelect={() => handleUpdateTeam(t.id)} className="bg-black text-white px-2 py-0.5 rounded outline-none border border-[#ff8f00]/50 flex-1" />
-                              <button onClick={() => handleUpdateTeam(t.id)} className="text-green-400 text-xs uppercase font-bold px-2">ОК</button>
-                          </div>
-                      ) : (
-                          <>
-                              <span className="font-bold cursor-pointer hover:text-[#ff8f00] transition-colors flex-1" onClick={() => {
-                                  setEditingTeamId(t.id);
-                                  setEditingTeamName(t.name);
-                              }}>
-                                  {t.name}
-                              </span>
-                              <button onClick={() => setTeams(teams.filter(ct => ct.id !== t.id))} className="text-red-400 hover:text-red-300 ml-2 p-1">
-                                  <Trash2 className="w-4 h-4" />
-                              </button>
-                          </>
-                      )}
-                  </div>
-              ))}
-              {teams.length === 0 && <span className="text-white/30 text-sm">Нет команд</span>}
-          </div>
-      </div>
 
-      {settings.seedingType !== 'random' && teams.length >= 2 && settings.stage1Type !== 'groups' && (() => {
+          {/* Quick Add Bar */}
+          <div className="bg-black/40 p-3.5 rounded-xl border border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <TeamAutocompleteInput 
+              value={newTeamName}
+              onChange={setNewTeamName}
+              onSelect={(val) => handleAddTeam(val)}
+              className="bg-black border border-white/10 px-3.5 py-2 rounded-xl text-white outline-none flex-1 text-sm placeholder:text-white/30"
+              placeholder="Добавить новую команду..."
+            />
+            <div className="flex items-center gap-2">
+              <select
+                value={targetAddGroupId}
+                onChange={(e) => setTargetAddGroupId(e.target.value)}
+                className="bg-black border border-white/10 px-3 py-2 rounded-xl text-white text-xs font-bold outline-none cursor-pointer"
+              >
+                <option value="auto">⚡ Авто-группа (поровну)</option>
+                {Array.from({ length: numGroups }).map((_, gIdx) => (
+                  <option key={gIdx} value={`gsl-group-${gIdx}`}>
+                    В Группу {String.fromCharCode(65 + gIdx)}
+                  </option>
+                ))}
+              </select>
+              <button 
+                type="button"
+                onClick={() => handleAddTeam()}
+                className="bg-[#ff8f00] hover:bg-[#ffa733] text-black font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Добавить
+              </button>
+            </div>
+          </div>
+
+          {/* Global saved teams */}
+          {globalTeams.length > 0 && (
+            <div className="border-t border-white/5 pt-3">
+              <p className="text-[11px] font-bold text-white/50 mb-2 uppercase tracking-wider">
+                Быстрое добавление из вашей базы:
+              </p>
+              <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto pr-1">
+                {globalTeams.filter(gt => !teams.find(t => t.name === gt.name)).map(gt => (
+                  <button 
+                    key={gt.id} 
+                    type="button"
+                    onClick={() => handleAddGlobalTeam(gt)}
+                    className="bg-white/5 hover:bg-[#ff8f00]/20 border border-white/10 hover:border-[#ff8f00]/50 px-2.5 py-1 rounded-lg text-xs text-white/80 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <TeamLogo teamName={gt.name} sizeClassName="w-3.5 h-3.5" />
+                    <span>{gt.name}</span>
+                    <span className="text-[#ff8f00] font-bold">+</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Group Columns Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+            {Array.from({ length: numGroups }).map((_, gIdx) => {
+              const groupKey = `gsl-group-${gIdx}`;
+              const groupLetter = String.fromCharCode(65 + gIdx);
+              const groupTeamIds = groupAssignments[groupKey] || [];
+              const groupTeams = groupTeamIds.map(id => teams.find(t => t.id === id)).filter(Boolean) as Team[];
+
+              return (
+                <div key={groupKey} className="bg-[#0e0e14] border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-lg">
+                  {/* Group Header */}
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-[#ff8f00]/20 border border-[#ff8f00]/40 text-[#ff8f00] font-black text-xs flex items-center justify-center">
+                        {groupLetter}
+                      </span>
+                      <h5 className="font-black text-sm text-white uppercase tracking-wider">
+                        Группа {groupLetter}
+                      </h5>
+                    </div>
+                    <span className="text-[11px] font-bold text-white/40 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                      {groupTeams.length} {groupTeams.length === 1 ? 'команда' : groupTeams.length < 5 ? 'команды' : 'команд'}
+                    </span>
+                  </div>
+
+                  {/* Teams in Group */}
+                  <div className="flex flex-col gap-2 min-h-[140px]">
+                    {groupTeams.length === 0 ? (
+                      <div className="flex-1 flex flex-col items-center justify-center p-4 border border-dashed border-white/10 rounded-xl text-white/30 text-xs font-bold text-center">
+                        Нет команд в группе {groupLetter}
+                        <span className="text-[10px] text-white/20 mt-0.5">Добавьте команду выше или переместите из другой группы</span>
+                      </div>
+                    ) : (
+                      groupTeams.map((team, tIdx) => (
+                        <div key={team.id} className="bg-white/5 hover:bg-white/[0.08] p-2 rounded-xl border border-white/5 flex items-center justify-between gap-2 transition-all">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="text-white/30 font-mono text-[11px] w-4 shrink-0 text-center">
+                              {tIdx + 1}.
+                            </span>
+                            <TeamLogo teamName={team.name} sizeClassName="w-5 h-5 shrink-0" />
+                            
+                            {editingTeamId === team.id ? (
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                <TeamAutocompleteInput 
+                                  value={editingTeamName} 
+                                  onChange={setEditingTeamName} 
+                                  onSelect={() => handleUpdateTeam(team.id)} 
+                                  className="bg-black text-white px-2 py-0.5 text-xs rounded border border-[#ff8f00] outline-none flex-1 min-w-0" 
+                                />
+                                <button 
+                                  type="button"
+                                  onClick={() => handleUpdateTeam(team.id)} 
+                                  className="text-emerald-400 font-bold text-xs px-1.5 py-0.5 bg-emerald-500/10 rounded"
+                                >
+                                  OK
+                                </button>
+                              </div>
+                            ) : (
+                              <span 
+                                className="font-bold text-xs text-white truncate cursor-pointer hover:text-[#ff8f00] transition-colors"
+                                title="Нажмите, чтобы переименовать"
+                                onClick={() => {
+                                  setEditingTeamId(team.id);
+                                  setEditingTeamName(team.name);
+                                }}
+                              >
+                                {team.name}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Action controls */}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Swap selector */}
+                            <select
+                              value={team.id}
+                              onChange={(e) => handleSwapGroupTeams(groupKey, tIdx, e.target.value)}
+                              className="bg-black/60 border border-white/10 hover:border-white/30 text-white/80 text-[10px] font-bold py-1 px-1.5 rounded-lg outline-none cursor-pointer max-w-[90px] truncate"
+                              title="Заменить эту команду на другую из турнира"
+                            >
+                              <optgroup label="Заменить на:">
+                                {teams.map(t => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            </select>
+
+                            {/* Move to other group dropdown */}
+                            {numGroups > 1 && (
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  if (e.target.value) handleMoveTeamToGroup(team.id, e.target.value);
+                                }}
+                                className="bg-black/60 border border-white/10 hover:border-white/30 text-white/60 hover:text-white text-[10px] font-bold py-1 px-1.5 rounded-lg outline-none cursor-pointer"
+                                title="Переместить в другую группу"
+                              >
+                                <option value="" disabled>➡️ В группу...</option>
+                                {Array.from({ length: numGroups }).map((_, otherGIdx) => {
+                                  const targetKey = `gsl-group-${otherGIdx}`;
+                                  if (targetKey === groupKey) return null;
+                                  return (
+                                    <option key={targetKey} value={targetKey}>
+                                      Группа {String.fromCharCode(65 + otherGIdx)}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            )}
+
+                            {/* Remove button */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTeam(team.id)}
+                              className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors"
+                              title="Удалить команду из турнира"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Inline Add Team to this Group */}
+                  <div className="mt-1 pt-2.5 border-t border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = prompt(`Введите название команды для Группы ${groupLetter}:`);
+                        if (name && name.trim()) {
+                          handleAddTeam(name.trim(), groupKey);
+                        }
+                      }}
+                      className="w-full py-1.5 px-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 hover:border-white/20 rounded-xl text-white/50 hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#ff8f00]" />
+                      Быстро добавить в Группу {groupLetter}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* ================= SINGLE/DOUBLE PLAYOFF LIST & PAIR CONSTRUCTOR ================= */
+        <div>
+            <label className="block text-white/50 font-bold mb-2">Команды</label>
+            <div className="flex gap-2 mb-4">
+                <TeamAutocompleteInput 
+                  value={newTeamName}
+                  onChange={setNewTeamName}
+                  onSelect={handleAddTeam}
+                  className="bg-black border border-white/10 px-4 py-2 rounded-xl text-white outline-none flex-1"
+                  placeholder="Название команды..."
+                />
+                <button 
+                  type="button"
+                  onClick={() => handleAddTeam()}
+                  className="bg-[#333] hover:bg-[#444] px-4 rounded-xl font-bold transition-colors cursor-pointer"
+                >
+                    Добавить
+                </button>
+            </div>
+            {globalTeams.length > 0 && (
+               <div className="mt-4 border-t border-white/10 pt-4">
+                  <p className="text-xs font-bold text-white/50 mb-2 uppercase">Или добавьте из ваших команд:</p>
+                  <div className="flex flex-wrap gap-2">
+                     {globalTeams.filter(gt => !teams.find(t => t.name === gt.name)).map(gt => (
+                        <button 
+                          key={gt.id} 
+                          type="button"
+                          onClick={() => handleAddGlobalTeam(gt)}
+                          className="bg-black/30 hover:bg-black/60 border border-white/5 hover:border-blue-500/50 px-3 py-1.5 rounded-lg text-sm text-white/80 transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                           <span className="text-[10px]">➕</span> {gt.name}
+                        </button>
+                     ))}
+                  </div>
+               </div>
+            )}
+            <div className="flex flex-col gap-2">
+                {teams.map((t, idx) => (
+                    <div key={t.id} className="bg-white/5 px-3 py-2 rounded-lg flex items-center gap-2 border border-white/10">
+                        {settings.seedingType === 'manual' && (
+                            <div className="flex flex-col gap-1 mr-2">
+                                <button type="button" onClick={() => moveTeamUp(idx)} disabled={idx === 0} className="text-white/30 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <ChevronUp className="w-4 h-4" />
+                                </button>
+                                <button type="button" onClick={() => moveTeamDown(idx)} disabled={idx === teams.length - 1} className="text-white/30 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <ChevronDown className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+                        
+                        <span className="text-white/20 font-mono text-xs w-6">{idx + 1}.</span>
+                        
+                        {editingTeamId === t.id ? (
+                            <div className="flex gap-2 flex-1">
+                                <TeamAutocompleteInput value={editingTeamName} onChange={setEditingTeamName} onSelect={() => handleUpdateTeam(t.id)} className="bg-black text-white px-2 py-0.5 rounded outline-none border border-[#ff8f00]/50 flex-1" />
+                                <button type="button" onClick={() => handleUpdateTeam(t.id)} className="text-green-400 text-xs uppercase font-bold px-2">ОК</button>
+                            </div>
+                        ) : (
+                            <>
+                                <span className="font-bold cursor-pointer hover:text-[#ff8f00] transition-colors flex-1" onClick={() => {
+                                    setEditingTeamId(t.id);
+                                    setEditingTeamName(t.name);
+                                }}>
+                                    {t.name}
+                                </span>
+                                <button type="button" onClick={() => handleRemoveTeam(t.id)} className="text-red-400 hover:text-red-300 ml-2 p-1">
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </>
+                        )}
+                    </div>
+                ))}
+                {teams.length === 0 && <span className="text-white/30 text-sm">Нет команд</span>}
+            </div>
+        </div>
+      )}
+
+      {/* Bracket Playoff Pairs Constructor for non-group formats */}
+      {settings.seedingType !== 'random' && teams.length >= 2 && !isGroupFormat && (() => {
           const matchCount = Math.floor(teams.length / 2);
           const pairs = [];
           for (let i = 0; i < matchCount; i++) {

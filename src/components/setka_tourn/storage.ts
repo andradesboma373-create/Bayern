@@ -147,34 +147,63 @@ export const loadTournaments = (userId: string, forceReload: boolean = false): T
   }
 };
 
+// Helper: perform emergency cleanup of legacy redundant caches to free up localStorage quota
+export const cleanupTournamentStorageQuota = (userId?: string) => {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      // Remove temporary heavy avatar base64 caches
+      if (k.startsWith('player_avatar_')) {
+        keysToRemove.push(k);
+      }
+      // If specific user given, remove redundant monolithic duplicate keys
+      if (userId && k === `tournaments_${userId}`) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach(k => {
+      try { localStorage.removeItem(k); } catch (e) {}
+    });
+  } catch (e) {}
+};
+
 // Helper to save a single tournament to its own local storage key
 const saveSingleTournamentIsolated = (userId: string, tournament: Tournament) => {
   if (!tournament || !tournament.id) return;
-  try {
-    const singleKey = `tournament_item_${userId}_${tournament.id}`;
-    
-    // Extract bgImage if present
-    const bgImg = tournament.settings?.bgImage;
-    if (bgImg) {
-      setTournamentBgImage(tournament.id, bgImg);
-    }
+  const singleKey = `tournament_item_${userId}_${tournament.id}`;
+  
+  // Extract bgImage if present to keep tournament object compact
+  const bgImg = tournament.settings?.bgImage;
+  if (bgImg) {
+    setTournamentBgImage(tournament.id, bgImg);
+  }
 
-    let tourneyCopy = { ...tournament, channelId: userId };
-    
-    // Save to isolated key
-    let jsonStr = JSON.stringify(tourneyCopy);
+  let tourneyCopy = { ...tournament, channelId: userId };
+  if (tourneyCopy.settings?.bgImage && tourneyCopy.settings.bgImage.startsWith('data:image')) {
+    tourneyCopy.settings = { ...tourneyCopy.settings, bgImage: undefined };
+  }
+
+  let jsonStr = JSON.stringify(tourneyCopy);
+
+  try {
     localStorage.setItem(singleKey, jsonStr);
   } catch (e) {
-    console.warn("Error saving isolated tournament " + tournament.id, e);
-    // If quota exceeded on base64 image inside single item, strip image and try saving
+    console.warn("Storage quota warning on saving tournament " + tournament.id + ", performing cleanup...", e);
+    cleanupTournamentStorageQuota(userId);
     try {
-      const singleKey = `tournament_item_${userId}_${tournament.id}`;
-      let compact = { ...tournament };
-      if (compact.settings?.bgImage && compact.settings.bgImage.startsWith('data:image')) {
-        compact.settings = { ...compact.settings, bgImage: undefined };
+      // Retry after cleanup
+      localStorage.setItem(singleKey, jsonStr);
+    } catch (e2) {
+      // Fallback: strip any base64 image strings or heavy logs
+      try {
+        const stripped = jsonStr.replace(/"data:image\/[^;]+;base64,[^"]+"/g, 'null');
+        localStorage.setItem(singleKey, stripped);
+      } catch (e3) {
+        console.error("Critical: Could not write tournament item to localStorage:", e3);
       }
-      localStorage.setItem(singleKey, JSON.stringify(compact));
-    } catch (e2) {}
+    }
   }
 };
 
@@ -193,18 +222,28 @@ const saveTournamentsIndex = (userId: string, tournaments: Tournament[]) => {
     }));
     localStorage.setItem(indexKey, JSON.stringify(indexList));
 
-    // Also update legacy key as backup without heavy images
+    // Try updating legacy key only as a lightweight summary list to prevent QuotaExceededError
     const legacyKey = "tournaments_" + userId;
-    const legacyClean = tournaments.map(t => {
-      const copy = { ...t };
-      if (copy.settings?.bgImage && copy.settings.bgImage.length > 1000) {
-        copy.settings = { ...copy.settings, bgImage: undefined };
-      }
-      return copy;
-    });
-    localStorage.setItem(legacyKey, JSON.stringify(legacyClean));
+    try {
+      // Check if we can safely update legacy key with lightweight records
+      const lightweightTourneys = tournaments.map(t => {
+        const { bracketRounds, losersBracketRounds, swissRounds, groups, tieredBracketRounds, ...lightweight } = t;
+        return lightweight;
+      });
+      localStorage.setItem(legacyKey, JSON.stringify(lightweightTourneys));
+    } catch (legErr) {
+      // If quota exceeded, simply remove the redundant monolithic key to save space
+      try {
+        localStorage.removeItem(legacyKey);
+      } catch (e) {}
+    }
   } catch (e) {
-    console.error("Error saving tournaments index:", e);
+    cleanupTournamentStorageQuota(userId);
+    try {
+      const indexKey = "tournaments_index_" + userId;
+      const indexList = tournaments.map(t => ({ id: t.id, name: t.name }));
+      localStorage.setItem(indexKey, JSON.stringify(indexList));
+    } catch (e2) {}
   }
 };
 

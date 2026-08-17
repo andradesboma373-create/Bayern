@@ -11,13 +11,47 @@ interface Props {
   onAdvanceToBracket: () => void;
   onVetoMatch?: (t1: Team, t2: Team, matchInfo?: any) => void;
   isExporting?: boolean;
+  isSwapMode?: boolean;
 }
 
-export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket, onVetoMatch, isExporting }: Props) {
+export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket, onVetoMatch, isExporting, isSwapMode }: Props) {
   const gslGroups = tournament.gslGroups || [];
   const [selectedGroupIdx, setSelectedGroupIdx] = useState<number>(0);
   const settings = tournament.settings;
   const isAllReady = areAllGslGroupsFinished(gslGroups);
+
+  const handleSwapTeam = (
+    groupIndex: number,
+    bracketType: 'upper' | 'lower',
+    rIdx: number,
+    mIdx: number,
+    teamNum: 1 | 2,
+    teamId: string
+  ) => {
+    let team = tournament.teams.find(t => t.id === teamId) || null;
+    if (teamId === 'BYE') team = { id: 'BYE', name: 'BYE' };
+
+    const newGroups = gslGroups.map((g, gIdx) => {
+      if (gIdx !== groupIndex) return g;
+      const targetBracket = bracketType === 'upper' ? [...g.upperBracket] : [...g.lowerBracket];
+      const targetRound = [...targetBracket[rIdx]];
+      const targetMatch = { ...targetRound[mIdx] };
+
+      if (teamNum === 1) targetMatch.team1 = team;
+      else targetMatch.team2 = team;
+
+      targetRound[mIdx] = targetMatch;
+      targetBracket[rIdx] = targetRound;
+
+      return {
+        ...g,
+        upperBracket: bracketType === 'upper' ? targetBracket : g.upperBracket,
+        lowerBracket: bracketType === 'lower' ? targetBracket : g.lowerBracket
+      };
+    });
+
+    onUpdate({ ...tournament, gslGroups: newGroups });
+  };
 
   const handleUpdateScore = (
     groupIndex: number,
@@ -223,7 +257,12 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
                         cardThemeColor={settings.cardThemeColor}
                         btnStyle={settings.btnStyle}
                         bracketMode={settings.bracketMode}
+                        onSwapTeam={(bType, r, m, teamNum, teamId) =>
+                          handleSwapTeam(selectedGroupIdx, 'upper', r, m, teamNum, teamId)
+                        }
+                        allTeams={tournament.teams}
                         isExporting={isExporting}
+                        isSwapMode={isSwapMode}
                       />
                     ))}
                   </div>
@@ -262,7 +301,12 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
                         cardThemeColor={settings.cardThemeColor}
                         btnStyle={settings.btnStyle}
                         bracketMode={settings.bracketMode}
+                        onSwapTeam={(bType, r, m, teamNum, teamId) =>
+                          handleSwapTeam(selectedGroupIdx, 'lower', r, m, teamNum, teamId)
+                        }
+                        allTeams={tournament.teams}
                         isExporting={isExporting}
+                        isSwapMode={isSwapMode}
                       />
                     ))}
                   </div>

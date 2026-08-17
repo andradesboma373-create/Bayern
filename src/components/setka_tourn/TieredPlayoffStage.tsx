@@ -10,13 +10,28 @@ interface Props {
   onUpdate: (updated: Tournament) => void;
   onVetoMatch?: (team1: Team, team2: Team, matchInfo?: any) => void;
   isExporting?: boolean;
+  isSwapMode?: boolean;
 }
 
-export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, isExporting }: Props) {
+export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, isExporting, isSwapMode }: Props) {
   const rounds = tournament.tieredBracketRounds || [];
   const settings = tournament.settings;
   const boxCls = getBoxStyle(settings.boxStyle || 'dark', settings.cardThemeColor, settings.btnStyle);
   const accentColor = settings.cardThemeColor || '#ff8f00';
+
+  const handleSwapTeam = (rIdx: number, mIdx: number, teamNum: 1 | 2, teamId: string) => {
+    let team = tournament.teams.find(t => t.id === teamId) || null;
+    if (teamId === 'BYE') team = { id: 'BYE', name: 'BYE' };
+
+    const newRounds = JSON.parse(JSON.stringify(rounds)) as Match[][];
+    const match = newRounds[rIdx]?.[mIdx];
+    if (!match) return;
+
+    if (teamNum === 1) match.team1 = team;
+    else match.team2 = team;
+
+    onUpdate({ ...tournament, tieredBracketRounds: newRounds });
+  };
 
   const handleUpdateScore = (rIdx: number, mIdx: number, teamNum: 1 | 2, score: number) => {
     const newRounds = JSON.parse(JSON.stringify(rounds)) as Match[][];
@@ -132,17 +147,31 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
                                 : 'bg-black/40 border-white/10 text-white font-bold'
                             }`}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <TeamLogo teamName={match.team1?.name || ''} sizeClassName="w-6 h-6 shrink-0" />
-                              <span className="truncate text-xs">
-                                {match.team1?.name || 'TBD'}
-                              </span>
+                              {!hasWinner && !isExporting && isSwapMode ? (
+                                <select
+                                  value={match.team1?.id || ''}
+                                  onChange={(e) => handleSwapTeam(rIdx, mIdx, 1, e.target.value)}
+                                  className="bg-[#12121a] text-white font-bold text-xs p-1 rounded border border-white/20 outline-none cursor-pointer max-w-[150px] truncate"
+                                >
+                                  <option value="">TBD</option>
+                                  <option value="BYE" className="text-emerald-400">BYE</option>
+                                  {tournament.teams.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className="truncate text-xs">
+                                  {match.team1?.name || 'TBD'}
+                                </span>
+                              )}
                             </div>
 
                             {match.team1 && match.team2 && !match.winnerId && settings.bracketMode !== 'realtime' && (
                               <input
                                 type="number"
-                                className="w-12 h-7 bg-black/60 text-center text-xs font-black border border-white/10 rounded focus:border-[#ff8f00] outline-none text-white"
+                                className="w-12 h-7 bg-black/60 text-center text-xs font-black border border-white/10 rounded focus:border-[#ff8f00] outline-none text-white shrink-0 ml-2"
                                 placeholder="0"
                                 value={match.score1 === 0 ? 0 : (match.score1 || '')}
                                 onChange={(e) => handleUpdateScore(rIdx, mIdx, 1, parseInt(e.target.value) || 0)}
@@ -166,17 +195,31 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
                                 : 'bg-black/40 border-white/10 text-white font-bold'
                             }`}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <TeamLogo teamName={match.team2?.name || ''} sizeClassName="w-6 h-6 shrink-0" />
-                              <span className="truncate text-xs">
-                                {match.team2?.name || 'TBD'}
-                              </span>
+                              {!hasWinner && !isExporting && isSwapMode ? (
+                                <select
+                                  value={match.team2?.id || ''}
+                                  onChange={(e) => handleSwapTeam(rIdx, mIdx, 2, e.target.value)}
+                                  className="bg-[#12121a] text-white font-bold text-xs p-1 rounded border border-white/20 outline-none cursor-pointer max-w-[150px] truncate"
+                                >
+                                  <option value="">TBD</option>
+                                  <option value="BYE" className="text-emerald-400">BYE</option>
+                                  {tournament.teams.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className="truncate text-xs">
+                                  {match.team2?.name || 'TBD'}
+                                </span>
+                              )}
                             </div>
 
                             {match.team1 && match.team2 && !match.winnerId && settings.bracketMode !== 'realtime' && (
                               <input
                                 type="number"
-                                className="w-12 h-7 bg-black/60 text-center text-xs font-black border border-white/10 rounded focus:border-[#ff8f00] outline-none text-white"
+                                className="w-12 h-7 bg-black/60 text-center text-xs font-black border border-white/10 rounded focus:border-[#ff8f00] outline-none text-white shrink-0 ml-2"
                                 placeholder="0"
                                 value={match.score2 === 0 ? 0 : (match.score2 || '')}
                                 onChange={(e) => handleUpdateScore(rIdx, mIdx, 2, parseInt(e.target.value) || 0)}

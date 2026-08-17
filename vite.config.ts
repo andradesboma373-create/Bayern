@@ -5,6 +5,9 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    define: {
+      'process.env': {},
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

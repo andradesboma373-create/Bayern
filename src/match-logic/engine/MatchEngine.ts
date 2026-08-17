@@ -38,7 +38,7 @@ export class MatchEngine {
     let t1Side: 'T' | 'CT' = 'T';
     let t2Side: 'T' | 'CT' = 'CT';
     
-    if (process.env.RANDOMIZE_SIDES === 'true') {
+    if (typeof process !== 'undefined' && process?.env?.RANDOMIZE_SIDES === 'true') {
       if (Math.random() > 0.5) {
         t1Side = 'CT';
         t2Side = 'T';
@@ -88,7 +88,7 @@ export class MatchEngine {
       } else if (roleLower === 'sniper') {
           speedBonus = -0.1;
           reactionBonus = 5;
-          if (process.env.NO_SNIPER_BONUS !== 'true') {
+          if (typeof process === 'undefined' || process?.env?.NO_SNIPER_BONUS !== 'true') {
               aimBonus = 10;
           }
       } else if (roleLower === 'support') {

@@ -9,11 +9,32 @@ interface Props {
   onUpdate: (tournament: Tournament) => void;
   onAdvanceToBracket: () => void;
   onVetoMatch?: (t1: any, t2: any, matchInfo?: any) => void;
+  isExporting?: boolean;
+  isSwapMode?: boolean;
 }
 
-export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, onVetoMatch }: Props) {
+export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, onVetoMatch, isExporting, isSwapMode }: Props) {
   const settings = tournament.settings;
   const groups = tournament.groups || [];
+
+  const handleSwapTeam = (groupId: string, matchId: string, teamNum: 1 | 2, teamId: string) => {
+    let team = tournament.teams.find(t => t.id === teamId) || null;
+    if (teamId === 'BYE') team = { id: 'BYE', name: 'BYE' };
+
+    const newGroups = groups.map(g => {
+      if (g.id !== groupId) return g;
+      const newMatches = g.matches.map(m => {
+        if (m.id !== matchId) return m;
+        return {
+          ...m,
+          team1: teamNum === 1 ? team : m.team1,
+          team2: teamNum === 2 ? team : m.team2
+        };
+      });
+      return { ...g, matches: newMatches };
+    });
+    onUpdate({ ...tournament, groups: newGroups });
+  };
 
   const updateMatchScore = (groupId: string, matchId: string, teamNum: 1 | 2, score: number) => {
     const newGroups = groups.map(g => {
@@ -178,13 +199,27 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
                     return (
                         <div key={match.id} className={`flex items-center justify-between transition-all ${boxCls.outerCard}`}>
                             <div className="flex items-center gap-3 flex-1 justify-end">
-                                <span className={`truncate max-w-[120px] ${
-                                    match.winnerId === match.team1?.id 
-                                        ? boxCls.winnerText 
-                                        : isFinished && match.winnerId !== match.team1?.id && !match.isDraw
-                                            ? boxCls.loserText 
-                                            : boxCls.defaultText
-                                }`}>{match.team1?.name}</span>
+                                {!isFinished && !isExporting && isSwapMode ? (
+                                    <select
+                                        value={match.team1?.id || ''}
+                                        onChange={(e) => handleSwapTeam(group.id, match.id, 1, e.target.value)}
+                                        className="bg-[#12121a] text-white font-bold text-xs p-1 rounded border border-white/20 outline-none cursor-pointer max-w-[130px] truncate"
+                                    >
+                                        <option value="">TBD</option>
+                                        <option value="BYE" className="text-emerald-400">BYE</option>
+                                        {tournament.teams.map(t => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <span className={`truncate max-w-[120px] ${
+                                        match.winnerId === match.team1?.id 
+                                            ? boxCls.winnerText 
+                                            : isFinished && match.winnerId !== match.team1?.id && !match.isDraw
+                                                ? boxCls.loserText 
+                                                : boxCls.defaultText
+                                    }`}>{match.team1?.name}</span>
+                                )}
                                 <TeamLogo teamName={match.team1?.name || ''} sizeClassName="w-6 h-6" />
                             </div>
                             
@@ -260,13 +295,27 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
 
                             <div className="flex items-center gap-3 flex-1 justify-start">
                                 <TeamLogo teamName={match.team2?.name || ''} sizeClassName="w-6 h-6" />
-                                <span className={`truncate max-w-[120px] ${
-                                    match.winnerId === match.team2?.id 
-                                        ? boxCls.winnerText 
-                                        : isFinished && match.winnerId !== match.team2?.id && !match.isDraw
-                                            ? boxCls.loserText 
-                                            : boxCls.defaultText
-                                }`}>{match.team2?.name}</span>
+                                {!isFinished && !isExporting && isSwapMode ? (
+                                    <select
+                                        value={match.team2?.id || ''}
+                                        onChange={(e) => handleSwapTeam(group.id, match.id, 2, e.target.value)}
+                                        className="bg-[#12121a] text-white font-bold text-xs p-1 rounded border border-white/20 outline-none cursor-pointer max-w-[130px] truncate"
+                                    >
+                                        <option value="">TBD</option>
+                                        <option value="BYE" className="text-emerald-400">BYE</option>
+                                        {tournament.teams.map(t => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <span className={`truncate max-w-[120px] ${
+                                        match.winnerId === match.team2?.id 
+                                            ? boxCls.winnerText 
+                                            : isFinished && match.winnerId !== match.team2?.id && !match.isDraw
+                                                ? boxCls.loserText 
+                                                : boxCls.defaultText
+                                    }`}>{match.team2?.name}</span>
+                                )}
                             </div>
                         </div>
                     );

@@ -241,7 +241,7 @@ export default function TournamentManager({ user }: { user: any }) {
       if (stage1Type === 'gsl_groups') {
           const numGroups = settings.numberOfGroups || 2;
           const orderedTeams = settings.seedingType === 'random' ? [...teams].sort(() => Math.random() - 0.5) : [...teams];
-          initialGslGroups = generateGslGroups(orderedTeams, numGroups);
+          initialGslGroups = generateGslGroups(orderedTeams, numGroups, settings.groupAssignments);
       } else if (stage1Type === 'groups') {
           const numGroups = settings.numberOfGroups || 2;
           for (let i = 0; i < numGroups; i++) {
@@ -253,10 +253,21 @@ export default function TournamentManager({ user }: { user: any }) {
               });
           }
           
-          const shuffled = settings.seedingType === 'random' ? [...teams].sort(() => Math.random() - 0.5) : [...teams];
-          shuffled.forEach((team, idx) => {
-              initialGroups[idx % numGroups].teams.push(team);
-          });
+          if (settings.groupAssignments && Object.keys(settings.groupAssignments).length > 0) {
+              const teamMap = new Map(teams.map(t => [t.id, t]));
+              initialGroups.forEach((grp, idx) => {
+                  const assignedIds = settings.groupAssignments![grp.id] || settings.groupAssignments![`gsl-group-${idx}`] || [];
+                  assignedIds.forEach(tId => {
+                      const tObj = teamMap.get(tId);
+                      if (tObj) grp.teams.push(tObj);
+                  });
+              });
+          } else {
+              const shuffled = settings.seedingType === 'random' ? [...teams].sort(() => Math.random() - 0.5) : [...teams];
+              shuffled.forEach((team, idx) => {
+                  initialGroups[idx % numGroups].teams.push(team);
+              });
+          }
 
           initialGroups.forEach(group => {
               const matches: Match[] = [];
@@ -602,15 +613,34 @@ export default function TournamentManager({ user }: { user: any }) {
                   team2: m.team2 && m.team2.id !== 'BYE' ? { ...m.team2, name: teamNameMap.get(m.team2.id) || m.team2.name } : m.team2,
               }));
           }
+          if (updatedTournament.gslGroups) {
+              updatedTournament.gslGroups = updatedTournament.gslGroups.map(g => ({
+                  ...g,
+                  teams: g.teams.map(t => ({ ...t, name: teamNameMap.get(t.id) || t.name })),
+                  upperBracket: g.upperBracket.map(r => r.map(m => ({
+                      ...m,
+                      team1: m.team1 && m.team1.id !== 'BYE' ? { ...m.team1, name: teamNameMap.get(m.team1.id) || m.team1.name } : m.team1,
+                      team2: m.team2 && m.team2.id !== 'BYE' ? { ...m.team2, name: teamNameMap.get(m.team2.id) || m.team2.name } : m.team2,
+                  }))),
+                  lowerBracket: g.lowerBracket.map(r => r.map(m => ({
+                      ...m,
+                      team1: m.team1 && m.team1.id !== 'BYE' ? { ...m.team1, name: teamNameMap.get(m.team1.id) || m.team1.name } : m.team1,
+                      team2: m.team2 && m.team2.id !== 'BYE' ? { ...m.team2, name: teamNameMap.get(m.team2.id) || m.team2.name } : m.team2,
+                  })))
+              }));
+          }
       }
 
       if (resetProgress) {
-          const { initialGroups, initialBracket, initialLosersBracket, initialGrandFinal } = generateInitialData(newSettings, newTeams);
+          const { initialGroups, initialBracket, initialLosersBracket, initialGrandFinal, initialSwissRounds, initialGslGroups } = generateInitialData(newSettings, newTeams);
           updatedTournament.activeStage = 1;
           updatedTournament.groups = initialGroups.length > 0 ? initialGroups : undefined;
+          updatedTournament.gslGroups = initialGslGroups.length > 0 ? initialGslGroups : undefined;
+          updatedTournament.swissRounds = initialSwissRounds.length > 0 ? initialSwissRounds : undefined;
           updatedTournament.bracketRounds = initialBracket.length > 0 ? initialBracket : undefined;
           updatedTournament.losersBracketRounds = initialLosersBracket.length > 0 ? initialLosersBracket : undefined;
           updatedTournament.grandFinal = initialGrandFinal.length > 0 ? initialGrandFinal : undefined;
+          updatedTournament.tieredBracketRounds = undefined;
       }
 
       handleUpdateActive(updatedTournament);
@@ -1545,10 +1575,10 @@ export default function TournamentManager({ user }: { user: any }) {
                       </div>
                       
                       {activeTournament.activeStage === 1 && activeTournament.settings.stage1Type === 'gsl_groups' && (
-                          <GslGroupStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} />
+                          <GslGroupStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
                       )}
                       {activeTournament.activeStage === 1 && (activeTournament.settings.stage1Type === 'groups' || (!activeTournament.settings.stage1Type && activeTournament.settings.mode === 'two_stage')) && (
-                          <GroupStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} />
+                          <GroupStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
                       )}
                       {activeTournament.activeStage === 1 && (activeTournament.settings.stage1Type === 'swiss' || (!activeTournament.settings.stage1Type && activeTournament.settings.mode === 'swiss')) && (
                           <SwissStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />

@@ -59,6 +59,7 @@ export interface TournamentSettings {
   lossPoints?: number;
   advancingPerGroup?: number;
   numberOfGroups?: number;
+  groupAssignments?: Record<string, string[]>; // groupId -> array of team ids (or team objects)
 
   // Bracket mode
   bracketMode?: 'standard' | 'realtime';

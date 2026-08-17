@@ -9,7 +9,7 @@ import PlayerAvatar from './PlayerAvatar';
 import { simulateMatchSeries, MAP_POOL_CS2, MAP_POOL_S2 } from '../lib/simulation';
 import VetoModal from "./VetoModal";
 import { saveMatchesToLocalStorage } from '../lib/utils';
-import { updateBetaTournamentMatchResult, loadTournaments } from './setka_tourn/storage';
+import { updateBetaTournamentMatchResult, loadTournaments, saveTournament } from './setka_tourn/storage';
 
 const DEFAULT_TEAM_T = [
   { nickname: 'Player 1', role: 'rifler', rating: 150 },
@@ -587,11 +587,14 @@ export default function Simulator({ user }: { user: any }) {
               newMatch.team1Score,
               newMatch.team2Score
             );
-            const localTourneys = JSON.parse(localStorage.getItem(`tournaments_${user.uid}`) || '[]');
-            const idx = localTourneys.findIndex((t: any) => t.id === selectedTournament);
-            if (idx !== -1) {
-              localTourneys[idx].matchIds = [...(localTourneys[idx].matchIds || []), newMatch.id];
-              localStorage.setItem(`tournaments_${user.uid}`, JSON.stringify(localTourneys));
+            const localTourneys = loadTournaments(user.uid);
+            const target = localTourneys.find((t: any) => t.id === selectedTournament);
+            if (target) {
+              const updated = {
+                ...target,
+                matchIds: [...(target.matchIds || []), newMatch.id]
+              };
+              saveTournament(user.uid, updated);
             }
           }
         } else {

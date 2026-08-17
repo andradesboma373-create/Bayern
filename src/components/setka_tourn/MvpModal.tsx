@@ -3,6 +3,7 @@ import { X, Award, Medal, Trophy, Download, Sparkles, Check, ChevronDown } from 
 import { toPng } from 'html-to-image';
 import TeamLogo from '../TeamLogo';
 import PlayerAvatar from '../PlayerAvatar';
+import { loadTournaments, saveTournament } from './storage';
 
 interface Props {
   user: any;
@@ -19,7 +20,7 @@ export default function MvpModal({ user, tournamentId, onClose }: Props) {
 
   // Load tourney & stats
   const { tourney, allPlayersStats, savedAwards } = useMemo(() => {
-    const localTourneys = JSON.parse(localStorage.getItem(`tournaments_${uid}`) || '[]');
+    const localTourneys = loadTournaments(uid);
     const localMatches = JSON.parse(localStorage.getItem(`matches_${uid}`) || '[]');
     const tourney = localTourneys.find((t: any) => t.id === tournamentId);
     const tourneyName = tourney?.name || '';
@@ -118,20 +119,18 @@ export default function MvpModal({ user, tournamentId, onClose }: Props) {
     setSelectedMvpId(mvpId);
     setSelectedEvpIds(evpIds);
 
-    const localTourneys = JSON.parse(localStorage.getItem(`tournaments_${uid}`) || '[]');
-    const updated = localTourneys.map((t: any) => {
-      if (t.id === tournamentId) {
-        return {
-          ...t,
-          awards: {
-            mvpId,
-            evpIds
-          }
-        };
-      }
-      return t;
-    });
-    localStorage.setItem(`tournaments_${uid}`, JSON.stringify(updated));
+    const localTourneys = loadTournaments(uid);
+    const target = localTourneys.find((t: any) => t.id === tournamentId);
+    if (target) {
+      const updated = {
+        ...target,
+        awards: {
+          mvpId,
+          evpIds
+        }
+      };
+      saveTournament(uid, updated);
+    }
   };
 
   const handleAutoSelect = () => {

@@ -17,18 +17,27 @@ export interface GslStandings {
  * Upper Bracket Final determines 1st & 2nd place (Loser does NOT drop to Lower Bracket)
  * Lower Bracket Final determines 3rd & 4th place
  */
-export function generateGslGroups(teams: Team[], numGroups: number = 2): GslGroup[] {
+export function generateGslGroups(teams: Team[], numGroups: number = 2, customAssignments?: Record<string, string[]>): GslGroup[] {
   const groups: GslGroup[] = [];
   const validNumGroups = Math.max(1, numGroups);
+  const teamMap = new Map(teams.map(t => [t.id, t]));
 
   for (let g = 0; g < validNumGroups; g++) {
     const groupName = `Группа ${String.fromCharCode(65 + g)}`;
     const groupId = `gsl-group-${g}`;
     const groupTeams: Team[] = [];
 
-    // Distribute teams to groups
-    for (let i = g; i < teams.length; i += validNumGroups) {
-      if (teams[i]) groupTeams.push(teams[i]);
+    if (customAssignments && customAssignments[groupId] && Array.isArray(customAssignments[groupId])) {
+      // Use custom assigned teams for this group
+      customAssignments[groupId].forEach(tId => {
+        const teamObj = teamMap.get(tId);
+        if (teamObj) groupTeams.push(teamObj);
+      });
+    } else {
+      // Default distribution
+      for (let i = g; i < teams.length; i += validNumGroups) {
+        if (teams[i]) groupTeams.push(teams[i]);
+      }
     }
 
     const { upperBracket, lowerBracket } = generateGslGroupBrackets(groupTeams, groupId);
