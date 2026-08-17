@@ -19,9 +19,11 @@ export class TeamAI {
         if (team.tactic === 'ECO') {
             team.strategy = r > 0.5 ? 'FAST_A' : 'FAST_B'; 
         } else {
-            if (r < 0.45) team.strategy = 'EXECUTE_A';
-            else if (r < 0.90) team.strategy = 'EXECUTE_B';
-            else if (r < 0.95) team.strategy = 'FAST_A';
+            if (r < 0.35) team.strategy = 'EXECUTE_A';
+            else if (r < 0.65) team.strategy = 'EXECUTE_B';
+            else if (r < 0.80) team.strategy = 'MID_SPLIT_A';
+            else if (r < 0.92) team.strategy = 'MID_SPLIT_B';
+            else if (r < 0.96) team.strategy = 'FAST_A';
             else team.strategy = 'FAST_B';
         }
       } else {

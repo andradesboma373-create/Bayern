@@ -796,14 +796,27 @@ function finalizeStats(stats: any[]) {
         s.adr = (s.damage / s.totalRounds).toFixed(1);
         s.kpr = (s.kills / s.totalRounds).toFixed(2);
         s.dpr = (s.deaths / s.totalRounds).toFixed(2);
-        s.kast = "70%";
         
-        const killRating = (s.kills / s.totalRounds) / 0.677;
-        const survivalRating = ((s.totalRounds - s.deaths) / s.totalRounds) / 0.31;
-        const rmKills = (s.k1 || 0) + (s.k2 || 0)*2 + (s.k3 || 0)*3 + (s.k4 || 0)*4 + (s.k5 || 0)*5;
-        const multikillRating = (rmKills / s.totalRounds) / 1.27;
-        const impact = 2.13 * (s.kills / s.totalRounds) + 0.42 * ((s.assists || 0) / s.totalRounds) - 0.41;
-        s.hltvRating = ((killRating + survivalRating + multikillRating + impact + 1) / 5).toFixed(2);
+        const kprNum = s.kills / s.totalRounds;
+        const dprNum = s.deaths / s.totalRounds;
+        const aprNum = (s.assists || 0) / s.totalRounds;
+        const adrNum = s.damage / s.totalRounds;
+        
+        const kastPct = s.kastRounds !== undefined 
+            ? Math.min(100, Math.max(30, (s.kastRounds / s.totalRounds) * 100))
+            : Math.min(95, Math.max(45, 68 + (s.kills + (s.assists || 0) - s.deaths) * 1.5));
+            
+        s.kast = `${Math.round(kastPct)}%`;
+        
+        // Official HLTV Rating 2.0 formula
+        const impact = 2.13 * kprNum + 0.42 * aprNum - 0.41;
+        let rating2 = 0.007387 * kastPct + 0.3591 * kprNum - 0.5329 * dprNum + 0.2372 * impact + 0.0032 * adrNum + 0.1587;
+        
+        // Ensure realistic range [0.45, 2.50]
+        rating2 = Math.max(0.45, Math.min(2.50, rating2));
+        
+        s.impact = impact.toFixed(2);
+        s.hltvRating = rating2.toFixed(2);
     });
 }
 
@@ -902,6 +915,7 @@ export function simulateMatchSeries(
             (results.team1Stats[idx] as any).k5 = ((results.team1Stats[idx] as any).k5 || 0) + (stat.k5 || 0);
             (results.team1Stats[idx] as any).fk = ((results.team1Stats[idx] as any).fk || 0) + (stat.fk || 0);
             (results.team1Stats[idx] as any).fd = ((results.team1Stats[idx] as any).fd || 0) + (stat.fd || 0);
+            (results.team1Stats[idx] as any).kastRounds = ((results.team1Stats[idx] as any).kastRounds || 0) + (stat.kastRounds || 0);
         });
         
         mapResult.team2Stats.forEach((stat, idx) => {
@@ -917,6 +931,7 @@ export function simulateMatchSeries(
             (results.team2Stats[idx] as any).k5 = ((results.team2Stats[idx] as any).k5 || 0) + (stat.k5 || 0);
             (results.team2Stats[idx] as any).fk = ((results.team2Stats[idx] as any).fk || 0) + (stat.fk || 0);
             (results.team2Stats[idx] as any).fd = ((results.team2Stats[idx] as any).fd || 0) + (stat.fd || 0);
+            (results.team2Stats[idx] as any).kastRounds = ((results.team2Stats[idx] as any).kastRounds || 0) + (stat.kastRounds || 0);
         });
 
         if (results.team1Score >= winsNeeded || results.team2Score >= winsNeeded) break;

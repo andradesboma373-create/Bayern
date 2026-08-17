@@ -95,14 +95,14 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
 
   const getUpperRoundLabel = (rIdx: number, total: number) => {
     const remaining = total - rIdx;
-    if (remaining === 1) return '🏆 Финал за 1-е и 2-е место';
+    if (remaining === 1) return 'Финал за 1-е и 2-е место';
     if (remaining === 2) return 'Полуфинал верхней сетки';
     return `Раунд ${rIdx + 1} (1/4)`;
   };
 
   const getLowerRoundLabel = (rIdx: number, total: number) => {
     const remaining = total - rIdx;
-    if (remaining === 1) return '🥉 Финал за 3-е и 4-е место';
+    if (remaining === 1) return 'Финал за 3-е и 4-е место';
     if (remaining === 2) return '1/4 нижней сетки';
     return `Раунд ${rIdx + 1} нижней сетки`;
   };

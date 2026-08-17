@@ -106,7 +106,7 @@ export interface Team {
   side: TeamSide;
   players: string[]; // Player IDs
   tactic: string;
-  strategy: 'DEFAULT' | 'FAST_A' | 'FAST_B' | 'EXECUTE_A' | 'EXECUTE_B' | 'SPLIT' | 'CONTACT' | 'FAKE' | 'SLOW' | 'AGGRESSIVE' | 'PASSIVE' | 'STACK_A' | 'STACK_B' | 'RETAKE' | 'SAVE' | 'DEFEND_BOMB' | 'RECOVER_BOMB';
+  strategy: 'DEFAULT' | 'FAST_A' | 'FAST_B' | 'EXECUTE_A' | 'EXECUTE_B' | 'MID_SPLIT_A' | 'MID_SPLIT_B' | 'SPLIT' | 'CONTACT' | 'FAKE' | 'SLOW' | 'AGGRESSIVE' | 'PASSIVE' | 'STACK_A' | 'STACK_B' | 'RETAKE' | 'SAVE' | 'DEFEND_BOMB' | 'RECOVER_BOMB';
   lossStreak?: number;
 }
 

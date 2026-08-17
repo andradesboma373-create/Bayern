@@ -76,12 +76,17 @@ export class CombatSystem {
     }
     
     if (shooter.state === 'MOVING') {
-        hitChance *= weapon.type === 'SNIPER' ? 0.20 : 0.45;
+        hitChance *= weapon.type === 'SNIPER' ? 0.25 : 0.65;
     }
     if (target.state === 'MOVING') hitChance *= 0.85;
     
+    // Flank / backstab / distraction bonus: enemy is looking elsewhere
+    if (target.targetEnemyId && target.targetEnemyId !== shooter.id) {
+        hitChance *= 1.25;
+    }
+    
     // Realistic CS2 hit chance caps
-    hitChance = weapon.type === 'SNIPER' ? Math.min(0.96, Math.max(0.25, hitChance)) : Math.min(0.88, Math.max(0.10, hitChance)); 
+    hitChance = weapon.type === 'SNIPER' ? Math.min(0.96, Math.max(0.25, hitChance)) : Math.min(0.90, Math.max(0.15, hitChance)); 
     
     const roll = this.random();
     this.createSoundEvent(state, shooter.currentNodeId, shooter.id);
@@ -171,6 +176,38 @@ export class CombatSystem {
        killer.statistics.openingKills++;
        victim.statistics.openingDeaths++;
        state.roundFirstKillId = killer.id;
+    }
+    
+    (victim as any).deathTick = state.tick;
+    (victim as any).killerId = killer.id;
+
+    // If victim recently killed one of killer's teammates, that teammate was successfully traded!
+    for (const mate of Object.values(state.players)) {
+        if (mate.teamId === killer.teamId && !mate.alive && (mate as any).killerId === victim.id && (state.tick - (mate as any).deathTick) <= 40) {
+            (mate as any).tradedInRound = true;
+        }
+    }
+
+    // Alert victim teammates about killer position for trade fragging
+    for (const mate of Object.values(state.players)) {
+        if (mate.alive && mate.teamId === victim.teamId) {
+            mate.knownEnemies.set(killer.id, {
+                enemyId: killer.id,
+                position: { ...killer.position },
+                nodeId: killer.currentNodeId,
+                timestamp: state.tick,
+                confidence: 1.0
+            });
+            // If nearby, immediately target killer for instant trade
+            if (mate.currentNodeId === victim.currentNodeId || MapSystem.hasLineOfSight(mate.currentNodeId, killer.currentNodeId)) {
+                if (mate.state !== 'ENGAGING') {
+                    mate.state = 'ENGAGING';
+                    mate.targetEnemyId = killer.id;
+                    mate.aimProgress = 0.80;
+                    mate.reactionTimer = state.tick + 2;
+                }
+            }
+        }
     }
     
     state.events.push({

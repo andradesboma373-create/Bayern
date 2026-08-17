@@ -83,32 +83,36 @@ export class MatchEngine {
       
       const roleLower = role.toLowerCase().trim();
       if (roleLower === 'entry' || roleLower === 'opener' || roleLower === 'энтри' || roleLower === 'открывающий') {
-          speedBonus = 0.08; 
-          reaction = skillVal * 1.10 + 5;
-          aim = skillVal * 1.05 + 4;
+          speedBonus = 0.04; 
+          reaction = skillVal * 1.05 + 2;
+          aim = skillVal * 1.04 + 2;
+          iq = skillVal * 0.98;
       } else if (roleLower === 'sniper' || roleLower === 'awper' || roleLower === 'awp' || roleLower === 'снайпер' || roleLower === 'авапер') {
-          speedBonus = -0.04;
-          reaction = skillVal * 1.12 + 6;
-          aim = skillVal * 1.18 + 10;
-      } else if (roleLower === 'support' || roleLower === 'саппорт' || roleLower === 'помощник') {
           speedBonus = -0.02;
-          reaction = skillVal * 0.94;
-          aim = skillVal * 0.90 - 2;
-          iq = skillVal * 1.15;
+          reaction = skillVal * 1.05 + 2;
+          aim = skillVal * 1.06 + 3;
+          iq = skillVal * 1.02;
+      } else if (roleLower === 'support' || roleLower === 'саппорт' || roleLower === 'помощник') {
+          speedBonus = -0.01;
+          reaction = skillVal * 0.98;
+          aim = skillVal * 0.98;
+          iq = skillVal * 1.06;
       } else if (roleLower === 'lurker' || roleLower === 'люркер') {
-          speedBonus = 0.04;
-          reaction = skillVal * 1.06 + 3;
-          aim = skillVal * 1.08 + 4;
+          speedBonus = 0.02;
+          reaction = skillVal * 1.03 + 1;
+          aim = skillVal * 1.03 + 1;
+          iq = skillVal * 1.04;
       } else if (roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader') {
-          speedBonus = -0.04;
-          reaction = skillVal * 0.85 - 3;
-          aim = skillVal * 0.76 - 8;
-          iq = skillVal * 1.35;
+          speedBonus = -0.02;
+          reaction = skillVal * 0.96;
+          aim = skillVal * 0.96;
+          iq = skillVal * 1.12;
       } else {
           // Default Rifler / стрелок
-          aim = skillVal * 1.10 + 6;
-          reaction = skillVal * 1.05 + 3;
-          speedBonus = 0.02;
+          aim = skillVal * 1.01;
+          reaction = skillVal * 1.01;
+          iq = skillVal * 1.00;
+          speedBonus = 0.01;
       }
       
       const p: Player = {
@@ -216,7 +220,8 @@ export class MatchEngine {
         id: p.id, nickname: p.name, kills: st.kills || 0, deaths: st.deaths || 0, assists: st.assists || 0, damage: st.damage || 0,
         hs: st.headshots || 0, role: p.role || 'rifler', rating: p.rating || 100,
         fk: st.openingKills || 0, fd: st.openingDeaths || 0,
-        k1: st.k1 || 0, k2: st.k2 || 0, k3: st.k3 || 0, k4: st.k4 || 0, k5: st.k5 || 0
+        k1: st.k1 || 0, k2: st.k2 || 0, k3: st.k3 || 0, k4: st.k4 || 0, k5: st.k5 || 0,
+        kastRounds: st.kastRounds || 0
       }
     }).filter(Boolean);
     
@@ -228,7 +233,8 @@ export class MatchEngine {
         id: p.id, nickname: p.name, kills: st.kills || 0, deaths: st.deaths || 0, assists: st.assists || 0, damage: st.damage || 0,
         hs: st.headshots || 0, role: p.role || 'rifler', rating: p.rating || 100,
         fk: st.openingKills || 0, fd: st.openingDeaths || 0,
-        k1: st.k1 || 0, k2: st.k2 || 0, k3: st.k3 || 0, k4: st.k4 || 0, k5: st.k5 || 0
+        k1: st.k1 || 0, k2: st.k2 || 0, k3: st.k3 || 0, k4: st.k4 || 0, k5: st.k5 || 0,
+        kastRounds: st.kastRounds || 0
       }
     }).filter(Boolean);
 

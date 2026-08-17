@@ -1625,7 +1625,7 @@ export default function TournamentManager({ user }: { user: any }) {
                       )}
 
                       {activeTournament.activeStage === 2 && activeTournament.tieredBracketRounds && (
-                          <TieredPlayoffStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} />
+                          <TieredPlayoffStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} />
                       )}
         
                       {((activeTournament.activeStage === 2 && !activeTournament.tieredBracketRounds) || activeTournament.settings.stage1Type === 'playoff' || (!activeTournament.settings.stage1Type && activeTournament.settings.mode === 'single_stage')) && (

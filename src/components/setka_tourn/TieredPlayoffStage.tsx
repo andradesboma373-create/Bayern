@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Tournament, Match, Team } from './types';
 import TeamLogo from '../TeamLogo';
 import { advanceTieredPlayoffMatch, getGslGroupStandings } from './gslLogic';
-import { Trophy, Award, Shield } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { getBoxStyle } from './boxStyles';
 
 interface Props {
@@ -19,11 +19,18 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
   const boxCls = getBoxStyle(settings.boxStyle || 'dark', settings.cardThemeColor, settings.btnStyle);
   const accentColor = settings.cardThemeColor || '#ff8f00';
 
-  // Extract only teams that actually advanced/qualified to this tiered playoff stage
+  // Extract all eligible and tournament teams for swapping
   const eligiblePlayoffTeams = useMemo(() => {
     const map = new Map<string, Team>();
 
-    // 1. Teams advancing from GSL Group stage (1st, 2nd, 3rd, 4th place)
+    // 1. Teams from entire tournament roster
+    if (tournament.teams && tournament.teams.length > 0) {
+      tournament.teams.forEach(t => {
+        if (t && t.id && t.id !== 'BYE') map.set(t.id, t);
+      });
+    }
+
+    // 2. Teams advancing from GSL Group stage (1st, 2nd, 3rd, 4th place)
     if (tournament.gslGroups && tournament.gslGroups.length > 0) {
       tournament.gslGroups.forEach(g => {
         const st = getGslGroupStandings(g);
@@ -34,7 +41,7 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
       });
     }
 
-    // 2. Teams present in any match across all tiered playoff rounds
+    // 3. Teams present in any match across all tiered playoff rounds
     (tournament.tieredBracketRounds || []).forEach(round => {
       round.forEach(m => {
         if (m.team1 && m.team1.id !== 'BYE') map.set(m.team1.id, m.team1);
@@ -42,16 +49,13 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
       });
     });
 
-    // Fallback: If no group stage or bracket matches populated yet, use full tournament teams
-    if (map.size === 0) {
-      return tournament.teams || [];
-    }
     return Array.from(map.values());
-  }, [tournament.gslGroups, tournament.tieredBracketRounds, tournament.teams]);
+  }, [tournament.teams, tournament.gslGroups, tournament.tieredBracketRounds]);
 
   const handleSwapTeam = (rIdx: number, mIdx: number, teamNum: 1 | 2, teamId: string) => {
-    let team = eligiblePlayoffTeams.find(t => t.id === teamId) || tournament.teams.find(t => t.id === teamId) || null;
+    let team = eligiblePlayoffTeams.find(t => t.id === teamId) || null;
     if (teamId === 'BYE') team = { id: 'BYE', name: 'BYE' };
+    if (!teamId) team = null;
 
     const newRounds = JSON.parse(JSON.stringify(rounds)) as Match[][];
     const match = newRounds[rIdx]?.[mIdx];
@@ -156,13 +160,13 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
                       <div className={`relative z-10 w-full transition-all ${boxCls.outerCard}`}>
                         {/* Seed badge if pre-seeded into this round */}
                         {showGroup1stBadge && (
-                          <div className="mb-2 inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase px-2 py-0.5 rounded-md shadow-sm">
-                            <Shield className="w-3 h-3" /> Group 1st place (1-е место группы)
+                          <div className="mb-2 inline-flex items-center bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase px-2 py-0.5 rounded-md shadow-sm">
+                            1-е место группы
                           </div>
                         )}
                         {showGroup2ndBadge && (
-                          <div className="mb-2 inline-flex items-center gap-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] font-black uppercase px-2 py-0.5 rounded-md shadow-sm">
-                            <Award className="w-3 h-3" /> Group 2nd place (2-е место группы)
+                          <div className="mb-2 inline-flex items-center bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] font-black uppercase px-2 py-0.5 rounded-md shadow-sm">
+                            2-е место группы
                           </div>
                         )}
 

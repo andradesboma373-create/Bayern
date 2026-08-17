@@ -9,7 +9,13 @@ import { BombSystem } from '../systems/BombSystem';
 export class RoundEngine {
   static startRound(state: MatchState) {
     state.round++;
-    Object.values(state.players).forEach(p => (p as any).lastRoundKills = p.statistics.kills);
+    Object.values(state.players).forEach(p => {
+        if (p && p.statistics) {
+            (p as any).lastRoundKills = p.statistics.kills;
+            (p as any).lastRoundAssists = p.statistics.assists;
+            (p as any).tradedInRound = false;
+        }
+    });
     state.phase = 'FREEZE';
     state.tick = 0;
     
@@ -192,11 +198,17 @@ export class RoundEngine {
     for (const p of Object.values(state.players)) {
       if (!p || !p.statistics) continue;
       const rKills = p.statistics.kills - ((p as any).lastRoundKills || 0);
+      const rAssists = p.statistics.assists - ((p as any).lastRoundAssists || 0);
       if (rKills === 1) (p.statistics as any).k1 = ((p.statistics as any).k1 || 0) + 1;
       else if (rKills === 2) (p.statistics as any).k2 = ((p.statistics as any).k2 || 0) + 1;
       else if (rKills === 3) (p.statistics as any).k3 = ((p.statistics as any).k3 || 0) + 1;
       else if (rKills === 4) (p.statistics as any).k4 = ((p.statistics as any).k4 || 0) + 1;
       else if (rKills >= 5) (p.statistics as any).k5 = ((p.statistics as any).k5 || 0) + 1;
+
+      const contributed = rKills > 0 || rAssists > 0 || p.alive || (p as any).tradedInRound;
+      if (contributed) {
+        (p.statistics as any).kastRounds = ((p.statistics as any).kastRounds || 0) + 1;
+      }
     }
     
     state.roundLogs.push({
