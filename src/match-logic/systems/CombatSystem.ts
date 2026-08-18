@@ -58,46 +58,51 @@ export class CombatSystem {
     shooter.statistics.shots++;
     const dist = MapSystem.getDistance(MapSystem.getNode(shooter.currentNodeId), MapSystem.getNode(target.currentNodeId));
     
-    // Normalize aim and reaction into 0-100 scale
-    const normAim = Math.min(99, Math.max(20, (shooter.aim || 100) * 0.8));
-    const aimFactor = normAim / 100;
-    const progress = Math.min(1.0, Math.max(0.2, shooter.aimProgress || 0.5));
+    // Normalize aim into a competitive pro scale [0.0 .. 1.0]
+    const normAim = Math.min(115, Math.max(80, shooter.aim || 100));
+    const aimFactor = (normAim - 80) / 35; // ~0.0 to 1.0 (smooth pro variance)
+    const progress = Math.min(1.0, Math.max(0.5, shooter.aimProgress || 0.75));
     
-    let hitChance = 0.20 + 0.65 * aimFactor * progress;
+    let hitChance = 0.44 + (0.18 * aimFactor * progress);
     if (weapon.type === 'SNIPER') {
         // High accuracy for scoped snipers
-        hitChance = 0.60 + 0.38 * aimFactor * Math.max(0.7, progress);
+        hitChance = 0.70 + (0.16 * aimFactor * Math.max(0.7, progress));
         hitChance *= (weapon.accuracy / 100);
-        // Minimal distance falloff for snipers
         hitChance *= Math.max(0.85, 1 - (dist / (weapon.range * 4)));
     } else {
         hitChance *= (weapon.accuracy / 100);
-        hitChance *= Math.max(0.35, 1 - (dist / (weapon.range * 1.2)));
+        hitChance *= Math.max(0.55, 1 - (dist / (weapon.range * 1.5)));
     }
     
+    // Stationary / angle holding advantage
+    if (shooter.state === 'HOLDING') {
+        hitChance *= 1.12;
+    }
+    
+    // Movement penalties
     if (shooter.state === 'MOVING') {
-        hitChance *= weapon.type === 'SNIPER' ? 0.25 : 0.65;
+        hitChance *= weapon.type === 'SNIPER' ? 0.40 : 0.78;
     }
-    if (target.state === 'MOVING') hitChance *= 0.85;
+    if (target.state === 'MOVING') hitChance *= 0.90;
     
-    // Flank / backstab / distraction bonus: enemy is looking elsewhere
+    // Crossfire / Flank / Distraction / Trade bonus: enemy is engaged with someone else
     if (target.targetEnemyId && target.targetEnemyId !== shooter.id) {
         hitChance *= 1.25;
     }
     
-    // Realistic CS2 hit chance caps
-    hitChance = weapon.type === 'SNIPER' ? Math.min(0.96, Math.max(0.25, hitChance)) : Math.min(0.90, Math.max(0.15, hitChance)); 
+    // Balanced hit chance caps (no player is sub-human or godmode)
+    hitChance = weapon.type === 'SNIPER' ? Math.min(0.92, Math.max(0.40, hitChance)) : Math.min(0.82, Math.max(0.32, hitChance)); 
     
     const roll = this.random();
     this.createSoundEvent(state, shooter.currentNodeId, shooter.id);
     
     if (!target.damageTaken) target.damageTaken = new Map();
     
-    // Realistic utility: if shooter carries an HE grenade, use it on first clash in contested node
+    // Utility usage: HE grenade in contested node
     if (shooter.grenades && shooter.grenades.includes('he') && !target.damageTaken.has(shooter.id)) {
         shooter.grenades = shooter.grenades.filter(g => g !== 'he');
         if (this.random() < 0.35) {
-            const nadeDamage = Math.floor(10 + this.random() * 18);
+            const nadeDamage = Math.floor(12 + this.random() * 16);
             const actualNade = Math.min(target.hp - 1, nadeDamage);
             if (actualNade > 0) {
                 target.hp -= actualNade;
@@ -110,8 +115,8 @@ export class CombatSystem {
     
     if (roll < hitChance) {
       shooter.statistics.hits++;
-      const hsChance = (shooter.aim / 200) * shooter.aimProgress;
-      const isHeadshot = this.random() < hsChance;
+      const baseHsChance = 0.30 + (aimFactor * 0.15); // Realistic 30% - 45% HS rate
+      const isHeadshot = this.random() < baseHsChance;
       
       let damage = weapon.damage;
       if (isHeadshot) damage *= weapon.headshotMultiplier;
@@ -142,7 +147,7 @@ export class CombatSystem {
                  position: { ...shooter.position },
                  nodeId: shooter.currentNodeId,
                  timestamp: state.tick,
-                 confidence: 0.5
+                 confidence: 0.8
             });
         }
       }

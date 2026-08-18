@@ -64,21 +64,21 @@ export function getSubclassObj(roleId: string, subclassId?: string): RoleSubclas
 }
 
 export const DEFAULT_ROLES_S2 = [
-    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.15, skillMultiplier: 1.10, impact: 1.15, deathMultiplier: 0.95, assistMultiplier: 1.0 },
-    { id: 'sniper', name: 'Снайпер', killMultiplier: 1.25, skillMultiplier: 1.20, impact: 1.30, deathMultiplier: 0.85, assistMultiplier: 0.75 },
-    { id: 'lurker', name: 'Люркер', killMultiplier: 1.15, skillMultiplier: 1.12, impact: 1.15, deathMultiplier: 0.90, assistMultiplier: 0.95 },
-    { id: 'opener', name: 'Опенер', killMultiplier: 1.20, skillMultiplier: 1.12, impact: 1.30, deathMultiplier: 1.10, assistMultiplier: 1.05 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 1.05, skillMultiplier: 1.05, impact: 1.05, deathMultiplier: 0.95, assistMultiplier: 1.25 },
-    { id: 'captain', name: 'Капитан', killMultiplier: 0.88, skillMultiplier: 0.94, impact: 0.95, deathMultiplier: 1.02, assistMultiplier: 1.25 }
+    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.02, skillMultiplier: 1.00, impact: 1.02, deathMultiplier: 1.00, assistMultiplier: 1.00 },
+    { id: 'sniper', name: 'Снайпер', killMultiplier: 1.06, skillMultiplier: 1.02, impact: 1.08, deathMultiplier: 0.98, assistMultiplier: 0.90 },
+    { id: 'lurker', name: 'Люркер', killMultiplier: 1.02, skillMultiplier: 1.00, impact: 1.02, deathMultiplier: 0.98, assistMultiplier: 0.95 },
+    { id: 'opener', name: 'Опенер', killMultiplier: 1.04, skillMultiplier: 1.01, impact: 1.06, deathMultiplier: 1.02, assistMultiplier: 1.05 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 0.98, skillMultiplier: 0.99, impact: 0.98, deathMultiplier: 1.00, assistMultiplier: 1.15 },
+    { id: 'captain', name: 'Капитан', killMultiplier: 0.98, skillMultiplier: 0.99, impact: 0.98, deathMultiplier: 1.00, assistMultiplier: 1.15 }
 ];
 
 export const DEFAULT_ROLES_CS2 = [
-    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.15, skillMultiplier: 1.10, impact: 1.15, deathMultiplier: 0.95, assistMultiplier: 1.0 },
-    { id: 'sniper', name: 'AWPer', killMultiplier: 1.25, skillMultiplier: 1.20, impact: 1.30, deathMultiplier: 0.85, assistMultiplier: 0.75 },
-    { id: 'lurker', name: 'Люркер', killMultiplier: 1.15, skillMultiplier: 1.12, impact: 1.15, deathMultiplier: 0.90, assistMultiplier: 0.95 },
-    { id: 'opener', name: 'Entry', killMultiplier: 1.20, skillMultiplier: 1.12, impact: 1.30, deathMultiplier: 1.10, assistMultiplier: 1.05 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 1.05, skillMultiplier: 1.05, impact: 1.05, deathMultiplier: 0.95, assistMultiplier: 1.25 },
-    { id: 'captain', name: 'IGL', killMultiplier: 0.88, skillMultiplier: 0.94, impact: 0.95, deathMultiplier: 1.02, assistMultiplier: 1.25 }
+    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.02, skillMultiplier: 1.00, impact: 1.02, deathMultiplier: 1.00, assistMultiplier: 1.00 },
+    { id: 'sniper', name: 'AWPer', killMultiplier: 1.06, skillMultiplier: 1.02, impact: 1.08, deathMultiplier: 0.98, assistMultiplier: 0.90 },
+    { id: 'lurker', name: 'Люркер', killMultiplier: 1.02, skillMultiplier: 1.00, impact: 1.02, deathMultiplier: 0.98, assistMultiplier: 0.95 },
+    { id: 'opener', name: 'Entry', killMultiplier: 1.04, skillMultiplier: 1.01, impact: 1.06, deathMultiplier: 1.02, assistMultiplier: 1.05 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 0.98, skillMultiplier: 0.99, impact: 0.98, deathMultiplier: 1.00, assistMultiplier: 1.15 },
+    { id: 'captain', name: 'IGL', killMultiplier: 0.98, skillMultiplier: 0.99, impact: 0.98, deathMultiplier: 1.00, assistMultiplier: 1.15 }
 ];
 
 export const MAP_POOL_CS2 = [
@@ -803,17 +803,19 @@ function finalizeStats(stats: any[]) {
         const adrNum = s.damage / s.totalRounds;
         
         const kastPct = s.kastRounds !== undefined 
-            ? Math.min(100, Math.max(30, (s.kastRounds / s.totalRounds) * 100))
+            ? Math.min(98, Math.max(40, (s.kastRounds / s.totalRounds) * 100))
             : Math.min(95, Math.max(45, 68 + (s.kills + (s.assists || 0) - s.deaths) * 1.5));
             
         s.kast = `${Math.round(kastPct)}%`;
         
-        // Official HLTV Rating 2.0 formula
-        const impact = 2.13 * kprNum + 0.42 * aprNum - 0.41;
+        // Official HLTV Rating 2.0 formula with realistic impact floor
+        const rawImpact = 2.13 * kprNum + 0.42 * aprNum - 0.41;
+        const impact = Math.max(0.40, rawImpact);
+        
         let rating2 = 0.007387 * kastPct + 0.3591 * kprNum - 0.5329 * dprNum + 0.2372 * impact + 0.0032 * adrNum + 0.1587;
         
-        // Ensure realistic range [0.45, 2.50]
-        rating2 = Math.max(0.45, Math.min(2.50, rating2));
+        // Realistic competitive HLTV bounds [0.55, 2.30]
+        rating2 = Math.max(0.55, Math.min(2.30, rating2));
         
         s.impact = impact.toFixed(2);
         s.hltvRating = rating2.toFixed(2);

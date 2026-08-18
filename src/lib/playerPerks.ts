@@ -61,52 +61,52 @@ export const CUSTOM_PLAYER_PERKS: PlayerPerk[] = [
   {
     nickname: "karrigan",
     customTitle: "Tactical Mastermind 🧠",
-    skillMultiplier: 0.95,
-    killMultiplier: 0.85,
-    deathMultiplier: 1.05,
-    assistMultiplier: 1.35,
-    tacticalBonus: 0.25,
-    clutchBonus: 0.10
+    skillMultiplier: 0.98,
+    killMultiplier: 0.94,
+    deathMultiplier: 1.02,
+    assistMultiplier: 1.15,
+    tacticalBonus: 0.08,
+    clutchBonus: 0.05
   },
   {
     nickname: "s1mple",
     customTitle: "The GOAT 👑",
-    skillMultiplier: 1.35,
-    killMultiplier: 1.35,
-    deathMultiplier: 0.75,
-    assistMultiplier: 1.05,
-    clutchBonus: 0.25,
-    hsMultiplier: 1.15
+    skillMultiplier: 1.08,
+    killMultiplier: 1.10,
+    deathMultiplier: 0.92,
+    assistMultiplier: 1.02,
+    clutchBonus: 0.10,
+    hsMultiplier: 1.08
   },
   {
     nickname: "zywoo",
     customTitle: "The Chosen One ✨",
-    skillMultiplier: 1.35,
-    killMultiplier: 1.30,
-    deathMultiplier: 0.70,
-    assistMultiplier: 1.20,
-    clutchBonus: 0.20,
-    hsMultiplier: 1.10
+    skillMultiplier: 1.08,
+    killMultiplier: 1.10,
+    deathMultiplier: 0.92,
+    assistMultiplier: 1.05,
+    clutchBonus: 0.08,
+    hsMultiplier: 1.06
   },
   {
     nickname: "donk",
     customTitle: "W-Key Machine ⚡",
-    skillMultiplier: 1.30,
-    killMultiplier: 1.45,
-    deathMultiplier: 1.15,
-    assistMultiplier: 0.90,
-    clutchBonus: 0.05,
-    hsMultiplier: 1.40
+    skillMultiplier: 1.07,
+    killMultiplier: 1.12,
+    deathMultiplier: 1.02,
+    assistMultiplier: 0.95,
+    clutchBonus: 0.04,
+    hsMultiplier: 1.12
   },
   {
     nickname: "m0nesy",
     customTitle: "Baby Goat ⚡",
-    skillMultiplier: 1.32,
-    killMultiplier: 1.32,
-    deathMultiplier: 0.72,
-    assistMultiplier: 1.00,
-    clutchBonus: 0.22,
-    hsMultiplier: 1.12
+    skillMultiplier: 1.07,
+    killMultiplier: 1.09,
+    deathMultiplier: 0.93,
+    assistMultiplier: 1.02,
+    clutchBonus: 0.08,
+    hsMultiplier: 1.06
   }
 ];
 
