@@ -19,17 +19,26 @@ export class RoundEngine {
     state.phase = 'FREEZE';
     state.tick = 0;
     
+    const isMR12 = state.format === 'MR12';
+    const halfRound = isMR12 ? 13 : 16;
+    const regulationMax = isMR12 ? 24 : 30;
+    const teamIds = Object.keys(state.teams);
+    const t1Orig = (state as any).t1StartedAs || 'T';
+    const t2Orig = (state as any).t2StartedAs || 'CT';
+    
     if (state.round === 1) {
-      const teamIds = Object.keys(state.teams);
-      state.teams[teamIds[0]].side = 'T';
-      state.teams[teamIds[1]].side = 'CT';
-    } else if (state.round === 13 && state.format === 'MR12') {
-      const teamIds = Object.keys(state.teams);
-      state.teams[teamIds[0]].side = state.teams[teamIds[0]].side === 'T' ? 'CT' : 'T';
-      state.teams[teamIds[1]].side = state.teams[teamIds[1]].side === 'T' ? 'CT' : 'T';
+      if (teamIds[0] && state.teams[teamIds[0]]) state.teams[teamIds[0]].side = t1Orig;
+      if (teamIds[1] && state.teams[teamIds[1]]) state.teams[teamIds[1]].side = t2Orig;
+    } else if (state.round === halfRound) {
+      if (teamIds[0] && state.teams[teamIds[0]]) {
+        state.teams[teamIds[0]].side = t1Orig === 'T' ? 'CT' : 'T';
+        state.teams[teamIds[0]].lossStreak = 0;
+      }
+      if (teamIds[1] && state.teams[teamIds[1]]) {
+        state.teams[teamIds[1]].side = t2Orig === 'T' ? 'CT' : 'T';
+        state.teams[teamIds[1]].lossStreak = 0;
+      }
       
-      state.teams[teamIds[0]].lossStreak = 0;
-      state.teams[teamIds[1]].lossStreak = 0;
       for (const p of Object.values(state.players)) {
         if (p) {
           p.money = 800;
@@ -38,6 +47,21 @@ export class RoundEngine {
           p.armor = 0;
           p.hasDefuseKit = false;
           p.grenades = [];
+        }
+      }
+    } else if (state.round > regulationMax) {
+      const otRound = state.round - regulationMax;
+      if (otRound === 1 || (otRound - 1) % 6 === 0) {
+        if (teamIds[0] && state.teams[teamIds[0]]) state.teams[teamIds[0]].side = t1Orig;
+        if (teamIds[1] && state.teams[teamIds[1]]) state.teams[teamIds[1]].side = t2Orig;
+        for (const p of Object.values(state.players)) {
+          if (p) p.money = 10000;
+        }
+      } else if ((otRound - 1) % 3 === 0) {
+        if (teamIds[0] && state.teams[teamIds[0]]) state.teams[teamIds[0]].side = t1Orig === 'T' ? 'CT' : 'T';
+        if (teamIds[1] && state.teams[teamIds[1]]) state.teams[teamIds[1]].side = t2Orig === 'T' ? 'CT' : 'T';
+        for (const p of Object.values(state.players)) {
+          if (p) p.money = 10000;
         }
       }
     }

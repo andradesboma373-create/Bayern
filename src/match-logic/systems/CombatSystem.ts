@@ -58,21 +58,25 @@ export class CombatSystem {
     shooter.statistics.shots++;
     const dist = MapSystem.getDistance(MapSystem.getNode(shooter.currentNodeId), MapSystem.getNode(target.currentNodeId));
     
-    // Normalize aim into a competitive pro scale [0.0 .. 1.0]
-    const normAim = Math.min(115, Math.max(80, shooter.aim || 100));
-    const aimFactor = (normAim - 80) / 35; // ~0.0 to 1.0 (smooth pro variance)
-    const progress = Math.min(1.0, Math.max(0.5, shooter.aimProgress || 0.75));
+    // Scale aim responsiveness across full rating range [40..250]
+    const aimRatio = Math.max(0.4, Math.min(2.5, (shooter.aim || 100) / 100));
+    const targetIqRatio = Math.max(0.4, Math.min(2.5, (target.iq || 100) / 100));
+    const progress = Math.min(1.0, Math.max(0.4, shooter.aimProgress || 0.75));
     
-    let hitChance = 0.44 + (0.18 * aimFactor * progress);
+    let hitChance = 0.44 + (aimRatio - 1.0) * 0.22 * progress;
     if (weapon.type === 'SNIPER') {
         // High accuracy for scoped snipers
-        hitChance = 0.70 + (0.16 * aimFactor * Math.max(0.7, progress));
+        hitChance = 0.72 + (aimRatio - 1.0) * 0.16 * Math.max(0.7, progress);
         hitChance *= (weapon.accuracy / 100);
         hitChance *= Math.max(0.85, 1 - (dist / (weapon.range * 4)));
     } else {
         hitChance *= (weapon.accuracy / 100);
         hitChance *= Math.max(0.55, 1 - (dist / (weapon.range * 1.5)));
     }
+    
+    // Target defensive movement / IQ positioning
+    const targetEvasion = Math.max(0.75, Math.min(1.25, 1.0 - (targetIqRatio - 1.0) * 0.08));
+    hitChance *= targetEvasion;
     
     // Stationary / angle holding advantage
     if (shooter.state === 'HOLDING') {
@@ -115,7 +119,7 @@ export class CombatSystem {
     
     if (roll < hitChance) {
       shooter.statistics.hits++;
-      const baseHsChance = 0.30 + (aimFactor * 0.15); // Realistic 30% - 45% HS rate
+      const baseHsChance = Math.min(0.65, Math.max(0.15, 0.32 + (aimRatio - 1.0) * 0.18));
       const isHeadshot = this.random() < baseHsChance;
       
       let damage = weapon.damage;

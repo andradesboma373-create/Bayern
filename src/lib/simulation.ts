@@ -773,7 +773,18 @@ export function simulateMap(
     // Create new engine state
     const state = MatchEngine.createInitialState(
         t1, t2,
-        isCS2, mapName, format, seed
+        isCS2, mapName, format, seed,
+        {
+            team1Synergy,
+            team2Synergy,
+            team1Tactic,
+            team2Tactic,
+            team1Form,
+            team2Form,
+            team1MapExp,
+            team2MapExp,
+            pickedByTeam
+        }
     );
     
     // Run simulation

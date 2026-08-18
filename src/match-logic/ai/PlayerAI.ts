@@ -146,10 +146,10 @@ export class PlayerAI {
        p.aimProgress = wasHolding ? 0.90 : 0.86;
        
        // Dynamic reaction delay based on holding vs peeking and individual reaction stat
-       let delay = 1.35 - (p.reaction / 120);
-       if (wasHolding) delay -= 0.25;
+       let delay = 1.4 - (p.reaction / 110);
+       if (wasHolding) delay -= 0.35;
        
-       p.reactionTimer = state.tick + Math.max(1, Math.round(delay));
+       p.reactionTimer = state.tick + Math.max(0, Math.round(delay));
        return;
     }
     

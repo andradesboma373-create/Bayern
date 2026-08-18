@@ -2,10 +2,23 @@ import { MatchState, Player, Team, MatchEvent } from '../models';
 import { RoundEngine } from './RoundEngine';
 import { CombatSystem } from '../systems/CombatSystem';
 
+export interface MatchEngineOptions {
+  team1Synergy?: number;
+  team2Synergy?: number;
+  team1Tactic?: string;
+  team2Tactic?: string;
+  team1Form?: number;
+  team2Form?: number;
+  team1MapExp?: number;
+  team2MapExp?: number;
+  pickedByTeam?: 1 | 2 | null;
+}
+
 export class MatchEngine {
   static createInitialState(
     team1Input: any[], team2Input: any[], 
-    isCS2: boolean, mapId: string, format: string, seed: number
+    isCS2: boolean, mapId: string, format: string, seed: number,
+    options?: MatchEngineOptions
   ): MatchState {
     
     CombatSystem.setSeed(seed);
@@ -38,11 +51,17 @@ export class MatchEngine {
     let t1Side: 'T' | 'CT' = 'T';
     let t2Side: 'T' | 'CT' = 'CT';
     
-    if (typeof process !== 'undefined' && process?.env?.RANDOMIZE_SIDES === 'true') {
-      if (Math.random() > 0.5) {
-        t1Side = 'CT';
-        t2Side = 'T';
-      }
+    if (options?.pickedByTeam === 1) {
+      t1Side = 'T';
+      t2Side = 'CT';
+    } else if (options?.pickedByTeam === 2) {
+      t1Side = 'CT';
+      t2Side = 'T';
+    } else {
+      // Deterministic coin flip based on seed
+      const isT1CT = (seed % 2 === 0);
+      t1Side = isT1CT ? 'CT' : 'T';
+      t2Side = isT1CT ? 'T' : 'CT';
     }
     
     (state as any).t1StartedAs = t1Side;
@@ -55,7 +74,7 @@ export class MatchEngine {
       money: 4000,
       side: t1Side,
       players: [],
-      tactic: 'DEFAULT',
+      tactic: options?.team1Tactic || 'DEFAULT',
       strategy: 'DEFAULT'
     };
     
@@ -66,7 +85,7 @@ export class MatchEngine {
       money: 4000,
       side: t2Side,
       players: [],
-      tactic: 'DEFAULT',
+      tactic: options?.team2Tactic || 'DEFAULT',
       strategy: 'DEFAULT'
     };
     
@@ -76,9 +95,16 @@ export class MatchEngine {
       let rawRating = parseFloat(pData.rating) || parseFloat(pData.valRating) || 100;
       if (rawRating < 10) rawRating = rawRating * 100; // Map HLTV 1.15 to 115
       
-      // Pro-tier competitive compression: baseline 100 with realistic variance
-      const rating = Math.max(75, Math.min(135, rawRating));
-      const skillVal = 100 + (rating - 100) * 0.35; // e.g. 125 rating -> 108.75 skill, 85 rating -> 94.75 skill
+      const teamForm = (teamId === t1Id ? options?.team1Form : options?.team2Form) || 0;
+      const teamSynergy = (teamId === t1Id ? options?.team1Synergy : options?.team2Synergy) ?? 50;
+      const mapExp = (teamId === t1Id ? options?.team1MapExp : options?.team2MapExp) ?? 50;
+      
+      const synergyMod = 0.96 + (teamSynergy / 100) * 0.08;
+      const mapExpMod = 0.96 + (mapExp / 100) * 0.08;
+      
+      const effectiveRating = (rawRating + teamForm) * synergyMod * mapExpMod;
+      const rating = Math.max(40, Math.min(250, effectiveRating));
+      const skillVal = rating;
       
       let speedBonus = 0;
       let aim = skillVal;
@@ -125,10 +151,10 @@ export class MatchEngine {
         side: state.teams[teamId].side,
         role,
         rating,
-        aim: Math.max(70, aim),
-        iq: Math.max(70, iq),
+        aim: Math.max(40, aim),
+        iq: Math.max(40, iq),
         movement: skillVal,
-        reaction: Math.max(70, reaction),
+        reaction: Math.max(40, reaction),
         roleSkill: skillVal,
         hp: 100,
         armor: 0,
@@ -138,7 +164,7 @@ export class MatchEngine {
         grenades: [],
         position: {x: 0, y: 0},
         targetPosition: null,
-        speed: 1.6 + (skillVal / 600) + speedBonus,
+        speed: 1.6 + (skillVal / 800) + speedBonus,
         alive: true,
         state: 'IDLE',
         targetEnemyId: null,
@@ -208,13 +234,6 @@ export class MatchEngine {
     const t1 = state.teams['t1'];
     const t2 = state.teams['t2'];
     
-    
-    
-      
-      
-    
-      
-      
     const t1Stats = t1.players.map(id => {
       const p = state.players[id];
       if (!p) return null;
@@ -240,9 +259,6 @@ export class MatchEngine {
         kastRounds: st.kastRounds || 0
       }
     }).filter(Boolean);
-
-
-    // Append aces to round logs if needed
 
     return {
       mapName: state.mapId,
