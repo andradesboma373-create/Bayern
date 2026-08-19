@@ -817,9 +817,10 @@ export default function TournamentManager({ user }: { user: any }) {
 
       if (isGsl && activeTournament.gslGroups) {
           const stage2Type = activeTournament.settings.stage2Type || 'tiered';
+          const advanceCount = activeTournament.settings.gslAdvanceCount || 3;
 
           if (stage2Type === 'tiered') {
-              const tieredRounds = generateTieredPlayoffBracket(activeTournament.gslGroups);
+              const tieredRounds = generateTieredPlayoffBracket(activeTournament.gslGroups, advanceCount);
               const updated = {
                   ...activeTournament,
                   activeStage: 2 as const,
@@ -834,7 +835,7 @@ export default function TournamentManager({ user }: { user: any }) {
                   if (st.first) advancingTeams.push(st.first);
                   if (st.second) advancingTeams.push(st.second);
                   if (st.third) advancingTeams.push(st.third);
-                  if (st.fourth) advancingTeams.push(st.fourth);
+                  if (advanceCount === 4 && st.fourth) advancingTeams.push(st.fourth);
               });
 
               let initialBracket: Match[][] = [];

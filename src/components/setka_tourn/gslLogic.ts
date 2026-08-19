@@ -315,109 +315,189 @@ export function getGslGroupStandings(group: GslGroup): GslStandings {
 }
 
 /**
- * Checks if all GSL groups have resolved their 1st, 2nd, 3rd, 4th places
+ * Checks if all GSL groups have resolved their advancing places (1st, 2nd, 3rd for Top-3 or 1-4 for Top-4)
  */
-export function areAllGslGroupsFinished(groups: GslGroup[]): boolean {
+export function areAllGslGroupsFinished(groups: GslGroup[], advanceCount: number = 3): boolean {
   if (!groups || groups.length === 0) return false;
   return groups.every(g => {
     const standings = getGslGroupStandings(g);
+    if (advanceCount === 3) {
+      return !!(standings.first && standings.second && standings.third);
+    }
     return !!(standings.first && standings.second && standings.third && standings.fourth);
   });
 }
 
 /**
- * Generates the Tiered Single Elimination Bracket (ESL Pro League style)
- * as shown on the screenshots!
- *
- * Structure for 4 groups:
- * - Round 1 (Playoffs round 1): 4 matches (3rd vs 4th places)
- * - Round 2 (Playoffs round 2): 4 matches (2nd places wait here, facing R1 winners)
- * - Round 3 (Quarter-finals): 4 matches (1st places wait here, facing R2 winners)
- * - Round 4 (Semi-finals): 2 matches
- * - Round 5 (Final): 1 match
- *
- * Structure for 2 groups:
- * - Round 1 (Playoffs round 1): 2 matches (3rd vs 4th places)
- * - Round 2 (Quarter-finals): 2 matches (2nd places wait here, facing R1 winners)
- * - Round 3 (Semi-finals): 2 matches (1st places wait here, facing QF winners)
- * - Round 4 (Final): 1 match
+ * Generates the Tiered Single Elimination Bracket:
+ * 
+ * 1. Top-3 format (advanceCount === 3, IEM / BLAST / StarLadder style):
+ *    - 2 Groups (6 teams total):
+ *      - Round 1 (Quarter-finals / 1/4): 2 matches (2A vs 3B, 2B vs 3A)
+ *      - Round 2 (Semi-finals / 1/2): 2 matches (1B vs QF1 win, 1A vs QF2 win - 1st places wait in Semis!)
+ *      - Round 3 (Grand Final): 1 match
+ *    - 4 Groups (12 teams total):
+ *      - Round 1 (Round of 12 / 1/8): 4 matches (2nd vs 3rd crossed)
+ *      - Round 2 (Quarter-finals / 1/4): 4 matches (1st places wait in QF!)
+ *      - Round 3 (Semi-finals / 1/2): 2 matches
+ *      - Round 4 (Grand Final): 1 match
+ * 
+ * 2. Top-4 format (advanceCount === 4, ESL Pro League style):
+ *    - 2 Groups (8 teams total):
+ *      - Round 1: 3rd vs 4th
+ *      - Round 2 (Quarter-finals): 2nd places wait here
+ *      - Round 3 (Semi-finals): 1st places wait here
+ *      - Round 4 (Grand Final): 1 match
+ *    - 4 Groups (16 teams total):
+ *      - Round 1 (R1): 3rd vs 4th
+ *      - Round 2 (R2): 2nd places wait here
+ *      - Round 3 (QF): 1st places wait here
+ *      - Round 4 (SF): 2 matches
+ *      - Round 5 (Grand Final): 1 match
  */
-export function generateTieredPlayoffBracket(groups: GslGroup[]): Match[][] {
+export function generateTieredPlayoffBracket(groups: GslGroup[], advanceCount: number = 3): Match[][] {
   const standings = groups.map(g => getGslGroupStandings(g));
   const numGroups = groups.length;
 
-  if (numGroups >= 4) {
-    // 4 Groups (A, B, C, D) -> 5 Rounds total
-    const A = standings[0];
-    const B = standings[1];
-    const C = standings[2];
-    const D = standings[3];
+  if (advanceCount === 3) {
+    // === TOP-3 ADVANCING FORMAT (IEM / BLAST / StarLadder) ===
+    if (numGroups >= 4) {
+      // 4 Groups (A, B, C, D) -> 12 teams -> 4 Rounds (1/8 -> 1/4 -> 1/2 -> GF)
+      const A = standings[0] || { first: null, second: null, third: null, fourth: null };
+      const B = standings[1] || { first: null, second: null, third: null, fourth: null };
+      const C = standings[2] || { first: null, second: null, third: null, fourth: null };
+      const D = standings[3] || { first: null, second: null, third: null, fourth: null };
 
-    // Round 1: Playoffs round 1 (3rd vs 4th from crossed groups)
-    const r1: Match[] = [
-      { id: 'tier-r1-m0', round: 1, team1: A.third || null, team2: B.fourth || null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r1-m1', round: 1, team1: C.third || null, team2: D.fourth || null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r1-m2', round: 1, team1: B.third || null, team2: A.fourth || null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r1-m3', round: 1, team1: D.third || null, team2: C.fourth || null, score1: 0, score2: 0, winnerId: null },
-    ];
+      // Round 1: Round of 12 (2nd vs 3rd)
+      const r1: Match[] = [
+        { id: 'tier-r1-m0', round: 1, team1: A.second || null, team2: B.third || null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r1-m1', round: 1, team1: C.second || null, team2: D.third || null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r1-m2', round: 1, team1: B.second || null, team2: A.third || null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r1-m3', round: 1, team1: D.second || null, team2: C.third || null, score1: 0, score2: 0, winnerId: null },
+      ];
 
-    // Round 2: Playoffs round 2 (2nd places pre-seeded in team1, winner of R1 in team2)
-    const r2: Match[] = [
-      { id: 'tier-r2-m0', round: 2, team1: C.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r2-m1', round: 2, team1: A.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r2-m2', round: 2, team1: D.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r2-m3', round: 2, team1: B.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
-    ];
+      // Round 2: Quarter-finals (1st places pre-seeded in team1, winner of R1 in team2)
+      const qf: Match[] = [
+        { id: 'tier-r2-m0', round: 2, team1: B.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r2-m1', round: 2, team1: D.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r2-m2', round: 2, team1: A.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r2-m3', round: 2, team1: C.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+      ];
 
-    // Round 3: Quarter-finals (1st places pre-seeded in team1, winner of R2 in team2)
-    const qf: Match[] = [
-      { id: 'tier-r3-m0', round: 3, team1: B.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r3-m1', round: 3, team1: D.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r3-m2', round: 3, team1: A.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r3-m3', round: 3, team1: C.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
-    ];
+      // Round 3: Semi-finals
+      const sf: Match[] = [
+        { id: 'tier-r3-m0', round: 3, team1: null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r3-m1', round: 3, team1: null, team2: null, score1: 0, score2: 0, winnerId: null },
+      ];
 
-    // Round 4: Semi-finals
-    const sf: Match[] = [
-      { id: 'tier-r4-m0', round: 4, team1: null, team2: null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r4-m1', round: 4, team1: null, team2: null, score1: 0, score2: 0, winnerId: null },
-    ];
+      // Round 4: Grand Final
+      const gf: Match[] = [
+        { id: 'tier-r4-m0', round: 4, team1: null, team2: null, score1: 0, score2: 0, winnerId: null }
+      ];
 
-    // Round 5: Grand Final
-    const gf: Match[] = [
-      { id: 'tier-r5-m0', round: 5, team1: null, team2: null, score1: 0, score2: 0, winnerId: null }
-    ];
+      return [r1, qf, sf, gf];
+    } else {
+      // 2 Groups (A, B) -> 6 teams -> 3 Rounds (Quarter-finals -> Semi-finals -> Grand Final)
+      // EXACT MATCH WITH USER SCREENSHOT FROM HLTV / BLAST!
+      const A = standings[0] || { first: null, second: null, third: null, fourth: null };
+      const B = standings[1] || { first: null, second: null, third: null, fourth: null };
 
-    return [r1, r2, qf, sf, gf];
+      // Round 1: Quarter-finals (1/4 финала, 2nd vs 3rd crossed)
+      const qf: Match[] = [
+        { id: 'tier-qf-m0', round: 1, team1: A.second || null, team2: B.third || null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-qf-m1', round: 1, team1: B.second || null, team2: A.third || null, score1: 0, score2: 0, winnerId: null },
+      ];
+
+      // Round 2: Semi-finals (1/2 финала, 1st places wait here!)
+      // SF 0: 1st of Group B vs Winner QF 0
+      // SF 1: 1st of Group A vs Winner QF 1
+      const sf: Match[] = [
+        { id: 'tier-sf-m0', round: 2, team1: B.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-sf-m1', round: 2, team1: A.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+      ];
+
+      // Round 3: Grand Final (Гранд-финал)
+      const gf: Match[] = [
+        { id: 'tier-gf-m0', round: 3, team1: null, team2: null, score1: 0, score2: 0, winnerId: null }
+      ];
+
+      return [qf, sf, gf];
+    }
   } else {
-    // 2 Groups (A, B) -> 4 Rounds total
-    const A = standings[0] || { first: null, second: null, third: null, fourth: null };
-    const B = standings[1] || { first: null, second: null, third: null, fourth: null };
+    // === TOP-4 ADVANCING FORMAT (ESL Pro League) ===
+    if (numGroups >= 4) {
+      // 4 Groups (A, B, C, D) -> 5 Rounds total
+      const A = standings[0] || { first: null, second: null, third: null, fourth: null };
+      const B = standings[1] || { first: null, second: null, third: null, fourth: null };
+      const C = standings[2] || { first: null, second: null, third: null, fourth: null };
+      const D = standings[3] || { first: null, second: null, third: null, fourth: null };
 
-    // Round 1: Playoffs round 1 (3rd vs 4th)
-    const r1: Match[] = [
-      { id: 'tier-r1-m0', round: 1, team1: A.third || null, team2: B.fourth || null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r1-m1', round: 1, team1: B.third || null, team2: A.fourth || null, score1: 0, score2: 0, winnerId: null },
-    ];
+      // Round 1: Playoffs round 1 (3rd vs 4th from crossed groups)
+      const r1: Match[] = [
+        { id: 'tier-r1-m0', round: 1, team1: A.third || null, team2: B.fourth || null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r1-m1', round: 1, team1: C.third || null, team2: D.fourth || null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r1-m2', round: 1, team1: B.third || null, team2: A.fourth || null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r1-m3', round: 1, team1: D.third || null, team2: C.fourth || null, score1: 0, score2: 0, winnerId: null },
+      ];
 
-    // Round 2: Quarter-finals (2nd places wait here, facing R1 winners)
-    const qf: Match[] = [
-      { id: 'tier-r2-m0', round: 2, team1: B.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r2-m1', round: 2, team1: A.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
-    ];
+      // Round 2: Playoffs round 2 (2nd places pre-seeded in team1, winner of R1 in team2)
+      const r2: Match[] = [
+        { id: 'tier-r2-m0', round: 2, team1: C.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r2-m1', round: 2, team1: A.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r2-m2', round: 2, team1: D.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r2-m3', round: 2, team1: B.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
+      ];
 
-    // Round 3: Semi-finals (1st places wait here, facing QF winners)
-    const sf: Match[] = [
-      { id: 'tier-r3-m0', round: 3, team1: A.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
-      { id: 'tier-r3-m1', round: 3, team1: B.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
-    ];
+      // Round 3: Quarter-finals (1st places pre-seeded in team1, winner of R2 in team2)
+      const qf: Match[] = [
+        { id: 'tier-r3-m0', round: 3, team1: B.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r3-m1', round: 3, team1: D.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r3-m2', round: 3, team1: A.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r3-m3', round: 3, team1: C.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+      ];
 
-    // Round 4: Grand Final
-    const gf: Match[] = [
-      { id: 'tier-r4-m0', round: 4, team1: null, team2: null, score1: 0, score2: 0, winnerId: null }
-    ];
+      // Round 4: Semi-finals
+      const sf: Match[] = [
+        { id: 'tier-r4-m0', round: 4, team1: null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r4-m1', round: 4, team1: null, team2: null, score1: 0, score2: 0, winnerId: null },
+      ];
 
-    return [r1, qf, sf, gf];
+      // Round 5: Grand Final
+      const gf: Match[] = [
+        { id: 'tier-r5-m0', round: 5, team1: null, team2: null, score1: 0, score2: 0, winnerId: null }
+      ];
+
+      return [r1, r2, qf, sf, gf];
+    } else {
+      // 2 Groups (A, B) -> 4 Rounds total
+      const A = standings[0] || { first: null, second: null, third: null, fourth: null };
+      const B = standings[1] || { first: null, second: null, third: null, fourth: null };
+
+      // Round 1: Playoffs round 1 (3rd vs 4th)
+      const r1: Match[] = [
+        { id: 'tier-r1-m0', round: 1, team1: A.third || null, team2: B.fourth || null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r1-m1', round: 1, team1: B.third || null, team2: A.fourth || null, score1: 0, score2: 0, winnerId: null },
+      ];
+
+      // Round 2: Quarter-finals (2nd places wait here, facing R1 winners)
+      const qf: Match[] = [
+        { id: 'tier-r2-m0', round: 2, team1: B.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r2-m1', round: 2, team1: A.second || null, team2: null, score1: 0, score2: 0, winnerId: null },
+      ];
+
+      // Round 3: Semi-finals (1st places wait here, facing QF winners)
+      const sf: Match[] = [
+        { id: 'tier-r3-m0', round: 3, team1: A.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+        { id: 'tier-r3-m1', round: 3, team1: B.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
+      ];
+
+      // Round 4: Grand Final
+      const gf: Match[] = [
+        { id: 'tier-r4-m0', round: 4, team1: null, team2: null, score1: 0, score2: 0, winnerId: null }
+      ];
+
+      return [r1, qf, sf, gf];
+    }
   }
 }
 
@@ -452,41 +532,68 @@ export function advanceTieredPlayoffMatch(
 
   const numRounds = newRounds.length;
 
-  if (numRounds === 5) {
-    // 4 groups tiered bracket:
+  if (numRounds === 3) {
+    // 2 groups TOP-3 format (QF [2 matches] -> SF [2 matches] -> GF [1 match]):
+    // r0 (QF: 2 matches) -> r1 (SF: 2 matches, QF0 -> SF0.team2, QF1 -> SF1.team2)
+    // r1 (SF: 2 matches) -> r2 (GF: 1 match, SF0 -> GF0.team1, SF1 -> GF0.team2)
+    if (rIdx === 0) {
+      newRounds[1][mIdx].team2 = winningTeam;
+    } else if (rIdx === 1) {
+      if (mIdx === 0) newRounds[2][0].team1 = winningTeam;
+      else newRounds[2][0].team2 = winningTeam;
+    }
+  } else if (numRounds === 4) {
+    // Check if it's 4 groups TOP-3 (R12: 4 -> QF: 4 -> SF: 2 -> GF: 1) or 2 groups TOP-4 (R1: 2 -> QF: 2 -> SF: 2 -> GF: 1)
+    const is4GroupsTop3 = newRounds[0].length === 4;
+
+    if (is4GroupsTop3) {
+      // 4 groups TOP-3:
+      // r0 (R12: 4 matches) -> r1 (QF: 4 matches, team2)
+      // r1 (QF: 4 matches) -> r2 (SF: 2 matches, 0/1 -> SF0, 2/3 -> SF1)
+      // r2 (SF: 2 matches) -> r3 (GF: 1 match)
+      if (rIdx === 0) {
+        newRounds[1][mIdx].team2 = winningTeam;
+      } else if (rIdx === 1) {
+        const sfIdx = Math.floor(mIdx / 2);
+        const isTeam1 = mIdx % 2 === 0;
+        if (isTeam1) newRounds[2][sfIdx].team1 = winningTeam;
+        else newRounds[2][sfIdx].team2 = winningTeam;
+      } else if (rIdx === 2) {
+        if (mIdx === 0) newRounds[3][0].team1 = winningTeam;
+        else newRounds[3][0].team2 = winningTeam;
+      }
+    } else {
+      // 2 groups TOP-4:
+      // r0 (R1: 2 matches) -> r1 (QF: 2 matches, team2)
+      // r1 (QF: 2 matches) -> r2 (SF: 2 matches, team2)
+      // r2 (SF: 2 matches) -> r3 (GF: 1 match)
+      if (rIdx === 0) {
+        newRounds[1][mIdx].team2 = winningTeam;
+      } else if (rIdx === 1) {
+        newRounds[2][mIdx].team2 = winningTeam;
+      } else if (rIdx === 2) {
+        if (mIdx === 0) newRounds[3][0].team1 = winningTeam;
+        else newRounds[3][0].team2 = winningTeam;
+      }
+    }
+  } else if (numRounds === 5) {
+    // 4 groups TOP-4 tiered bracket:
     // r0 (R1: 4 matches) -> r1 (R2: 4 matches, team2)
     // r1 (R2: 4 matches) -> r2 (QF: 4 matches, team2)
     // r2 (QF: 4 matches) -> r3 (SF: 2 matches, m0->sf0.t1, m1->sf0.t2, m2->sf1.t1, m3->sf1.t2)
     // r3 (SF: 2 matches) -> r4 (GF: 1 match, m0->gf.t1, m1->gf.t2)
     if (rIdx === 0) {
-      // R1 winner goes to R2 team2 (same match index)
       newRounds[1][mIdx].team2 = winningTeam;
     } else if (rIdx === 1) {
-      // R2 winner goes to QF team2 (same match index)
       newRounds[2][mIdx].team2 = winningTeam;
     } else if (rIdx === 2) {
-      // QF winner goes to SF
       const sfIdx = Math.floor(mIdx / 2);
       const isTeam1 = mIdx % 2 === 0;
       if (isTeam1) newRounds[3][sfIdx].team1 = winningTeam;
       else newRounds[3][sfIdx].team2 = winningTeam;
     } else if (rIdx === 3) {
-      // SF winner goes to GF
       if (mIdx === 0) newRounds[4][0].team1 = winningTeam;
       else newRounds[4][0].team2 = winningTeam;
-    }
-  } else {
-    // 2 groups tiered bracket:
-    // r0 (R1: 2 matches) -> r1 (QF: 2 matches, team2)
-    // r1 (QF: 2 matches) -> r2 (SF: 2 matches, team2)
-    // r2 (SF: 2 matches) -> r3 (GF: 1 match)
-    if (rIdx === 0) {
-      newRounds[1][mIdx].team2 = winningTeam;
-    } else if (rIdx === 1) {
-      newRounds[2][mIdx].team2 = winningTeam;
-    } else if (rIdx === 2) {
-      if (mIdx === 0) newRounds[3][0].team1 = winningTeam;
-      else newRounds[3][0].team2 = winningTeam;
     }
   }
 

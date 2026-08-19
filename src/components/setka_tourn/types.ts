@@ -60,6 +60,7 @@ export interface TournamentSettings {
   advancingPerGroup?: number;
   numberOfGroups?: number;
   groupAssignments?: Record<string, string[]>; // groupId -> array of team ids (or team objects)
+  gslAdvanceCount?: 3 | 4; // 3 = IEM / BLAST (Top-3: 1st -> Semis, 2nd & 3rd -> Quarters), 4 = ESL Pro League (Top-4)
 
   // Bracket mode
   bracketMode?: 'standard' | 'realtime';

@@ -500,18 +500,79 @@ export default function TournamentSettingsForm({
           </div>
       </div>
 
-      {settings.stage1Type === 'gsl_groups' && (
+       {settings.stage1Type === 'gsl_groups' && (
           <div className="flex flex-col gap-4 bg-black/20 p-5 rounded-xl border border-white/5">
+              {/* Advance Format Selector: 3 vs 4 teams */}
+              <div>
+                  <label className="block text-white/70 text-xs font-black uppercase tracking-wider mb-2">
+                      Правило выхода из групп в плей-офф
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                          type="button"
+                          onClick={() => setSettings({ ...settings, gslAdvanceCount: 3 })}
+                          className={`p-3.5 rounded-xl border text-left transition-all ${
+                              (settings.gslAdvanceCount || 3) === 3
+                                  ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_15px_rgba(255,143,0,0.2)]'
+                                  : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                      >
+                          <div className="font-extrabold text-sm text-[#ff8f00] mb-1 flex items-center justify-between">
+                              <span>🚀 Топ-3 из группы (IEM / BLAST)</span>
+                              {(settings.gslAdvanceCount || 3) === 3 && (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff8f00] shadow-[0_0_8px_#ff8f00]" />
+                              )}
+                          </div>
+                          <div className="text-xs text-white/70 leading-relaxed">
+                              <strong>1-е место</strong> выходит напрямую в <strong>Полуфинал (1/2)</strong>, а <strong>2-е и 3-е места</strong> сражаются в <strong>1/4 финала</strong>. 4-е место выбывает.
+                          </div>
+                      </button>
+
+                      <button
+                          type="button"
+                          onClick={() => setSettings({ ...settings, gslAdvanceCount: 4 })}
+                          className={`p-3.5 rounded-xl border text-left transition-all ${
+                              settings.gslAdvanceCount === 4
+                                  ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_15px_rgba(255,143,0,0.2)]'
+                                  : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                      >
+                          <div className="font-extrabold text-sm text-[#ff8f00] mb-1 flex items-center justify-between">
+                              <span>🏆 Топ-4 из группы (ESL Pro League)</span>
+                              {settings.gslAdvanceCount === 4 && (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff8f00] shadow-[0_0_8px_#ff8f00]" />
+                              )}
+                          </div>
+                          <div className="text-xs text-white/70 leading-relaxed">
+                              Все 4 команды выходят в ступенчатый плей-офф: 3-4 места играют в R1, 2-е в R2, 1-е в 1/4 финала.
+                          </div>
+                      </button>
+                  </div>
+              </div>
+
               <div className="bg-[#ff8f00]/10 border border-[#ff8f00]/30 p-4 rounded-xl text-xs text-white/80 leading-relaxed">
                   <div className="font-extrabold text-[#ff8f00] uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                      ℹ️ Двухэтапный формат GSL / ESL Pro League:
+                      ℹ️ Описание схемы турнира:
                   </div>
-                  <div>
-                      • <strong>1 этап:</strong> Группы по системе Double Elimination. В финале виннеров победитель берет <strong>1 место</strong>, проигравший — <strong>2 место</strong> (не падает в лузера!). В нижней сетке разыгрываются <strong>3 и 4 места</strong>.
-                  </div>
-                  <div className="mt-1">
-                      • <strong>2 этап (Плей-офф):</strong> 3 и 4 места играют в Раунде 1, победители выходят на 2-е места в Раунде 2, а затем на 1-е места в 1/4 финала!
-                  </div>
+                  {(settings.gslAdvanceCount || 3) === 3 ? (
+                      <>
+                          <div>
+                              • <strong>1 этап (Группы):</strong> Double Elimination сетки по 8 (или 4) команд. Финалист виннеров = <strong>1 место</strong> (в 1/2 финала), проигравший финала виннеров = <strong>2 место</strong> (в 1/4 финала), победитель лузеров = <strong>3 место</strong> (в 1/4 финала).
+                          </div>
+                          <div className="mt-1">
+                              • <strong>2 этап (Плей-офф):</strong> 2-е и 3-е места играют в 1/4 финала, победители выходят на победителей групп в 1/2 финала!
+                          </div>
+                      </>
+                  ) : (
+                      <>
+                          <div>
+                              • <strong>1 этап:</strong> Группы по системе Double Elimination. В финале виннеров победитель берет <strong>1 место</strong>, проигравший — <strong>2 место</strong>. В нижней сетке разыгрываются <strong>3 и 4 места</strong>.
+                          </div>
+                          <div className="mt-1">
+                              • <strong>2 этап (Плей-офф):</strong> 3 и 4 места играют в Раунде 1, победители выходят на 2-е места в Раунде 2, а затем на 1-е места в 1/4 финала!
+                          </div>
+                      </>
+                  )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -534,7 +595,7 @@ export default function TournamentSettingsForm({
                         onChange={e => setSettings({...settings, stage2Type: e.target.value as any, eliminationType: e.target.value === 'double' ? 'double' : 'single' })} 
                         className="w-full bg-black p-3 rounded-xl text-white outline-none border border-white/10 focus:border-[#ff8f00]/50 font-bold"
                       >
-                          <option value="tiered">🏆 Ступенчатый Плей-офф (ESL Pro League: R1 -&gt; R2 -&gt; QF -&gt; SF -&gt; GF)</option>
+                          <option value="tiered">🏆 Ступенчатый Плей-офф (С прямым посевом в 1/2 или 1/4 финала)</option>
                           <option value="single">🥇 Классический Сингл Элиминейшн (Single Elimination)</option>
                           <option value="double">🥈 Дабл Элиминейшн (Double Elimination)</option>
                       </select>

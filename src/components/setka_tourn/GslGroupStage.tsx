@@ -18,7 +18,9 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
   const gslGroups = tournament.gslGroups || [];
   const [selectedGroupIdx, setSelectedGroupIdx] = useState<number>(0);
   const settings = tournament.settings;
-  const isAllReady = areAllGslGroupsFinished(gslGroups);
+  const advanceCount = settings.gslAdvanceCount || 3;
+  const numGroups = gslGroups.length || 2;
+  const isAllReady = areAllGslGroupsFinished(gslGroups, advanceCount);
 
   const handleSwapTeam = (
     groupIndex: number,
@@ -200,25 +202,39 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
               </span>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                  <span className="text-[10px] text-emerald-400 font-bold block">1-е место (1/4)</span>
+                  <span className="text-[10px] text-emerald-400 font-bold block">
+                    {advanceCount === 3
+                      ? numGroups <= 2 ? '1-е место (1/2 Полуфинал 🚀)' : '1-е место (1/4 финала 🚀)'
+                      : '1-е место (1/4)'}
+                  </span>
                   <span className="font-extrabold text-white truncate block">
                     {activeStandings.first?.name || 'TBD'}
                   </span>
                 </div>
                 <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                  <span className="text-[10px] text-blue-400 font-bold block">2-е место (R2)</span>
+                  <span className="text-[10px] text-blue-400 font-bold block">
+                    {advanceCount === 3
+                      ? numGroups <= 2 ? '2-е место (1/4 финала)' : '2-е место (1/8 финала)'
+                      : '2-е место (R2)'}
+                  </span>
                   <span className="font-extrabold text-white truncate block">
                     {activeStandings.second?.name || 'TBD'}
                   </span>
                 </div>
                 <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                  <span className="text-[10px] text-amber-400 font-bold block">3-е место (R1)</span>
+                  <span className="text-[10px] text-amber-400 font-bold block">
+                    {advanceCount === 3
+                      ? numGroups <= 2 ? '3-е место (1/4 финала)' : '3-е место (1/8 финала)'
+                      : '3-е место (R1)'}
+                  </span>
                   <span className="font-extrabold text-white truncate block">
                     {activeStandings.third?.name || 'TBD'}
                   </span>
                 </div>
                 <div className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                  <span className="text-[10px] text-purple-400 font-bold block">4-е место (R1)</span>
+                  <span className="text-[10px] text-purple-400 font-bold block">
+                    {advanceCount === 3 ? '4-е место (Выбывает ❌)' : '4-е место (R1)'}
+                  </span>
                   <span className="font-extrabold text-white truncate block">
                     {activeStandings.fourth?.name || 'TBD'}
                   </span>
@@ -230,7 +246,9 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
           {/* Upper Bracket Section */}
           <div className="flex flex-col gap-4">
             <h4 className="text-sm font-black uppercase tracking-widest text-emerald-400">
-              Верхняя сетка (Upper Bracket) — Победитель занимает 1-е место, Проигравший 2-е место
+              {advanceCount === 3
+                ? 'Верхняя сетка (Upper Bracket) — Победитель выходит в 1/2 финала (1 место), Проигравший в 1/4 финала (2 место)'
+                : 'Верхняя сетка (Upper Bracket) — Победитель занимает 1-е место, Проигравший 2-е место'}
             </h4>
             <div className="flex gap-4 overflow-x-auto p-4 bg-black/25 backdrop-blur-sm rounded-xl border border-white/5 min-h-[220px]">
               {activeGroup.upperBracket.map((round, rIdx) => (
@@ -274,7 +292,9 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
           {/* Lower Bracket Section */}
           <div className="flex flex-col gap-4">
             <h4 className="text-sm font-black uppercase tracking-widest text-amber-400">
-              Нижняя сетка (Lower Bracket) — Матч за 3-е и 4-е место
+              {advanceCount === 3
+                ? 'Нижняя сетка (Lower Bracket) — Победитель выходит в 1/4 финала (3-е место), Проигравший выбывает'
+                : 'Нижняя сетка (Lower Bracket) — Матч за 3-е и 4-е место'}
             </h4>
             <div className="flex gap-4 overflow-x-auto p-4 bg-black/25 backdrop-blur-sm rounded-xl border border-white/5 min-h-[220px]">
               {activeGroup.lowerBracket.map((round, rIdx) => (

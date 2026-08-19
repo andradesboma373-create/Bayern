@@ -158,16 +158,28 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
   };
 
   const getRoundName = (rIdx: number, totalRounds: number) => {
-    if (totalRounds === 5) {
+    if (totalRounds === 3) {
+      if (rIdx === 0) return 'Quarter-finals (1/4 финала)';
+      if (rIdx === 1) return 'Semi-finals (1/2 финала)';
+      return 'Grand Final (Гранд-финал)';
+    } else if (totalRounds === 4) {
+      const isTop3FourGroups = rounds[0]?.length === 4;
+      if (isTop3FourGroups) {
+        if (rIdx === 0) return 'Round of 12 (1/8 финала)';
+        if (rIdx === 1) return 'Quarter-finals (1/4 финала)';
+        if (rIdx === 2) return 'Semi-finals (1/2 финала)';
+        return 'Grand Final (Гранд-финал)';
+      } else {
+        if (rIdx === 0) return 'Playoffs round 1';
+        if (rIdx === 1) return 'Quarter-finals';
+        if (rIdx === 2) return 'Semi-finals';
+        return 'Grand Final';
+      }
+    } else if (totalRounds === 5) {
       if (rIdx === 0) return 'Playoffs round 1';
       if (rIdx === 1) return 'Playoffs round 2';
       if (rIdx === 2) return 'Quarter-finals';
       if (rIdx === 3) return 'Semi-finals';
-      return 'Grand Final';
-    } else if (totalRounds === 4) {
-      if (rIdx === 0) return 'Playoffs round 1';
-      if (rIdx === 1) return 'Quarter-finals';
-      if (rIdx === 2) return 'Semi-finals';
       return 'Grand Final';
     }
     const rem = totalRounds - rIdx;
@@ -185,16 +197,22 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
     );
   }
 
+  const advanceCount = tournament.settings.gslAdvanceCount || 3;
+
   return (
     <div className="flex flex-col mb-12">
       {/* Title & Info */}
       <div className="flex items-center justify-between mb-4 bg-black/40 p-4 rounded-xl border border-white/10 flex-wrap gap-3">
         <h3 className="text-xl font-black text-white flex items-center gap-3 uppercase tracking-wider">
           <Trophy className="w-5 h-5 text-[#ff8f00]" />
-          Ступенчатый Плей-офф (ESL Pro League Single Elimination)
+          {advanceCount === 3
+            ? 'Ступенчатый Плей-офф (IEM / BLAST: 1/4 -> 1/2 -> Финал)'
+            : 'Ступенчатый Плей-офф (ESL Pro League: R1 -> R2 -> 1/4 -> 1/2 -> Финал)'}
         </h3>
-        <span className="text-xs text-white/50 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
-          Сетка с прямым посевом победителей групп
+        <span className="text-xs text-[#ff8f00] bg-[#ff8f00]/10 px-3 py-1.5 rounded-lg border border-[#ff8f00]/20 font-bold">
+          {advanceCount === 3
+            ? '1-е места групп напрямую в Полуфинале (1/2)'
+            : 'Сетка с прямым посевом победителей групп'}
         </span>
       </div>
 
@@ -225,8 +243,18 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
       >
         {rounds.map((round, rIdx) => {
           const totalRounds = rounds.length;
-          const isQf = (totalRounds === 5 && rIdx === 2) || (totalRounds === 4 && rIdx === 1);
-          const isR2 = (totalRounds === 5 && rIdx === 1);
+          const isTop3 = (tournament.settings.gslAdvanceCount || 3) === 3;
+          
+          // Determine which round is pre-seeded for 1st places & 2nd places
+          const showGroup1stBadge = 
+            (totalRounds === 3 && rIdx === 1) || // Top-3 2 groups: 1st places wait in Semis (rIdx 1)
+            (totalRounds === 4 && isTop3 && rIdx === 1) || // Top-3 4 groups: 1st places wait in QF (rIdx 1)
+            (totalRounds === 4 && !isTop3 && rIdx === 2) || // Top-4 2 groups: 1st places wait in Semis (rIdx 2)
+            (totalRounds === 5 && rIdx === 2); // Top-4 4 groups: 1st places wait in QF (rIdx 2)
+
+          const showGroup2ndBadge = 
+            (totalRounds === 4 && !isTop3 && rIdx === 1) || // Top-4 2 groups: 2nd places wait in QF (rIdx 1)
+            (totalRounds === 5 && rIdx === 1); // Top-4 4 groups: 2nd places wait in R2 (rIdx 1)
 
           return (
             <div key={`tiered-r-${rIdx}`} className="flex flex-col w-[320px] shrink-0">
@@ -243,8 +271,8 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
                   const isBottomWinner = match.winnerId === match.team2?.id;
 
                   // Pre-seeded labels (clean text, no icons or emojis)
-                  const showGroup1stBadge = isQf && match.team1 && !hasWinner;
-                  const showGroup2ndBadge = isR2 && match.team1 && !hasWinner;
+                  const hasGroup1stBadge = showGroup1stBadge && match.team1 && !hasWinner;
+                  const hasGroup2ndBadge = showGroup2ndBadge && match.team1 && !hasWinner;
 
                   const isSlot1Selected = selectedSwapSlot?.rIdx === rIdx && selectedSwapSlot?.mIdx === mIdx && selectedSwapSlot?.teamNum === 1;
                   const isSlot2Selected = selectedSwapSlot?.rIdx === rIdx && selectedSwapSlot?.mIdx === mIdx && selectedSwapSlot?.teamNum === 2;
@@ -253,12 +281,12 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
                     <div key={match.id} className="relative flex flex-col justify-center px-2 group">
                       <div className={`relative z-10 w-full transition-all ${boxCls.outerCard}`}>
                         {/* Seed badge if pre-seeded into this round */}
-                        {showGroup1stBadge && (
+                        {hasGroup1stBadge && (
                           <div className="mb-2 inline-flex items-center bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black uppercase px-2 py-0.5 rounded-md shadow-sm tracking-wider">
-                            1-е место группы
+                            1-е место группы (Прямой выход)
                           </div>
                         )}
-                        {showGroup2ndBadge && (
+                        {hasGroup2ndBadge && (
                           <div className="mb-2 inline-flex items-center bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] font-black uppercase px-2 py-0.5 rounded-md shadow-sm tracking-wider">
                             2-е место группы
                           </div>
