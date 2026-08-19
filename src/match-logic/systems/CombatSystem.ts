@@ -38,7 +38,7 @@ export class CombatSystem {
         const weapon = WEAPONS[p.weaponId] || WEAPONS['glock'];
         const fireInterval = 10 / weapon.fireRate;
 
-        const aimSpeed = p.aim / 2000;
+        const aimSpeed = p.aim / 1500;
         if ((p.state as string) === 'MOVING') {
             p.aimProgress = Math.max(0, (p.aimProgress || 0) - 0.1);
         } else {
@@ -94,7 +94,7 @@ export class CombatSystem {
         hitChance *= 1.25;
     }
     
-    // Balanced hit chance caps (no player is sub-human or godmode)
+    // Balanced hit chance caps
     hitChance = weapon.type === 'SNIPER' ? Math.min(0.92, Math.max(0.40, hitChance)) : Math.min(0.82, Math.max(0.32, hitChance)); 
     
     const roll = this.random();
@@ -142,91 +142,78 @@ export class CombatSystem {
       });
       
       if (target.hp <= 0 && target.alive) {
-        this.processKill(state, shooter, target, isHeadshot);
-      } else {
-        if (target.state !== 'ENGAGING' && target.alive) {
-            target.state = 'IDLE'; 
-            target.knownEnemies.set(shooter.id, {
-                 enemyId: shooter.id,
-                 position: { ...shooter.position },
-                 nodeId: shooter.currentNodeId,
-                 timestamp: state.tick,
-                 confidence: 0.8
-            });
+        target.alive = false;
+        target.state = 'DEAD';
+        target.hp = 0;
+        shooter.statistics.kills++;
+        if (isHeadshot) shooter.statistics.headshots++;
+        target.statistics.deaths++;
+        
+        // Opening kill tracking (first kill in round)
+        if (!(state as any).roundFirstKillId) {
+            (state as any).roundFirstKillId = shooter.id;
+            shooter.statistics.openingKills++;
+            target.statistics.openingDeaths++;
         }
-      }
-    }
-  }
-  
-  static processKill(state: MatchState, killer: Player, victim: Player, isHeadshot: boolean) {
-    if (!victim || !victim.alive) return;
-    victim.alive = false;
-    victim.state = 'DEAD';
-    victim.hp = 0;
-    victim.statistics.deaths++;
-    killer.statistics.kills++;
-    if (isHeadshot) killer.statistics.headshots++;
-    
-    killer.money = Math.min(16000, killer.money + 300);
-    killer.state = 'IDLE';
-    killer.targetEnemyId = null;
-    killer.aimProgress = 0;
-    
-    if (victim.damageTaken) {
-      for (const [assistId, dmg] of victim.damageTaken.entries()) {
-        if (assistId !== killer.id && dmg >= 40) {
-           const assister = state.players[assistId];
-           if (assister && assister.teamId === killer.teamId) {
-             assister.statistics.assists++;
-           }
-        }
-      }
-    }
-    
-    const totalDead = Object.values(state.players).filter(p => !p.alive).length;
-    if (totalDead === 1) {
-       killer.statistics.openingKills++;
-       victim.statistics.openingDeaths++;
-       state.roundFirstKillId = killer.id;
-    }
-    
-    (victim as any).deathTick = state.tick;
-    (victim as any).killerId = killer.id;
-
-    // If victim recently killed one of killer's teammates, that teammate was successfully traded!
-    for (const mate of Object.values(state.players)) {
-        if (mate.teamId === killer.teamId && !mate.alive && (mate as any).killerId === victim.id && (state.tick - (mate as any).deathTick) <= 40) {
-            (mate as any).tradedInRound = true;
-        }
-    }
-
-    // Alert victim teammates about killer position for trade fragging
-    for (const mate of Object.values(state.players)) {
-        if (mate.alive && mate.teamId === victim.teamId) {
-            mate.knownEnemies.set(killer.id, {
-                enemyId: killer.id,
-                position: { ...killer.position },
-                nodeId: killer.currentNodeId,
-                timestamp: state.tick,
-                confidence: 1.0
-            });
-            // If nearby, immediately target killer for instant trade
-            if (mate.currentNodeId === victim.currentNodeId || MapSystem.hasLineOfSight(mate.currentNodeId, killer.currentNodeId)) {
-                if (mate.state !== 'ENGAGING') {
-                    mate.state = 'ENGAGING';
-                    mate.targetEnemyId = killer.id;
-                    mate.aimProgress = 0.80;
-                    mate.reactionTimer = state.tick + 2;
+        
+        // Trade kill detection (target had dealt damage to a teammate who died recently)
+        const victimDamaged = target.damageTaken;
+        let isTrade = false;
+        if (victimDamaged) {
+            for (const [damagerId, dmg] of victimDamaged.entries()) {
+                const damager = state.players[damagerId];
+                if (damager && !damager.alive && damager.teamId === shooter.teamId) {
+                    shooter.statistics.trades++;
+                    target.statistics.tradeDeaths++;
+                    (shooter as any).tradedInRound = true;
+                    isTrade = true;
+                    break;
                 }
             }
         }
+        
+        // Assist distribution (at least 35 damage dealt by a teammate)
+        if (target.damageTaken) {
+            for (const [assisterId, dmg] of target.damageTaken.entries()) {
+                if (assisterId !== shooter.id && dmg >= 35) {
+                    const assister = state.players[assisterId];
+                    if (assister && assister.teamId === shooter.teamId) {
+                        assister.statistics.assists++;
+                        break; 
+                    }
+                }
+            }
+        }
+
+        // Alert victim teammates about killer position for trade fragging
+        for (const mate of Object.values(state.players)) {
+            if (mate.alive && mate.teamId === target.teamId) {
+                mate.knownEnemies.set(shooter.id, {
+                    enemyId: shooter.id,
+                    position: { ...shooter.position },
+                    nodeId: shooter.currentNodeId,
+                    timestamp: state.tick,
+                    confidence: 1.0
+                });
+                // If nearby, immediately target killer for instant trade
+                if (mate.currentNodeId === target.currentNodeId || MapSystem.hasLineOfSight(mate.currentNodeId, shooter.currentNodeId)) {
+                    if (mate.state !== 'ENGAGING') {
+                        mate.state = 'ENGAGING';
+                        mate.targetEnemyId = shooter.id;
+                        mate.aimProgress = 0.80;
+                        mate.reactionTimer = state.tick + 2;
+                    }
+                }
+            }
+        }
+        
+        state.events.push({
+           type: 'PLAYER_KILLED',
+           tick: state.tick,
+           data: { killerId: shooter.id, victimId: target.id, isHeadshot }
+        });
+      }
     }
-    
-    state.events.push({
-       type: 'PLAYER_KILLED',
-       tick: state.tick,
-       data: { killerId: killer.id, victimId: victim.id, isHeadshot }
-    });
   }
 
   static createSoundEvent(state: MatchState, nodeId: string, sourceId: string) {
@@ -253,9 +240,15 @@ export class CombatSystem {
   }
   
   static rngSeed = 1;
-  static setSeed(seed: number) { this.rngSeed = seed; }
+  static setSeed(seed: number) { 
+    this.rngSeed = (Math.abs(seed) % 2147483647) || 12345; 
+  }
+  // High quality Mulberry32 PRNG (2^32 period)
   static random() {
-    this.rngSeed = (this.rngSeed * 9301 + 49297) % 233280;
-    return this.rngSeed / 233280;
+    this.rngSeed |= 0;
+    this.rngSeed = (this.rngSeed + 0x6D2B79F5) | 0;
+    let t = Math.imul(this.rngSeed ^ (this.rngSeed >>> 15), 1 | this.rngSeed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t >>> 0) / 4294967296);
   }
 }

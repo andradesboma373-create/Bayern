@@ -367,7 +367,7 @@ export default function SwissStage({ tournament, onUpdate, onAdvanceToBracket, i
           // Decider Match (e.g. 2:2)
           return {
               borderColor: 'border-amber-500/30 hover:border-amber-500/60',
-              bgGlow: 'shadow-[0_0_15px_rgba(245,158,11,0.04)] bg-[#181410]/95',
+              bgGlow: 'shadow-[0_0_15px_rgba(245,158,11,0.1)] bg-[#181410]/70 backdrop-blur-md',
               textColor: 'text-amber-400',
               icon: <Zap className="w-4 h-4 text-amber-400" />,
               badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
@@ -378,7 +378,7 @@ export default function SwissStage({ tournament, onUpdate, onAdvanceToBracket, i
           // e.g. 2:0 or 2:1 (Matches for promotion)
           return {
               borderColor: 'border-emerald-500/30 hover:border-emerald-500/60',
-              bgGlow: 'shadow-[0_0_15px_rgba(16,185,129,0.04)] bg-[#0c1612]/95',
+              bgGlow: 'shadow-[0_0_15px_rgba(16,185,129,0.1)] bg-[#0c1612]/70 backdrop-blur-md',
               textColor: 'text-emerald-400',
               icon: <Trophy className="w-4 h-4 text-emerald-400" />,
               badgeClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -389,7 +389,7 @@ export default function SwissStage({ tournament, onUpdate, onAdvanceToBracket, i
           // e.g. 0:2 or 1:2 (Matches for elimination)
           return {
               borderColor: 'border-rose-500/30 hover:border-rose-500/60',
-              bgGlow: 'shadow-[0_0_15px_rgba(244,63,94,0.04)] bg-[#1c0d10]/95',
+              bgGlow: 'shadow-[0_0_15px_rgba(244,63,94,0.1)] bg-[#1c0d10]/70 backdrop-blur-md',
               textColor: 'text-rose-400',
               icon: <Skull className="w-4 h-4 text-rose-400" />,
               badgeClass: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
@@ -399,7 +399,7 @@ export default function SwissStage({ tournament, onUpdate, onAdvanceToBracket, i
       // Neutral (0:0, 1:0, 0:1)
       return {
           borderColor: 'border-white/10 hover:border-white/20',
-          bgGlow: 'shadow-md bg-[#12121a]/95',
+          bgGlow: 'shadow-lg bg-[#12121a]/70 backdrop-blur-md',
           textColor: 'text-white/60',
           icon: <Award className="w-4 h-4 text-white/40" />,
           badgeClass: 'bg-white/5 text-white/50 border-white/5',

@@ -63,31 +63,19 @@ export class EconomySystem {
         const p = state.players[playerId];
         if (!p) continue;
         
-        let keepWeapon = false;
-        if (p.alive && p.primaryWeaponId) {
-            const w = WEAPONS[p.primaryWeaponId];
-            if (w && (w.type === 'RIFLE' || w.type === 'SNIPER')) {
-                keepWeapon = true;
-            }
-        }
-        
-        if (!p.alive) {
-           p.primaryWeaponId = null;
-           p.secondaryWeaponId = p.side === 'T' ? 'glock' : 'usp';
-           p.armor = 0;
-           p.hasDefuseKit = false;
-           p.grenades = [];
-        }
-        
+        const hasSavedRifle = Boolean(p.primaryWeaponId && (WEAPONS[p.primaryWeaponId]?.type === 'RIFLE' || WEAPONS[p.primaryWeaponId]?.type === 'SNIPER'));
         let budget = p.money;
-        const rLower = (p.role || '').toLowerCase().trim();
-        const isSniper = rLower === 'sniper' || rLower === 'awper' || rLower === 'awp' || rLower === 'снайпер' || rLower === 'авапер';
         
-        if (!keepWeapon) {
+        if (!hasSavedRifle) {
             let desiredWeapon = this.decideWeapon(p.role, type, team.side, budget);
             let cost = WEAPONS[desiredWeapon]?.price || 0;
             if (budget >= cost) {
-                p.primaryWeaponId = desiredWeapon;
+                if (WEAPONS[desiredWeapon]?.type === 'PISTOL') {
+                    p.secondaryWeaponId = desiredWeapon;
+                    p.primaryWeaponId = null;
+                } else {
+                    p.primaryWeaponId = desiredWeapon;
+                }
                 budget -= cost;
             } else {
                 // Fallback weapons hierarchy
@@ -98,6 +86,7 @@ export class EconomySystem {
                     if (budget >= fbCost) {
                         if (WEAPONS[fb]?.type === 'PISTOL') {
                             p.secondaryWeaponId = fb;
+                            p.primaryWeaponId = null;
                         } else {
                             p.primaryWeaponId = fb;
                         }
@@ -107,6 +96,7 @@ export class EconomySystem {
                     }
                 }
                 if (!bought) {
+                    p.primaryWeaponId = null;
                     p.secondaryWeaponId = team.side === 'T' ? 'glock' : 'usp';
                 }
             }

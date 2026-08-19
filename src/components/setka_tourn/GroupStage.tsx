@@ -150,7 +150,7 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
           const advanceCount = settings.advancingPerGroup || 2;
 
           return (
-            <div key={group.id} className="bg-[#12121a] p-6 rounded-2xl border border-white/5">
+            <div key={group.id} className="bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-xl">
               <h4 className="font-bold text-xl mb-4 text-[#ff8f00]">{group.name}</h4>
               
               {/* Standings */}

@@ -1,54 +1,88 @@
-=== Server Log Started at 2026-08-18T08:40:57.580Z ===
-[2026-08-18T08:40:57.608Z] [ERROR] Error loading local database cache: Unexpected end of JSON input
-[2026-08-18T08:40:57.614Z] [INFO] Restoring custom maps from LocalDB...
-[2026-08-18T08:40:57.617Z] [INFO] Custom maps restored.
-[2026-08-18T08:40:57.617Z] [INFO] Loaded 0 Telegram bots from LocalDB.
-[2026-08-18T08:40:57.875Z] [INFO] Server running on http://0.0.0.0:3000
-[2026-08-18T08:41:03.375Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:41:05.503Z] [INFO] Received cache sync request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:41:05.503Z] [INFO] Sync settings for user: channel_simu@matchsimulator.com
-[2026-08-18T08:41:06.155Z] [INFO] Successfully synced cache for user channel_simu@matchsimulator.com
-[2026-08-18T08:41:31.677Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:42:01.740Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:42:18.187Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:42:20.033Z] [INFO] Received cache sync request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:42:20.033Z] [INFO] Sync settings for user: channel_simu@matchsimulator.com
-[2026-08-18T08:42:21.038Z] [INFO] Successfully synced cache for user channel_simu@matchsimulator.com
-[2026-08-18T08:42:46.286Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:43:16.285Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:43:46.286Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:44:16.367Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:44:46.289Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:45:16.578Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:45:46.535Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:46:30.411Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:47:29.521Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:48:29.651Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:49:29.585Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:50:29.585Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:51:29.579Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:52:30.390Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:53:29.515Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:54:29.585Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:55:29.602Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:56:29.645Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:57:29.599Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:58:30.280Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T08:59:29.527Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:00:11.757Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:00:16.300Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:00:46.312Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:01:16.370Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:01:46.312Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:02:16.317Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:02:46.310Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:03:16.301Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:03:47.078Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:04:16.440Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:04:46.305Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:05:16.306Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:05:46.441Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:06:16.314Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:06:46.371Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:07:16.438Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
-[2026-08-18T09:07:46.368Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+=== Server Log Started at 2026-08-18T09:08:33.353Z ===
+[2026-08-18T09:08:33.361Z] [INFO] Successfully loaded local database cache from disk.
+[2026-08-18T09:08:33.367Z] [INFO] Restoring custom maps from LocalDB...
+[2026-08-18T09:08:33.370Z] [INFO] Custom maps restored.
+[2026-08-18T09:08:33.370Z] [INFO] Loaded 0 Telegram bots from LocalDB.
+[2026-08-18T09:08:33.621Z] [INFO] Server running on http://0.0.0.0:3000
+[2026-08-18T09:08:43.273Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:08:45.130Z] [INFO] Received cache sync request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:08:45.130Z] [INFO] Sync settings for user: channel_simu@matchsimulator.com
+[2026-08-18T09:08:46.453Z] [INFO] Successfully synced cache for user channel_simu@matchsimulator.com
+[2026-08-18T09:09:12.382Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:09:41.645Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:10:11.649Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:10:41.596Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:11:11.706Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:11:41.656Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:12:11.580Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:12:41.580Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:13:11.664Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:13:41.604Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:14:11.647Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:14:42.466Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:15:11.655Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:15:41.656Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:16:11.712Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:16:41.584Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:17:11.583Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:17:41.723Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:18:11.591Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:18:41.608Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:19:11.655Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:19:41.651Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:20:12.386Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:20:41.727Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:21:11.653Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:21:41.585Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:22:11.651Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:22:41.586Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:23:11.671Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:23:41.658Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:24:11.652Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:24:41.658Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:25:11.660Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:25:42.367Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:26:11.600Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:26:41.724Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:27:11.660Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:27:42.621Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:28:12.546Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:29:29.626Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:30:29.614Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:31:30.529Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:32:29.609Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:33:29.615Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:34:29.621Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:35:29.684Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:36:29.627Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:37:30.487Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:38:29.616Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:39:29.680Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:40:29.558Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:41:29.612Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:42:29.576Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:43:30.482Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:44:29.570Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:45:29.630Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:46:29.558Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:47:29.631Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:48:29.560Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:49:30.343Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:50:29.577Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:51:29.637Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:51:58.739Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:52:11.600Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:52:41.670Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:53:11.606Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:53:42.690Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:54:12.617Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:55:30.467Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:56:29.557Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:57:29.715Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:58:29.568Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T09:59:29.689Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T10:00:29.651Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T10:01:27.919Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T10:01:41.612Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T10:02:11.624Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com
+[2026-08-18T10:02:41.698Z] [INFO] Serving backup-data request for user: channel_simu@matchsimulator.com

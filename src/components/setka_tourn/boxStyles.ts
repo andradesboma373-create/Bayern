@@ -24,7 +24,7 @@ export const CARD_COLOR_PRESETS = [
 
 export const BOX_STYLES: Record<string, BoxStyleConfig> = {
   dark: {
-    outerCard: 'bg-[#12121a] p-4 rounded-xl border w-full shadow-xl transition-all border-white/10 hover:border-white/20',
+    outerCard: 'bg-[#12121a]/85 backdrop-blur-md p-4 rounded-xl border w-full shadow-xl transition-all border-white/10 hover:border-white/20',
     innerTeamRow: 'flex items-center justify-between p-2.5 rounded-lg border bg-black/30 border-white/5 transition-colors',
     selectedTeamRow: 'flex items-center justify-between p-2.5 rounded-lg border bg-[#ff8f00]/15 border-[#ff8f00]/40 text-white transition-colors shadow-[0_0_12px_rgba(255,143,0,0.2)]',
     nonSelectedTeamRow: 'flex items-center justify-between p-2.5 rounded-lg border bg-black/10 border-white/5 opacity-50 transition-colors',

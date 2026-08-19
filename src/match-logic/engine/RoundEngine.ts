@@ -86,6 +86,14 @@ export class RoundEngine {
     
     for (const p of Object.values(state.players)) {
       if (!p) continue;
+      // If player died in previous round, reset weapons & armor so economy buys fresh
+      if (!p.alive) {
+        p.primaryWeaponId = null;
+        p.secondaryWeaponId = state.teams[p.teamId]?.side === 'T' ? 'glock' : 'usp';
+        p.armor = 0;
+        p.hasDefuseKit = false;
+        p.grenades = [];
+      }
       p.alive = true;
       p.hp = 100;
       p.state = 'IDLE';

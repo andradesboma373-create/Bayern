@@ -16,93 +16,120 @@ export interface MatchEngineOptions {
 
 export class MatchEngine {
   static createInitialState(
-    team1Input: any[], team2Input: any[], 
-    isCS2: boolean, mapId: string, format: string, seed: number,
+    team1Input: any[],
+    team2Input: any[],
+    isCS2: boolean = true,
+    mapId: string = 'mirage',
+    format: string = 'MR12',
+    seed: number = 12345,
     options?: MatchEngineOptions
   ): MatchState {
-    
     CombatSystem.setSeed(seed);
     
+    const t1Id = 't1';
+    const t2Id = 't2';
+    
+    // Balanced starting side: coin flip based on seed unless pickedByTeam is specified
+    let t1StartsAs: 'T' | 'CT' = 'T';
+    if (options?.pickedByTeam === 1) {
+      // Team 1 picked the map, Team 2 chooses starting side (typically CT)
+      t1StartsAs = 'T';
+    } else if (options?.pickedByTeam === 2) {
+      // Team 2 picked the map, Team 1 chooses starting side (typically CT)
+      t1StartsAs = 'CT';
+    } else {
+      // Coin flip by seed
+      t1StartsAs = (seed % 2 === 0) ? 'CT' : 'T';
+    }
+    const t2StartsAs: 'T' | 'CT' = t1StartsAs === 'T' ? 'CT' : 'T';
+
     const state: MatchState = {
-      matchId: CombatSystem.random().toString(36).substring(2, 9),
-      seed,
-      mapId,
-      isCS2,
-      format,
-      phase: 'FREEZE',
       round: 0,
-      half: 1,
       tick: 0,
-      teams: {},
+      phase: 'FREEZE',
+      isCS2,
+      mapId,
+      format,
+      teams: {
+        [t1Id]: {
+          id: t1Id,
+          name: 'Team 1',
+          side: t1StartsAs,
+          score: 0,
+          economy: 4000,
+          lossStreak: 0,
+          players: [],
+          tactic: options?.team1Tactic || 'DEFAULT',
+          strategy: 'DEFAULT',
+          timeoutsRemaining: 4
+        },
+        [t2Id]: {
+          id: t2Id,
+          name: 'Team 2',
+          side: t2StartsAs,
+          score: 0,
+          economy: 4000,
+          lossStreak: 0,
+          players: [],
+          tactic: options?.team2Tactic || 'DEFAULT',
+          strategy: 'DEFAULT',
+          timeoutsRemaining: 4
+        }
+      },
       players: {},
       bomb: {
         state: 'CARRIED',
-        position: {x: 0, y: 0},
+        position: null,
+        nodeId: null,
         carrierId: null,
         timer: 0
       },
       events: [],
       roundLogs: []
-    };
+    } as any;
     
-    const t1Id = 't1';
-    const t2Id = 't2';
-    
-    let t1Side: 'T' | 'CT' = 'T';
-    let t2Side: 'T' | 'CT' = 'CT';
-    
-    if (options?.pickedByTeam === 1) {
-      t1Side = 'T';
-      t2Side = 'CT';
-    } else if (options?.pickedByTeam === 2) {
-      t1Side = 'CT';
-      t2Side = 'T';
-    } else {
-      // Deterministic coin flip based on seed
-      const isT1CT = (seed % 2 === 0);
-      t1Side = isT1CT ? 'CT' : 'T';
-      t2Side = isT1CT ? 'T' : 'CT';
-    }
-    
-    (state as any).t1StartedAs = t1Side;
-    (state as any).t2StartedAs = t2Side;
-    
-    state.teams[t1Id] = {
-      id: t1Id,
-      name: 'Team 1',
-      score: 0,
-      money: 4000,
-      side: t1Side,
-      players: [],
-      tactic: options?.team1Tactic || 'DEFAULT',
-      strategy: 'DEFAULT'
-    };
-    
-    state.teams[t2Id] = {
-      id: t2Id,
-      name: 'Team 2',
-      score: 0,
-      money: 4000,
-      side: t2Side,
-      players: [],
-      tactic: options?.team2Tactic || 'DEFAULT',
-      strategy: 'DEFAULT'
-    };
-    
+    (state as any).t1StartedAs = t1StartsAs;
+    (state as any).t2StartedAs = t2StartsAs;
+
+    // Calculate team average overall ratings (team overall baseline)
+    const t1Overall = team1Input.slice(0, 5).reduce((acc, p) => {
+      let r = parseFloat(p?.rating) || parseFloat(p?.valRating) || 100;
+      if (r < 10) r *= 100;
+      return acc + r;
+    }, 0) / Math.max(1, Math.min(5, team1Input.length));
+
+    const t2Overall = team2Input.slice(0, 5).reduce((acc, p) => {
+      let r = parseFloat(p?.rating) || parseFloat(p?.valRating) || 100;
+      if (r < 10) r *= 100;
+      return acc + r;
+    }, 0) / Math.max(1, Math.min(5, team2Input.length));
+
+    // Team synergy: subtle impact (max ±1.5% as requested by user)
+    const team1Synergy = options?.team1Synergy ?? 50;
+    const team2Synergy = options?.team2Synergy ?? 50;
+    const t1SynergyMod = 0.985 + (team1Synergy / 100) * 0.03;
+    const t2SynergyMod = 0.985 + (team2Synergy / 100) * 0.03;
+
+    // Map experience: subtle impact (max ±2%)
+    const team1MapExp = options?.team1MapExp ?? 50;
+    const team2MapExp = options?.team2MapExp ?? 50;
+    const t1MapExpMod = 0.98 + (team1MapExp / 100) * 0.04;
+    const t2MapExpMod = 0.98 + (team2MapExp / 100) * 0.04;
+
     const initPlayer = (pData: any, teamId: string) => {
       const pId = pData.id || pData.nickname;
       const role = pData.role || 'Rifler';
       let rawRating = parseFloat(pData.rating) || parseFloat(pData.valRating) || 100;
       if (rawRating < 10) rawRating = rawRating * 100; // Map HLTV 1.15 to 115
       
+      const teamOverall = teamId === t1Id ? t1Overall : t2Overall;
       const teamForm = (teamId === t1Id ? options?.team1Form : options?.team2Form) || 0;
-      const teamSynergy = (teamId === t1Id ? options?.team1Synergy : options?.team2Synergy) ?? 50;
-      const mapExp = (teamId === t1Id ? options?.team1MapExp : options?.team2MapExp) ?? 50;
+      const synergyMod = teamId === t1Id ? t1SynergyMod : t2SynergyMod;
+      const mapExpMod = teamId === t1Id ? t1MapExpMod : t2MapExpMod;
       
-      const synergyMod = 0.96 + (teamSynergy / 100) * 0.08;
-      const mapExpMod = 0.96 + (mapExp / 100) * 0.08;
-      
-      const effectiveRating = (rawRating + teamForm) * synergyMod * mapExpMod;
+      // Blend: 70% individual skill + 30% team overall baseline + form
+      const baseRating = (rawRating * 0.70) + (teamOverall * 0.30) + teamForm;
+      const effectiveRating = baseRating * synergyMod * mapExpMod;
       const rating = Math.max(40, Math.min(250, effectiveRating));
       const skillVal = rating;
       
@@ -159,7 +186,7 @@ export class MatchEngine {
         hp: 100,
         armor: 0,
         money: 800,
-        weaponId: 'glock',
+        weaponId: state.teams[teamId].side === 'T' ? 'glock' : 'usp',
         hasDefuseKit: false,
         grenades: [],
         position: {x: 0, y: 0},
@@ -187,29 +214,36 @@ export class MatchEngine {
     return state;
   }
   
-  static simulateEntireMatch(state: MatchState) {
-    let roundsToWin = state.format === 'MR15' ? 16 : (state.format === 'MR12' ? 13 : 10);
-    if (!state.isCS2) roundsToWin = 13;
+  static isMatchOver(s1: number, s2: number, format: string): boolean {
+    const regTarget = format === 'MR15' ? 16 : 13;
+    const regTie = regTarget - 1; // 12 in MR12, 15 in MR15
     
+    // 1. Regular regulation win
+    if (s1 === regTarget && s2 < regTie) return true;
+    if (s2 === regTarget && s1 < regTie) return true;
+    
+    // 2. Overtime logic
+    if (s1 >= regTie && s2 >= regTie) {
+      const totalRounds = s1 + s2;
+      const otRounds = Math.max(1, totalRounds - (regTie * 2));
+      const otNumber = Math.floor((otRounds - 1) / 6);
+      const otTarget = regTie + 4 + (otNumber * 3);
+      
+      if (s1 >= otTarget && (s1 - s2) >= 2) return true;
+      if (s2 >= otTarget && (s2 - s1) >= 2) return true;
+    }
+    return false;
+  }
+
+  static simulateEntireMatch(state: MatchState) {
     state.events.push({ type: 'MATCH_STARTED', tick: 0, data: { map: state.mapId, format: state.format }});
     
     while (state.phase !== 'MATCH_END') {
        if (state.phase === 'ROUND_END' || state.round === 0) {
-         
          const t1 = state.teams['t1'];
          const t2 = state.teams['t2'];
          
-         let currentRtw = roundsToWin;
-         const regulationTies = roundsToWin - 1;
-         
-         if (t1.score >= regulationTies && t2.score >= regulationTies) {
-             const totalScore = t1.score + t2.score;
-             const otRoundsPlayed = Math.max(0, totalScore - (regulationTies * 2));
-             const otNumber = Math.floor(otRoundsPlayed / 6);
-             currentRtw = regulationTies + 4 + (otNumber * 3);
-         }
-
-         if (t1.score >= currentRtw || t2.score >= currentRtw) {
+         if (this.isMatchOver(t1.score, t2.score, state.format)) {
            state.phase = 'MATCH_END';
            break;
          }
@@ -219,7 +253,7 @@ export class MatchEngine {
        
        RoundEngine.update(state);
        
-       // Fallback against infinite loop
+       // Fallback against infinite tick loop
        if (state.tick > 2000) {
          RoundEngine.endRound(state, 'TIME');
        }
@@ -259,17 +293,15 @@ export class MatchEngine {
         kastRounds: st.kastRounds || 0
       }
     }).filter(Boolean);
-
+    
     return {
-      mapName: state.mapId,
       team1Score: t1.score,
       team2Score: t2.score,
       winner: t1.score > t2.score ? 1 : 2,
       team1Stats: t1Stats,
       team2Stats: t2Stats,
-      roundLogs: state.roundLogs,
-      t1StartedAs: (state as any).t1StartedAs,
-      t2StartedAs: (state as any).t2StartedAs
+      events: state.events,
+      roundLogs: (state as any).roundLogs || []
     };
   }
 }

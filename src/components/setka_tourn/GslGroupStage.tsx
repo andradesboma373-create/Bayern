@@ -113,7 +113,7 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
   return (
     <div className="flex flex-col gap-8 w-full">
       {/* Header Info & Advance Button */}
-      <div className="bg-[#12121a] p-6 rounded-2xl border border-white/10 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-wrap items-center justify-between gap-4 shadow-xl">
         <div>
           <div className="flex items-center gap-2">
             <span className="bg-[#ff8f00]/20 text-[#ff8f00] font-black text-xs px-3 py-1 rounded-lg uppercase tracking-wider">
@@ -165,7 +165,7 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
                 className={`px-5 py-3 rounded-xl font-black text-sm transition-all flex items-center gap-2 cursor-pointer border ${
                   isSelected
                     ? 'bg-[#ff8f00] text-black border-[#ff8f00] shadow-[0_0_15px_rgba(255,143,0,0.3)]'
-                    : 'bg-[#12121a] text-white/70 border-white/10 hover:border-white/20 hover:text-white'
+                    : 'bg-black/40 backdrop-blur-sm text-white/70 border-white/10 hover:border-white/25 hover:text-white'
                 }`}
               >
                 <span>{group.name}</span>
@@ -180,7 +180,7 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
 
       {/* Active Group Content */}
       {activeGroup && activeStandings && (
-        <div className="flex flex-col gap-8 bg-[#0e0e16] p-6 rounded-2xl border border-white/5">
+        <div className="flex flex-col gap-8 bg-black/35 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-2xl">
           {/* Group Header & Standings Preview */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-3 flex flex-col justify-center">
@@ -194,7 +194,7 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
             </div>
 
             {/* Live Seeds Box */}
-            <div className="bg-black/50 p-4 rounded-xl border border-white/10 flex flex-col gap-2">
+            <div className="bg-black/60 backdrop-blur-md p-4 rounded-xl border border-white/10 flex flex-col gap-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-[#ff8f00]">
                 Итоги группы (Путевки в Плей-офф):
               </span>
@@ -232,7 +232,7 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
             <h4 className="text-sm font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
               <Shield className="w-4 h-4" /> Верхняя сетка (Upper Bracket) — Победитель занимает 1-е место, Проигравший 2-е место
             </h4>
-            <div className="flex gap-4 overflow-x-auto p-4 bg-black/30 rounded-xl border border-white/5 min-h-[220px]">
+            <div className="flex gap-4 overflow-x-auto p-4 bg-black/25 backdrop-blur-sm rounded-xl border border-white/5 min-h-[220px]">
               {activeGroup.upperBracket.map((round, rIdx) => (
                 <div key={`ub-${rIdx}`} className="flex flex-col w-[300px] shrink-0">
                   <div className="h-8 flex items-center justify-center font-black text-xs uppercase tracking-wider text-emerald-400/70 mb-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
@@ -276,7 +276,7 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
             <h4 className="text-sm font-black uppercase tracking-widest text-amber-400 flex items-center gap-2">
               <Award className="w-4 h-4" /> Нижняя сетка (Lower Bracket) — Матч за 3-е и 4-е место
             </h4>
-            <div className="flex gap-4 overflow-x-auto p-4 bg-black/30 rounded-xl border border-white/5 min-h-[220px]">
+            <div className="flex gap-4 overflow-x-auto p-4 bg-black/25 backdrop-blur-sm rounded-xl border border-white/5 min-h-[220px]">
               {activeGroup.lowerBracket.map((round, rIdx) => (
                 <div key={`lb-${rIdx}`} className="flex flex-col w-[300px] shrink-0">
                   <div className="h-8 flex items-center justify-center font-black text-xs uppercase tracking-wider text-amber-400/70 mb-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
