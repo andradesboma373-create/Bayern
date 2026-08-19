@@ -3,7 +3,7 @@ import { Tournament, Match, GslGroup, Team } from './types';
 import TeamLogo from '../TeamLogo';
 import MatchCard from './MatchCard';
 import { updateGslMatch, getGslGroupStandings, areAllGslGroupsFinished } from './gslLogic';
-import { Trophy, ArrowRight, Shield, Award, Users, CheckCircle2 } from 'lucide-react';
+import { Trophy, ArrowRight, Users, CheckCircle2 } from 'lucide-react';
 
 interface Props {
   tournament: Tournament;
@@ -229,8 +229,8 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
 
           {/* Upper Bracket Section */}
           <div className="flex flex-col gap-4">
-            <h4 className="text-sm font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
-              <Shield className="w-4 h-4" /> Верхняя сетка (Upper Bracket) — Победитель занимает 1-е место, Проигравший 2-е место
+            <h4 className="text-sm font-black uppercase tracking-widest text-emerald-400">
+              Верхняя сетка (Upper Bracket) — Победитель занимает 1-е место, Проигравший 2-е место
             </h4>
             <div className="flex gap-4 overflow-x-auto p-4 bg-black/25 backdrop-blur-sm rounded-xl border border-white/5 min-h-[220px]">
               {activeGroup.upperBracket.map((round, rIdx) => (
@@ -273,8 +273,8 @@ export default function GslGroupStage({ tournament, onUpdate, onAdvanceToBracket
 
           {/* Lower Bracket Section */}
           <div className="flex flex-col gap-4">
-            <h4 className="text-sm font-black uppercase tracking-widest text-amber-400 flex items-center gap-2">
-              <Award className="w-4 h-4" /> Нижняя сетка (Lower Bracket) — Матч за 3-е и 4-е место
+            <h4 className="text-sm font-black uppercase tracking-widest text-amber-400">
+              Нижняя сетка (Lower Bracket) — Матч за 3-е и 4-е место
             </h4>
             <div className="flex gap-4 overflow-x-auto p-4 bg-black/25 backdrop-blur-sm rounded-xl border border-white/5 min-h-[220px]">
               {activeGroup.lowerBracket.map((round, rIdx) => (
