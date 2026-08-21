@@ -355,18 +355,20 @@ export function areAllGslGroupsFinished(groups: GslGroup[], advanceCount: number
  *      - Round 4 (SF): 2 matches
  *      - Round 5 (Grand Final): 1 match
  */
-export function generateTieredPlayoffBracket(groups: GslGroup[], advanceCount: number = 3): Match[][] {
-  const standings = groups.map(g => getGslGroupStandings(g));
-  const numGroups = groups.length;
+/**
+ * Generates the Tiered Playoff Bracket from standings
+ */
+export function generateTieredPlayoffFromStandings(standings: GslStandings[], advanceCount: number = 3): Match[][] {
+  const numGroups = standings.length;
 
   if (advanceCount === 3) {
     // === TOP-3 ADVANCING FORMAT (IEM / BLAST / StarLadder) ===
     if (numGroups >= 4) {
       // 4 Groups (A, B, C, D) -> 12 teams -> 4 Rounds (1/8 -> 1/4 -> 1/2 -> GF)
-      const A = standings[0] || { first: null, second: null, third: null, fourth: null };
-      const B = standings[1] || { first: null, second: null, third: null, fourth: null };
-      const C = standings[2] || { first: null, second: null, third: null, fourth: null };
-      const D = standings[3] || { first: null, second: null, third: null, fourth: null };
+      const A = standings[0] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
+      const B = standings[1] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
+      const C = standings[2] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
+      const D = standings[3] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
 
       // Round 1: Round of 12 (2nd vs 3rd)
       const r1: Match[] = [
@@ -398,9 +400,13 @@ export function generateTieredPlayoffBracket(groups: GslGroup[], advanceCount: n
       return [r1, qf, sf, gf];
     } else {
       // 2 Groups (A, B) -> 6 teams -> 3 Rounds (Quarter-finals -> Semi-finals -> Grand Final)
-      // EXACT MATCH WITH USER SCREENSHOT FROM HLTV / BLAST!
-      const A = standings[0] || { first: null, second: null, third: null, fourth: null };
-      const B = standings[1] || { first: null, second: null, third: null, fourth: null };
+      // Match 1 (1/4): 2A vs 3B
+      // Match 2 (1/4): 2B vs 3A
+      // Match 1 (1/2): 1B vs Winner (2A vs 3B)
+      // Match 2 (1/2): 1A vs Winner (2B vs 3A)
+      // Grand Final: Winner Semi 1 vs Winner Semi 2
+      const A = standings[0] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
+      const B = standings[1] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
 
       // Round 1: Quarter-finals (1/4 финала, 2nd vs 3rd crossed)
       const qf: Match[] = [
@@ -409,8 +415,8 @@ export function generateTieredPlayoffBracket(groups: GslGroup[], advanceCount: n
       ];
 
       // Round 2: Semi-finals (1/2 финала, 1st places wait here!)
-      // SF 0: 1st of Group B vs Winner QF 0
-      // SF 1: 1st of Group A vs Winner QF 1
+      // SF 0: 1st of Group B vs Winner QF 0 (2A vs 3B)
+      // SF 1: 1st of Group A vs Winner QF 1 (2B vs 3A)
       const sf: Match[] = [
         { id: 'tier-sf-m0', round: 2, team1: B.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
         { id: 'tier-sf-m1', round: 2, team1: A.first || null, team2: null, score1: 0, score2: 0, winnerId: null },
@@ -427,10 +433,10 @@ export function generateTieredPlayoffBracket(groups: GslGroup[], advanceCount: n
     // === TOP-4 ADVANCING FORMAT (ESL Pro League) ===
     if (numGroups >= 4) {
       // 4 Groups (A, B, C, D) -> 5 Rounds total
-      const A = standings[0] || { first: null, second: null, third: null, fourth: null };
-      const B = standings[1] || { first: null, second: null, third: null, fourth: null };
-      const C = standings[2] || { first: null, second: null, third: null, fourth: null };
-      const D = standings[3] || { first: null, second: null, third: null, fourth: null };
+      const A = standings[0] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
+      const B = standings[1] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
+      const C = standings[2] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
+      const D = standings[3] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
 
       // Round 1: Playoffs round 1 (3rd vs 4th from crossed groups)
       const r1: Match[] = [
@@ -470,8 +476,8 @@ export function generateTieredPlayoffBracket(groups: GslGroup[], advanceCount: n
       return [r1, r2, qf, sf, gf];
     } else {
       // 2 Groups (A, B) -> 4 Rounds total
-      const A = standings[0] || { first: null, second: null, third: null, fourth: null };
-      const B = standings[1] || { first: null, second: null, third: null, fourth: null };
+      const A = standings[0] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
+      const B = standings[1] || { first: null, second: null, third: null, fourth: null, eliminated: [], isGroupFinished: false };
 
       // Round 1: Playoffs round 1 (3rd vs 4th)
       const r1: Match[] = [
@@ -499,6 +505,11 @@ export function generateTieredPlayoffBracket(groups: GslGroup[], advanceCount: n
       return [r1, qf, sf, gf];
     }
   }
+}
+
+export function generateTieredPlayoffBracket(groups: GslGroup[], advanceCount: number = 3): Match[][] {
+  const standings = groups.map(g => getGslGroupStandings(g));
+  return generateTieredPlayoffFromStandings(standings, advanceCount);
 }
 
 /**

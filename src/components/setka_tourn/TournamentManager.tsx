@@ -12,7 +12,7 @@ import TournamentSettingsForm from './TournamentSettingsForm';
 import MatchCard from './MatchCard';
 import { generateDoubleElimination, cascadeAdvancements, advanceDoubleElimMatch } from './doubleEliminationLogic';
 import { generateNextSwissRound } from './swissLogic';
-import { generateGslGroups, generateTieredPlayoffBracket, getGslGroupStandings, updateGslMatch, advanceTieredPlayoffMatch } from './gslLogic';
+import { generateGslGroups, generateTieredPlayoffBracket, generateTieredPlayoffFromStandings, getGslGroupStandings, updateGslMatch, advanceTieredPlayoffMatch } from './gslLogic';
 import TeamLogo from '../TeamLogo';
 import Top20Modal from './Top20Modal';
 import FinalistsModal from './FinalistsModal';
@@ -819,7 +819,7 @@ export default function TournamentManager({ user }: { user: any }) {
           const stage2Type = activeTournament.settings.stage2Type || 'tiered';
           const advanceCount = activeTournament.settings.gslAdvanceCount || 3;
 
-          if (stage2Type === 'tiered') {
+          if (stage2Type === 'tiered' || (stage2Type === 'single' && (advanceCount === 3 || advanceCount === 4))) {
               const tieredRounds = generateTieredPlayoffBracket(activeTournament.gslGroups, advanceCount);
               const updated = {
                   ...activeTournament,
@@ -881,34 +881,88 @@ export default function TournamentManager({ user }: { user: any }) {
               if (s.w >= winsToAdvance) advancingTeams.push(s.team);
           });
       } else if (activeTournament.groups) {
+          const groupStandingsList: { first: Team | null, second: Team | null, third: Team | null, fourth: Team | null, sorted: Team[] }[] = [];
+
           activeTournament.groups.forEach(group => {
-          const stats: any = {};
-          group.teams.forEach(t => stats[t.id] = { team: t, pts: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 });
-          group.matches.forEach(m => {
-            if (m.winnerId || m.isDraw) {
-                const add = (tId: string, gf: number, ga: number, isW: boolean, isD: boolean) => {
-                    stats[tId].gf += gf; stats[tId].ga += ga;
-                    if (isW) { stats[tId].w++; stats[tId].pts += (activeTournament.settings.winPoints || 3); }
-                    else if (isD) { stats[tId].d++; stats[tId].pts += (activeTournament.settings.drawPoints || 1); }
-                    else { stats[tId].l++; stats[tId].pts += (activeTournament.settings.lossPoints || 0); }
-                };
-                if (m.team1) add(m.team1.id, m.score1, m.score2, m.winnerId === m.team1.id, !!m.isDraw);
-                if (m.team2) add(m.team2.id, m.score2, m.score1, m.winnerId === m.team2.id, !!m.isDraw);
-            }
+              const stats: any = {};
+              group.teams.forEach(t => stats[t.id] = { team: t, pts: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 });
+              group.matches.forEach(m => {
+                if (m.winnerId || m.isDraw) {
+                    const add = (tId: string, gf: number, ga: number, isW: boolean, isD: boolean) => {
+                        stats[tId].gf += gf; stats[tId].ga += ga;
+                        if (isW) { stats[tId].w++; stats[tId].pts += (activeTournament.settings.winPoints || 3); }
+                        else if (isD) { stats[tId].d++; stats[tId].pts += (activeTournament.settings.drawPoints || 1); }
+                        else { stats[tId].l++; stats[tId].pts += (activeTournament.settings.lossPoints || 0); }
+                    };
+                    if (m.team1) add(m.team1.id, m.score1, m.score2, m.winnerId === m.team1.id, !!m.isDraw);
+                    if (m.team2) add(m.team2.id, m.score2, m.score1, m.winnerId === m.team2.id, !!m.isDraw);
+                }
+              });
+              
+              const sorted = (Object.values(stats) as Array<{team: Team, pts: number, gf: number, ga: number}>).sort((a, b) => {
+                  if (b.pts !== a.pts) return b.pts - a.pts;
+                  const gdA = a.gf - a.ga; const gdB = b.gf - b.ga;
+                  if (gdB !== gdA) return gdB - gdA;
+                  return b.gf - a.gf;
+              }).map(s => s.team);
+              
+              groupStandingsList.push({
+                  first: sorted[0] || null,
+                  second: sorted[1] || null,
+                  third: sorted[2] || null,
+                  fourth: sorted[3] || null,
+                  sorted
+              });
           });
-          
-          const sorted = (Object.values(stats) as Array<{team: Team, pts: number, gf: number, ga: number}>).sort((a, b) => {
-              if (b.pts !== a.pts) return b.pts - a.pts;
-              const gdA = a.gf - a.ga; const gdB = b.gf - b.ga;
-              if (gdB !== gdA) return gdB - gdA;
-              return b.gf - a.gf;
-          });
-          
+
           const advCount = activeTournament.settings.advancingPerGroup || 2;
-          for (let i = 0; i < advCount && i < sorted.length; i++) {
-              advancingTeams.push(sorted[i].team);
+          const stage2Type = activeTournament.settings.stage2Type || (advCount === 3 ? 'tiered' : 'single');
+
+          // If 3 teams advance per group from 2 groups, generate Tiered Playoff bracket (Quarter-finals -> Semis -> GF)
+          if (groupStandingsList.length === 2 && advCount === 3 && stage2Type !== 'double') {
+              const gslFormatStandings = groupStandingsList.map(g => ({
+                  first: g.first,
+                  second: g.second,
+                  third: g.third,
+                  fourth: g.fourth,
+                  eliminated: g.sorted.slice(3),
+                  isGroupFinished: true
+              }));
+              const tieredRounds = generateTieredPlayoffFromStandings(gslFormatStandings, 3);
+              const updated = {
+                  ...activeTournament,
+                  activeStage: 2 as const,
+                  tieredBracketRounds: tieredRounds
+              };
+              handleUpdateActive(updated);
+              return;
           }
-      });
+
+          // If 2 teams advance from 2 groups in single elimination, cross-seed: 1A vs 2B, 1B vs 2A
+          if (groupStandingsList.length === 2 && advCount === 2 && stage2Type !== 'double') {
+              const A = groupStandingsList[0];
+              const B = groupStandingsList[1];
+              const r1: Match[] = [
+                  { id: 'm0', round: 1, team1: A.first || null, team2: B.second || null, score1: 0, score2: 0, winnerId: null },
+                  { id: 'm1', round: 1, team1: B.first || null, team2: A.second || null, score1: 0, score2: 0, winnerId: null },
+              ];
+              const r2: Match[] = [
+                  { id: 'm2', round: 2, team1: null, team2: null, score1: 0, score2: 0, winnerId: null }
+              ];
+              const updated = {
+                  ...activeTournament,
+                  activeStage: 2 as const,
+                  bracketRounds: [r1, r2]
+              };
+              handleUpdateActive(updated);
+              return;
+          }
+
+          groupStandingsList.forEach(g => {
+              for (let i = 0; i < advCount && i < g.sorted.length; i++) {
+                  advancingTeams.push(g.sorted[i]);
+              }
+          });
       }
 
       let initialBracket: Match[][] = [];
@@ -1555,7 +1609,40 @@ export default function TournamentManager({ user }: { user: any }) {
                               </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                              {!isExporting && activeTournament.activeStage === 2 && (activeTournament.gslGroups || activeTournament.groups || activeTournament.swissRounds) && (
+                                  <>
+                                      <button
+                                          onClick={() => handleUpdateActive({ ...activeTournament, activeStage: 1 })}
+                                          className="px-3 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                          title="Вернуться к групповому этапу для просмотра или изменения результатов"
+                                      >
+                                          ⬅ К группам
+                                      </button>
+                                      <button
+                                          onClick={() => {
+                                              if (window.confirm("Пересобрать сетку плей-офф по актуальным результатам групп в новом формате?")) {
+                                                  handleAdvanceToBracket();
+                                              }
+                                          }}
+                                          className="px-3 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                          title="Пересчитать сетку плей-офф по результатам групп"
+                                      >
+                                          🔄 Пересобрать плей-офф
+                                      </button>
+                                  </>
+                              )}
+
+                              {!isExporting && activeTournament.activeStage === 1 && (activeTournament.tieredBracketRounds || activeTournament.bracketRounds) && (
+                                  <button
+                                      onClick={() => handleUpdateActive({ ...activeTournament, activeStage: 2 })}
+                                      className="px-3 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/40 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                      title="Перейти к сетке плей-офф"
+                                  >
+                                      К плей-офф ➡
+                                  </button>
+                              )}
+
                               {!isExporting && (
                                   <button
                                       onClick={toggleTournamentCompleted}
