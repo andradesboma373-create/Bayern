@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { lookupBuiltinTeamLogo } from '../teamLogosMap';
 
 export interface TeamLogoProps {
   game?: 'cs2' | 's2';
@@ -108,11 +107,7 @@ function resolveTeamLogo(
   }
 
   // 1. Built-in instant professional esports logo map
-  const builtin = lookupBuiltinTeamLogo(cleanName);
-  if (builtin) {
-    logoCache.set(cacheKey, builtin);
-    return Promise.resolve(builtin);
-  }
+  // (Removed builtin lookup)
 
   // 2. Check local saved teams
   const localLogo = getLocalTeamLogo(lowerName);
@@ -170,34 +165,11 @@ function resolveTeamLogo(
 }
 
 function getTeamInitials(name: string): string {
-  if (!name) return '?';
-  const clean = name.trim();
-  const words = clean.split(/[\s\-_.]+/).filter(Boolean);
-  if (words.length >= 2) {
-    return (words[0][0] + words[1][0]).toUpperCase();
-  }
-  if (clean.length <= 3) {
-    return clean.toUpperCase();
-  }
-  return clean.slice(0, 2).toUpperCase();
+  return '?';
 }
 
 function getTeamBadgePalette(name: string): { bg: string; border: string; text: string } {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash << 5) - hash + name.charCodeAt(i);
-    hash |= 0;
-  }
-  const palettes = [
-    { bg: 'bg-gradient-to-br from-amber-500/20 to-orange-600/30', border: 'border-amber-500/40', text: 'text-amber-300' },
-    { bg: 'bg-gradient-to-br from-blue-500/20 to-indigo-600/30', border: 'border-blue-500/40', text: 'text-blue-300' },
-    { bg: 'bg-gradient-to-br from-emerald-500/20 to-teal-600/30', border: 'border-emerald-500/40', text: 'text-emerald-300' },
-    { bg: 'bg-gradient-to-br from-purple-500/20 to-pink-600/30', border: 'border-purple-500/40', text: 'text-purple-300' },
-    { bg: 'bg-gradient-to-br from-rose-500/20 to-red-600/30', border: 'border-rose-500/40', text: 'text-rose-300' },
-    { bg: 'bg-gradient-to-br from-cyan-500/20 to-blue-600/30', border: 'border-cyan-500/40', text: 'text-cyan-300' }
-  ];
-  const idx = Math.abs(hash) % palettes.length;
-  return palettes[idx];
+  return { bg: 'bg-[#18192a]', border: 'border-white/10', text: 'text-[#ff8f00]' };
 }
 
 export function TeamLogo({ 
@@ -214,8 +186,8 @@ export function TeamLogo({
   const lowerName = cleanName.toLowerCase();
   const cacheKey = `${game || 'all'}_${lowerName}`;
 
-  // Instant synchronous resolution if logoUrl is provided or already in memory or in builtin map
-  const builtin = cleanName ? lookupBuiltinTeamLogo(cleanName) : null;
+  // Instant synchronous resolution if logoUrl is provided or already in memory
+  const builtin = null;
   const initialLogo = (logoUrl && typeof logoUrl === 'string' && logoUrl.trim() !== '') 
     ? logoUrl 
     : (cleanName ? (logoCache.get(cacheKey) ?? builtin ?? getLocalTeamLogo(lowerName)) : null) || null;
@@ -248,14 +220,7 @@ export function TeamLogo({
       return;
     }
 
-    // Fast check builtin
-    const bi = lookupBuiltinTeamLogo(cleanName);
-    if (bi) {
-      logoCache.set(cacheKey, bi);
-      setResolvedLogo(bi);
-      setIsSearching(false);
-      return;
-    }
+    // Fast check builtin (removed)
 
     // Fast check local
     const local = getLocalTeamLogo(lowerName);

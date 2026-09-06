@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, getDocs, collection, updateDoc, query, where, writeBatch } from '../firebase';
-import { Settings as SettingsIcon, Bot, Coins, CheckCircle, AlertTriangle, Save, ShieldAlert, Sliders, UserCheck, Lock, Unlock, Key, Trash2, Plus, Star, Award } from 'lucide-react';
+import { Settings as SettingsIcon, Bot, Coins, CheckCircle, AlertTriangle, Save, ShieldAlert, Sliders, UserCheck, Lock, Unlock, Key, Trash2, Plus, Star, Award, Database, CloudUpload } from 'lucide-react';
 import { DEFAULT_ROLES_CS2, DEFAULT_ROLES_S2, setSimulationRoles } from '../lib/simulation';
 import { getAllPlayerPerks, savePlayerPerk, deletePlayerPerk, PlayerPerk } from '../lib/playerPerks';
 
 export default function Settings({ user }: { user: any }) {
-  const [botToken, setBotToken] = useState('');
   const [clubBudget, setClubBudget] = useState<number>(1000000);
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Custom Roles
   const [customRolesCS2, setCustomRolesCS2] = useState<any[]>(DEFAULT_ROLES_CS2);
   const [customRolesS2, setCustomRolesS2] = useState<any[]>(DEFAULT_ROLES_S2);
-  const [activeTab, setActiveTab] = useState<'general' | 'individual'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'individual' | 'database'>('general');
   const [activeRoleGame, setActiveRoleGame] = useState<'cs2' | 's2'>('cs2');
 
   // Bamep Room & Individual Perks State
@@ -108,7 +108,6 @@ export default function Settings({ user }: { user: any }) {
         const response = await fetch(`/api/settings/${user.uid}`);
         if (response.ok) {
           const data = await response.json();
-          setBotToken(data.botToken || '');
           if (data.clubBudget !== undefined) setClubBudget(Number(data.clubBudget));
           else if (data.money !== undefined) setClubBudget(Number(data.money));
           
@@ -129,7 +128,6 @@ export default function Settings({ user }: { user: any }) {
         const snap = await getDoc(docRef);
         if (snap.exists()) {
           const data = snap.data();
-          setBotToken(data.botToken || '');
           if (data.clubBudget !== undefined) setClubBudget(Number(data.clubBudget));
           else if (data.money !== undefined) setClubBudget(Number(data.money));
           
@@ -149,7 +147,6 @@ export default function Settings({ user }: { user: any }) {
         if (local) {
           try {
             const parsed = JSON.parse(local);
-            setBotToken(parsed.botToken || '');
             if (parsed.clubBudget !== undefined) setClubBudget(Number(parsed.clubBudget));
             else if (parsed.money !== undefined) setClubBudget(Number(parsed.money));
             
@@ -191,7 +188,6 @@ export default function Settings({ user }: { user: any }) {
         },
         body: JSON.stringify({
           userId: user.uid,
-          botToken: botToken.trim(),
           clubBudget,
           money: clubBudget,
           customRolesCS2,
@@ -206,7 +202,6 @@ export default function Settings({ user }: { user: any }) {
 
       // Save locally to ensure sync doesn't overwrite it
       localStorage.setItem(`settings_${user.uid}`, JSON.stringify({
-        botToken: botToken.trim(),
         clubBudget,
         money: clubBudget,
         customRolesCS2,
@@ -215,23 +210,77 @@ export default function Settings({ user }: { user: any }) {
 
       setStatusMsg({
         type: 'success',
-        text: 'Настройки успешно сохранены! Бот автоматически запущен на сервере и готов отвечать в Telegram.'
+        text: 'Настройки бюджета успешно сохранены!'
       });
     } catch (err: any) {
       console.warn("Error saving settings via API, saving locally as backup:", err);
       localStorage.setItem(`settings_${user.uid}`, JSON.stringify({
-        botToken: botToken.trim(),
-        
+        clubBudget,
+        money: clubBudget,
         customRolesCS2,
         customRolesS2
       }));
 
       setStatusMsg({
         type: 'error',
-        text: `Ошибка при запуске бота на сервере: ${err.message || err}`
+        text: `Ошибка при сохранении: ${err.message || err}`
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDatabaseSync = async () => {
+    if (!user) return;
+    setSyncing(true);
+    setStatusMsg(null);
+    try {
+      const payload: any = { userId: user.uid };
+      
+      const keys = [
+        { prop: 'settings', cacheKey: `settings_${user.uid}` },
+        { prop: 'players', cacheKey: `players_${user.uid}` },
+        { prop: 'teams', cacheKey: `teams_${user.uid}` },
+        { prop: 'swapOffers', cacheKey: `swapOffers_${user.uid}` },
+        { prop: 'tournaments', cacheKey: `tournaments_${user.uid}` },
+        { prop: 'matches', cacheKey: `matches_${user.uid}` },
+        { prop: 'tgUsers', cacheKey: `tgUsers_${user.uid}` },
+        { prop: 'tgVetos', cacheKey: `tgVetos_${user.uid}` },
+        { prop: 'mapStats', cacheKey: `mapStats_${user.uid}` }
+      ];
+
+      // Grab custom data
+      for (const item of keys) {
+        const raw = localStorage.getItem(item.cacheKey);
+        if (raw) {
+          try {
+            payload[item.prop] = JSON.parse(raw);
+          } catch (e) {}
+        }
+      }
+
+      // Sync the rest with the backend API
+      const response = await fetch('/api/sync-cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка синхронизации с сервером');
+      }
+
+      setStatusMsg({
+        type: 'success',
+        text: 'Все ваши настройки, турниры, логотипы и карты успешно сохранены в облачную базу данных!'
+      });
+    } catch (err: any) {
+      setStatusMsg({
+        type: 'error',
+        text: `Ошибка при синхронизации: ${err.message || err}`
+      });
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -276,6 +325,13 @@ export default function Settings({ user }: { user: any }) {
           <UserCheck className="w-4 h-4" />
           Индивидуальные Рейты {isBamepUnlocked ? '👑' : '🔒'}
         </button>
+        <button
+          onClick={() => setActiveTab('database')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTab === 'database' ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'text-white/50 hover:bg-white/5'}`}
+        >
+          <Database className="w-4 h-4" />
+          База Данных
+        </button>
       </div>
 
       {loading ? (
@@ -286,33 +342,6 @@ export default function Settings({ user }: { user: any }) {
         <div className="flex flex-col gap-6">
           {activeTab === 'general' && (
             <form onSubmit={handleSave} className="flex flex-col gap-6">
-              {/* Telegram Bot Setup */}
-              <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-2xl rounded-full pointer-events-none"></div>
-                <div className="flex items-start gap-4 mb-6">
-                  <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-lg">
-                    <Bot className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white mb-1">Telegram Бот</h3>
-                    <p className="text-xs text-white/50 leading-relaxed">
-                      Подключите своего собственного бота для канала. Вставьте токен, полученный у <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">@BotFather</a>. Бот будет автоматически запущен и настроен под ваш канал!
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-white/50 uppercase tracking-wider">Токен Бота</label>
-                  <input 
-                    type="text" 
-                    value={botToken} 
-                    onChange={e => setBotToken(e.target.value)} 
-                    placeholder="1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
-                  />
-                </div>
-              </div>
-
               <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 blur-2xl rounded-full pointer-events-none"></div>
                 <div className="flex items-start gap-4 mb-6">
@@ -358,6 +387,34 @@ export default function Settings({ user }: { user: any }) {
                 {saving ? 'СОХРАНЕНИЕ...' : 'СОХРАНИТЬ НАСТРОЙКИ'}
               </button>
             </form>
+          )}
+
+          {activeTab === 'database' && (
+            <div className="flex flex-col gap-6">
+              <div className="bg-[#12121a] border border-white/5 rounded-2xl p-8 space-y-6 text-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-2xl rounded-full pointer-events-none"></div>
+                <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-2 border border-emerald-500/30">
+                  <Database className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white uppercase tracking-wider mb-2">
+                    Облачное Хранилище
+                  </h3>
+                  <p className="text-sm text-white/60 max-w-lg mx-auto leading-relaxed">
+                    Нажмите кнопку ниже, чтобы принудительно синхронизировать все ваши данные (турниры, настройки, индивидуальные рейты) с вашей админской комнатой в облачной базе данных. 
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleDatabaseSync}
+                  disabled={syncing}
+                  className="mx-auto w-full max-w-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black uppercase text-sm py-4 rounded-xl tracking-wider transition-all cursor-pointer shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-50 mt-4"
+                >
+                  <CloudUpload className="w-5 h-5" />
+                  {syncing ? 'СИНХРОНИЗАЦИЯ...' : 'ВЫГРУЗИТЬ В БАЗУ ДАННЫХ'}
+                </button>
+              </div>
+            </div>
           )}
 
       {activeTab === 'individual' && (
