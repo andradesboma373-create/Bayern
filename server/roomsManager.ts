@@ -310,8 +310,6 @@ export function trackRoomRequest(
 ): { isAllowed: boolean; error?: string } {
   ensureStorage();
   
-  if (opType === 'read') dailyQuota.readsToday++;
-  if (opType === 'write') dailyQuota.writesToday++;
 
   // Find room by channelId or username
   const cleanId = (userIdOrChannel || '').replace('@matchsimulator.com', '');
@@ -320,7 +318,8 @@ export function trackRoomRequest(
   if (!room) {
     return { isAllowed: true };
   }
-
+  if (opType === 'read') dailyQuota.readsToday++;
+  if (opType === 'write') dailyQuota.writesToday++;
   room.totalRequestsToday = (room.totalRequestsToday || 0) + 1;
   room.lastActive = new Date().toISOString();
 

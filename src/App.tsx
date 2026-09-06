@@ -1,7 +1,7 @@
 import { loadTournaments } from './components/setka_tourn/storage';
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity } from 'lucide-react';
 import { auth, logout, db } from './firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from './firebase';
 import { collection, query, where, getDocs, onSnapshot } from './firebase';
@@ -17,6 +17,7 @@ import News from './components/News';
 import SettingsComponent from './components/Settings';
 import TgUsers from './components/TgUsers';
 import Transfers from './components/Transfers';
+import AdminAnalytics from './components/AdminAnalytics';
 
 function Sidebar() {
   const location = useLocation();
@@ -31,6 +32,7 @@ function Sidebar() {
     { icon: Newspaper, label: 'Новости', path: '/news' },
     { icon: Zap, label: 'Трансферы', path: '/transfers' },
     { icon: Database, label: 'База ТГ Бота', path: '/tg-users' },
+    { icon: Activity, label: 'Аналитика', path: '/analytics' },
     { icon: Settings, label: 'Настройки', path: '/settings' },
   ];
 
@@ -557,6 +559,7 @@ export default function App() {
               <Route path="/news" element={<News user={user} />} />
               <Route path="/transfers" element={<Transfers user={user} />} />
               <Route path="/tg-users" element={<TgUsers user={user} />} />
+              <Route path="/analytics" element={<AdminAnalytics user={user} />} />
               <Route path="/settings" element={<SettingsComponent user={user} />} />
             </Routes>
           </div>

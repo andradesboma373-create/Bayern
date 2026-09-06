@@ -220,20 +220,6 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  if (!isSuperAdmin) {
-    return (
-      <div className="p-8 max-w-4xl mx-auto text-center">
-        <div className="bg-red-500/10 border border-red-500/20 p-8 rounded-2xl">
-          <ShieldAlert className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-black text-white uppercase tracking-wider mb-2">Доступ ограничен</h2>
-          <p className="text-white/60 text-sm">
-            Панель аналитики лимитов и управления комнатами доступна только для аккаунта супер-администратора (bamep).
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto flex flex-col gap-6 animate-fade-in">
       {/* Header */}
@@ -255,21 +241,15 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={fetchData}
-            disabled={loading}
-            className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </button>
-          <button
-            onClick={() => { setShowCreateModal(true); setCreateSuccessData(null); }}
-            className="px-4 py-2.5 bg-[#ff8f00] hover:bg-[#ffa733] text-black rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(255,143,0,0.3)] cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Создать комнату
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => { setShowCreateModal(true); setCreateSuccessData(null); }}
+              className="px-4 py-2.5 bg-[#ff8f00] hover:bg-[#ffa733] text-black rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(255,143,0,0.3)] cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Создать комнату
+            </button>
+          )}
         </div>
       </div>
 
@@ -391,6 +371,7 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
         </div>
       )}
 
+      {isSuperAdmin && ( <>
       {/* Rooms Table */}
       <div className="bg-[#161726] border border-white/10 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
@@ -722,6 +703,8 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
