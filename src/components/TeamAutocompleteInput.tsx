@@ -1,3 +1,4 @@
+import TeamLogo from "./TeamLogo";
 import React, { useState, useEffect, useRef } from 'react';
 import teamsListData from '../teamsList.json';
 
@@ -99,14 +100,6 @@ export function TeamAutocompleteInput({
                 setShowDropdown(false);
               }}
             >
-              <img 
-                src={`/optimized/${teamName}.webp`} 
-                alt={teamName} 
-                className="w-6 h-6 object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = `/images/${teamName}.png`; // fallback if needed
-                }}
-              />
               {teamName}
             </div>
           ))}

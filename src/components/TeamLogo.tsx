@@ -133,7 +133,6 @@ function resolveTeamLogo(
       candidates.push(`/logos/${name}.svg`);
       candidates.push(`/logos/${name}.png`);
       candidates.push(`/logos/${name}.webp`);
-      candidates.push(`/optimized/${name}.webp`);
     }
 
     const tryCandidate = (index: number) => {

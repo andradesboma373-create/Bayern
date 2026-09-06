@@ -309,6 +309,8 @@ export function trackRoomRequest(
   details?: string
 ): { isAllowed: boolean; error?: string } {
   ensureStorage();
+
+
   
 
   // Find room by channelId or username

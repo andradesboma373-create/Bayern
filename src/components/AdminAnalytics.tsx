@@ -276,13 +276,19 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
             </div>
 
             <div className="my-2">
-              <div className="flex items-baseline justify-between mb-1.5">
-                <span className="text-2xl font-black text-white font-mono">
-                  {stats.readsToday.toLocaleString()}
-                </span>
-                <span className="text-xs text-white/40 font-mono">
-                  / {stats.maxReads.toLocaleString()} ({stats.percentReads}%)
-                </span>
+              <div className="flex flex-col mb-1.5">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-2xl font-black text-white font-mono">
+                    {stats.readsToday.toLocaleString()}
+                  </span>
+                  <span className="text-sm text-white/60 font-mono">
+                    ({stats.percentReads}%)
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-xs text-white/40">Использовано</span>
+                  <span className="text-xs font-bold text-emerald-400">Осталось: {(stats.maxReads - stats.readsToday).toLocaleString()}</span>
+                </div>
               </div>
               <div className="w-full h-2.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
                 <div 
@@ -295,7 +301,7 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
             </div>
 
             <p className="text-[11px] text-white/40 mt-2">
-              Счетчик операций чтения в Firestore. Сбрасывается каждые 24ч.
+              Операции чтения из Firebase (Spark Plan: 50,000 в сутки). Сбрасывается каждые 24ч.
             </p>
           </div>
 
@@ -312,13 +318,19 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
             </div>
 
             <div className="my-2">
-              <div className="flex items-baseline justify-between mb-1.5">
-                <span className="text-2xl font-black text-white font-mono">
-                  {stats.writesToday.toLocaleString()}
-                </span>
-                <span className="text-xs text-white/40 font-mono">
-                  / {stats.maxWrites.toLocaleString()} ({stats.percentWrites}%)
-                </span>
+              <div className="flex flex-col mb-1.5">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-2xl font-black text-white font-mono">
+                    {stats.writesToday.toLocaleString()}
+                  </span>
+                  <span className="text-sm text-white/60 font-mono">
+                    ({stats.percentWrites}%)
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-xs text-white/40">Использовано</span>
+                  <span className="text-xs font-bold text-emerald-400">Осталось: {(stats.maxWrites - stats.writesToday).toLocaleString()}</span>
+                </div>
               </div>
               <div className="w-full h-2.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
                 <div 
