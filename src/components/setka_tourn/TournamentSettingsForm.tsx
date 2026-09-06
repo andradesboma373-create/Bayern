@@ -1,0 +1,1583 @@
+import React, { useState, useEffect } from 'react';
+import { TeamAutocompleteInput } from '../TeamAutocompleteInput';
+import { TournamentSettings, Team } from './types';
+import { Trash2, ChevronUp, ChevronDown, Upload, Folder, X, HelpCircle, Check, Shuffle, ArrowRightLeft, ArrowRight, Plus, Layers, Grid } from 'lucide-react';
+import TeamLogo from '../TeamLogo';
+import MatchCard from './MatchCard';
+
+interface Props {
+  user?: any;
+  initialName?: string;
+  initialLogoUrl?: string;
+  initialPrizePool?: string;
+  initialSettings?: TournamentSettings;
+  initialTeams?: Team[];
+  onSave: (name: string, settings: TournamentSettings, teams: Team[], logoUrl?: string, prizePool?: string) => void;
+  submitLabel: string;
+}
+
+
+export default function TournamentSettingsForm({ 
+    user,
+    initialName = "", 
+    initialLogoUrl = "",
+    initialPrizePool = "$100,000",
+    initialSettings, 
+    initialTeams = [], 
+    onSave, 
+    submitLabel 
+}: Props) {
+  const [name, setName] = useState(initialName);
+  const [logoUrl, setLogoUrl] = useState(initialLogoUrl);
+  const [prizePool, setPrizePool] = useState(initialPrizePool);
+  const [settings, setSettings] = useState<TournamentSettings>(initialSettings || {
+    mode: 'single_stage',
+    stage1Type: 'playoff',
+    seedingType: 'manual',
+    hasStage2: false,
+    matchesPerPairing: 1,
+    winPoints: 3,
+    drawPoints: 1,
+    lossPoints: 0,
+    advancingPerGroup: 2,
+    numberOfGroups: 2,
+  });
+  const [teams, setTeams] = useState<Team[]>(initialTeams);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [targetAddGroupId, setTargetAddGroupId] = useState<string>("auto");
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [editingTeamName, setEditingTeamName] = useState("");
+  const [showCustomizationModal, setShowCustomizationModal] = useState(false);
+  const [hasCustomized, setHasCustomized] = useState(false);
+  const [error, setError] = useState('');
+
+  const isGroupFormat = settings.stage1Type === 'gsl_groups' || settings.stage1Type === 'groups';
+  const numGroups = Math.max(1, settings.numberOfGroups || 2);
+
+  const [groupAssignments, setGroupAssignments] = useState<Record<string, string[]>>(() => {
+    if (initialSettings?.groupAssignments && Object.keys(initialSettings.groupAssignments).length > 0) {
+      return initialSettings.groupAssignments;
+    }
+    const initialAssigned: Record<string, string[]> = {};
+    const gCount = initialSettings?.numberOfGroups || 2;
+    for (let i = 0; i < gCount; i++) {
+      initialAssigned[`gsl-group-${i}`] = [];
+    }
+    initialTeams.forEach((t, idx) => {
+      initialAssigned[`gsl-group-${idx % gCount}`].push(t.id);
+    });
+    return initialAssigned;
+  });
+
+  // Ensure groupAssignments has keys for all configured groups
+  useEffect(() => {
+    if (isGroupFormat) {
+      setGroupAssignments(prev => {
+        const next: Record<string, string[]> = {};
+        const gCount = settings.numberOfGroups || 2;
+        const allAssignedIds: string[] = [];
+        
+        for (let i = 0; i < gCount; i++) {
+          const key = `gsl-group-${i}`;
+          next[key] = (prev[key] || []).filter(id => teams.some(t => t.id === id));
+          allAssignedIds.push(...next[key]);
+        }
+        
+        // Add any unassigned teams
+        teams.forEach((t, idx) => {
+          if (!allAssignedIds.includes(t.id)) {
+            const targetKey = `gsl-group-${idx % gCount}`;
+            next[targetKey] = [...(next[targetKey] || []), t.id];
+          }
+        });
+        return next;
+      });
+    }
+  }, [settings.numberOfGroups, settings.stage1Type]);
+
+  const [globalTeams, setGlobalTeams] = useState<any[]>([]);
+  useEffect(() => {
+    if (user?.uid) {
+      const stored = localStorage.getItem(`teams_${user.uid}`);
+      if (stored) {
+        setGlobalTeams(JSON.parse(stored));
+      }
+    }
+  }, [user]);
+
+  const handleAddTeam = (optionalName?: string, specificGroupId?: string) => {
+    const nameToAdd = typeof optionalName === 'string' && optionalName.trim() ? optionalName : newTeamName;
+    if (nameToAdd.trim()) {
+      const newId = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 4);
+      const newTeam: Team = { id: newId, name: nameToAdd.trim() };
+      const updatedTeams = [...teams, newTeam];
+      setTeams(updatedTeams);
+      setNewTeamName("");
+
+      if (isGroupFormat) {
+        setGroupAssignments(prev => {
+          const next = { ...prev };
+          const gCount = settings.numberOfGroups || 2;
+          for (let i = 0; i < gCount; i++) {
+            if (!next[`gsl-group-${i}`]) next[`gsl-group-${i}`] = [];
+          }
+
+          let assignedG = specificGroupId || (targetAddGroupId !== 'auto' ? targetAddGroupId : null);
+          if (!assignedG || !next[assignedG]) {
+            // Find group with fewest teams
+            let minLen = Infinity;
+            let minG = `gsl-group-0`;
+            for (let i = 0; i < gCount; i++) {
+              const gKey = `gsl-group-${i}`;
+              if ((next[gKey]?.length || 0) < minLen) {
+                minLen = next[gKey]?.length || 0;
+                minG = gKey;
+              }
+            }
+            assignedG = minG;
+          }
+
+          next[assignedG] = [...(next[assignedG] || []), newId];
+          return next;
+        });
+      }
+    }
+  };
+
+  const handleAddGlobalTeam = (globalTeam: any, specificGroupId?: string) => {
+    if (!teams.find(t => t.name === globalTeam.name)) {
+      handleAddTeam(globalTeam.name, specificGroupId);
+    }
+  };
+
+  const handleRemoveTeam = (teamId: string) => {
+    setTeams(teams.filter(ct => ct.id !== teamId));
+    setGroupAssignments(prev => {
+      const next: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        next[k] = v.filter(id => id !== teamId);
+      }
+      return next;
+    });
+  };
+
+  const handleUpdateTeam = (id: string) => {
+    if (editingTeamName.trim()) {
+      setTeams(teams.map(t => t.id === id ? { ...t, name: editingTeamName.trim() } : t));
+    }
+    setEditingTeamId(null);
+  };
+
+  const handleRandomizeGroups = () => {
+    const gCount = settings.numberOfGroups || 2;
+    const next: Record<string, string[]> = {};
+    for (let i = 0; i < gCount; i++) {
+      next[`gsl-group-${i}`] = [];
+    }
+    const shuffled = [...teams].sort(() => Math.random() - 0.5);
+    shuffled.forEach((team, idx) => {
+      next[`gsl-group-${idx % gCount}`].push(team.id);
+    });
+    setGroupAssignments(next);
+  };
+
+  const handleSequentialGroups = () => {
+    const gCount = settings.numberOfGroups || 2;
+    const next: Record<string, string[]> = {};
+    for (let i = 0; i < gCount; i++) {
+      next[`gsl-group-${i}`] = [];
+    }
+    teams.forEach((team, idx) => {
+      next[`gsl-group-${idx % gCount}`].push(team.id);
+    });
+    setGroupAssignments(next);
+  };
+
+  const handleMoveTeamToGroup = (teamId: string, targetGroupId: string) => {
+    setGroupAssignments(prev => {
+      const next: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        next[k] = v.filter(id => id !== teamId);
+      }
+      next[targetGroupId] = [...(next[targetGroupId] || []), teamId];
+      return next;
+    });
+  };
+
+  const handleSwapGroupTeams = (sourceGroupId: string, slotIdx: number, newTeamId: string) => {
+    setGroupAssignments(prev => {
+      const next = { ...prev };
+      const currentList = [...(next[sourceGroupId] || [])];
+      const oldTeamId = currentList[slotIdx];
+      if (oldTeamId === newTeamId) return prev;
+
+      // Check if newTeamId is currently in another group
+      let otherGroupId: string | null = null;
+      let otherSlotIdx = -1;
+      for (const [gK, list] of Object.entries(next)) {
+        const idx = list.indexOf(newTeamId);
+        if (idx !== -1) {
+          otherGroupId = gK;
+          otherSlotIdx = idx;
+          break;
+        }
+      }
+
+      if (otherGroupId && otherGroupId !== sourceGroupId) {
+        const otherList = [...(next[otherGroupId] || [])];
+        otherList[otherSlotIdx] = oldTeamId;
+        currentList[slotIdx] = newTeamId;
+        next[sourceGroupId] = currentList;
+        next[otherGroupId] = otherList;
+      } else {
+        currentList[slotIdx] = newTeamId;
+        next[sourceGroupId] = currentList;
+      }
+      return next;
+    });
+  };
+
+  const moveTeamUp = (index: number) => {
+    if (index === 0) return;
+    const newTeams = [...teams];
+    const temp = newTeams[index];
+    newTeams[index] = newTeams[index - 1];
+    newTeams[index - 1] = temp;
+    setTeams(newTeams);
+    setSettings(prev => ({ ...prev, seedingType: 'manual' }));
+  };
+
+  const moveTeamDown = (index: number) => {
+    if (index === teams.length - 1) return;
+    const newTeams = [...teams];
+    const temp = newTeams[index];
+    newTeams[index] = newTeams[index + 1];
+    newTeams[index + 1] = temp;
+    setTeams(newTeams);
+    setSettings(prev => ({ ...prev, seedingType: 'manual' }));
+  };
+
+  const handleSwapTeams = (idx1: number, idx2: number) => {
+    const newTeams = [...teams];
+    const temp = newTeams[idx1];
+    newTeams[idx1] = newTeams[idx2];
+    newTeams[idx2] = temp;
+    setTeams(newTeams);
+    setSettings(prev => ({ ...prev, seedingType: 'manual' }));
+  };
+
+  const handlePairFirstWithLast = () => {
+    const sorted = [...teams];
+    const rearranged = [];
+    let left = 0;
+    let right = sorted.length - 1;
+    while (left <= right) {
+      if (left === right) {
+        rearranged.push(sorted[left]);
+      } else {
+        rearranged.push(sorted[left]);
+        rearranged.push(sorted[right]);
+      }
+      left++;
+      right--;
+    }
+    setTeams(rearranged);
+    setSettings(prev => ({ ...prev, seedingType: 'manual' }));
+  };
+
+  const handleFormSubmit = () => {
+    if (!name.trim()) {
+      setError('Введите название турнира');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+    if (teams.length < 2) {
+      setError('Добавьте как минимум 2 команды (или загрузите пресет)');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
+    let finalTeams = [...teams];
+    if (isGroupFormat) {
+      const gCount = settings.numberOfGroups || 2;
+      const teamMap = new Map(teams.map(t => [t.id, t]));
+      const ordered: Team[] = [];
+      const usedIds = new Set<string>();
+      for (let i = 0; i < gCount; i++) {
+        const gKey = `gsl-group-${i}`;
+        (groupAssignments[gKey] || []).forEach(tId => {
+          const t = teamMap.get(tId);
+          if (t && !usedIds.has(t.id)) {
+            ordered.push(t);
+            usedIds.add(t.id);
+          }
+        });
+      }
+      // Add any unassigned teams
+      teams.forEach(t => {
+        if (!usedIds.has(t.id)) ordered.push(t);
+      });
+      finalTeams = ordered;
+    }
+
+    const finalSettings: TournamentSettings = {
+      ...settings,
+      seedingType: settings.seedingType === 'random' ? 'random' : 'manual',
+      groupAssignments: isGroupFormat ? groupAssignments : undefined
+    };
+    onSave(name, finalSettings, finalTeams, logoUrl, prizePool);
+  };
+
+  return (
+    <div className="bg-[#12121a] p-8 rounded-2xl border border-white/5 flex flex-col gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <label className="block text-white/50 font-bold mb-2">Название турнира</label>
+            <input 
+                type="text" 
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#ff8f00]/50"
+                placeholder="Stake Pulse Beat I"
+            />
+        </div>
+
+        <div>
+            <label className="block text-white/50 font-bold mb-2">Призовой фонд ($)</label>
+            <input 
+                type="text" 
+                value={prizePool}
+                onChange={e => setPrizePool(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#ff8f00]/50"
+                placeholder="$100,000"
+            />
+        </div>
+      </div>
+
+      {/* Tournament Avatar / Logo Section */}
+      <div className="bg-black/40 p-5 rounded-2xl border border-white/10 space-y-4">
+        <div className="flex items-center justify-between">
+          <label className="block text-[#ff8f00] font-black uppercase tracking-widest text-xs flex items-center gap-2">
+            <Folder className="w-4 h-4" /> Аватарка / Логотип турнира
+          </label>
+          <span className="text-white/40 text-xs">Загрузите свою или выберите из папки</span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          {/* Avatar Preview Box - Question mark fallback if empty */}
+          <div className="relative shrink-0">
+            {logoUrl ? (
+              <div className="relative group">
+                <img 
+                  src={logoUrl} 
+                  alt="Tournament Avatar" 
+                  className="w-16 h-16 object-contain rounded-2xl border-2 border-[#ff8f00]/50 bg-black/80 p-1 shadow-lg"
+                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setLogoUrl('')}
+                  className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-500 text-white p-1 rounded-full text-xs shadow-md cursor-pointer"
+                  title="Удалить логотип"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="w-16 h-16 rounded-2xl bg-[#18192a] border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-[#ff8f00] shadow-inner">
+                <span className="text-2xl font-black">?</span>
+                <span className="text-[9px] text-white/40 font-bold uppercase">Без авы</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 w-full space-y-3">
+            {/* File Upload Button & Direct URL Input */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label className="bg-[#ff8f00]/20 hover:bg-[#ff8f00]/30 border border-[#ff8f00]/50 text-[#ff8f00] font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shrink-0">
+                <Upload className="w-4 h-4" />
+                <span>Загрузить фото</span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      try {
+                        fetch('/api/upload', { method: 'POST', body: formData })
+                          .then(r => r.json())
+                          .then(d => { if (d.url) setLogoUrl(d.url); });
+                      } catch(e) {}
+                    }
+                  }}
+                  className="hidden" 
+                />
+              </label>
+
+              <input 
+                type="text" 
+                value={logoUrl}
+                onChange={e => setLogoUrl(e.target.value)}
+                className="flex-1 bg-black/50 border border-white/10 px-4 py-2.5 rounded-xl text-white text-xs outline-none focus:border-[#ff8f00]/50"
+                placeholder="Или вставьте прямую ссылку (https://...)"
+              />
+            </div>
+
+
+          </div>
+        </div>
+      </div>
+
+      <div>
+          <label className="block text-[#ff8f00] font-black uppercase tracking-widest text-sm mb-4">Формат 1 стадии</label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <button 
+                type="button"
+                onClick={() => setSettings({...settings, stage1Type: 'groups', mode: settings.hasStage2 ? 'two_stage' : 'single_stage' })}
+                className={`p-4 rounded-xl border ${settings.stage1Type === 'groups' ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+              >
+                  Круговые группы
+              </button>
+              <button 
+                type="button"
+                onClick={() => setSettings({...settings, stage1Type: 'gsl_groups', mode: 'two_stage', hasStage2: true, stage2Type: 'tiered', numberOfGroups: settings.numberOfGroups || 2 })}
+                className={`p-4 rounded-xl border ${settings.stage1Type === 'gsl_groups' ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+              >
+                  ⭐ Группы GSL (ESL / 2 этапа)
+              </button>
+              <button 
+                type="button"
+                onClick={() => setSettings({...settings, stage1Type: 'swiss', mode: 'swiss' })}
+                className={`p-4 rounded-xl border ${settings.stage1Type === 'swiss' ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+              >
+                  Швейцарская система
+              </button>
+              <button 
+                type="button"
+                onClick={() => setSettings({...settings, stage1Type: 'playoff', mode: 'single_stage', hasStage2: false })}
+                className={`p-4 rounded-xl border ${settings.stage1Type === 'playoff' ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+              >
+                  Плей-офф
+              </button>
+          </div>
+      </div>
+
+       {settings.stage1Type === 'gsl_groups' && (
+          <div className="flex flex-col gap-4 bg-black/20 p-5 rounded-xl border border-white/5">
+              {/* Advance Format Selector: 2 vs 3 vs 4 teams */}
+              <div>
+                  <label className="block text-white/70 text-xs font-black uppercase tracking-wider mb-2">
+                      Правило выхода из групп в плей-офф
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <button
+                          type="button"
+                          onClick={() => setSettings({ ...settings, gslAdvanceCount: 2 })}
+                          className={`p-3.5 rounded-xl border text-left transition-all ${
+                              settings.gslAdvanceCount === 2
+                                  ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_15px_rgba(255,143,0,0.2)]'
+                                  : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                      >
+                          <div className="font-extrabold text-sm text-[#ff8f00] mb-1 flex items-center justify-between">
+                              <span>🥇 Топ-2 (Классический GSL)</span>
+                              {settings.gslAdvanceCount === 2 && (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff8f00] shadow-[0_0_8px_#ff8f00]" />
+                              )}
+                          </div>
+                          <div className="text-xs text-white/70 leading-relaxed">
+                              <strong>1-е и 2-е места</strong> выходят в плей-офф. Проигравший финала виннеров падает в Решающий матч (Decider). 3-е и 4-е места выбывают.
+                          </div>
+                      </button>
+
+                      <button
+                          type="button"
+                          onClick={() => setSettings({ ...settings, gslAdvanceCount: 3 })}
+                          className={`p-3.5 rounded-xl border text-left transition-all ${
+                              (settings.gslAdvanceCount || 3) === 3
+                                  ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_15px_rgba(255,143,0,0.2)]'
+                                  : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                      >
+                          <div className="font-extrabold text-sm text-[#ff8f00] mb-1 flex items-center justify-between">
+                              <span>🚀 Топ-3 (IEM / BLAST)</span>
+                              {(settings.gslAdvanceCount || 3) === 3 && (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff8f00] shadow-[0_0_8px_#ff8f00]" />
+                              )}
+                          </div>
+                          <div className="text-xs text-white/70 leading-relaxed">
+                              <strong>1-е место</strong> сразу в <strong>1/2 финала</strong>, <strong>2-е и 3-е места</strong> — в <strong>1/4 финала</strong>. В нижней сетке 1 матч за 3-е место без лишних TBD. 4-е выбывает.
+                          </div>
+                      </button>
+
+                      <button
+                          type="button"
+                          onClick={() => setSettings({ ...settings, gslAdvanceCount: 4 })}
+                          className={`p-3.5 rounded-xl border text-left transition-all ${
+                              settings.gslAdvanceCount === 4
+                                  ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_15px_rgba(255,143,0,0.2)]'
+                                  : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                      >
+                          <div className="font-extrabold text-sm text-[#ff8f00] mb-1 flex items-center justify-between">
+                              <span>🏆 Топ-4 (ESL Pro League)</span>
+                              {settings.gslAdvanceCount === 4 && (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff8f00] shadow-[0_0_8px_#ff8f00]" />
+                              )}
+                          </div>
+                          <div className="text-xs text-white/70 leading-relaxed">
+                              Все 4 команды выходят в ступенчатый плей-офф: 3-4 места играют в R1, 2-е в R2, 1-е в 1/4 финала.
+                          </div>
+                      </button>
+                  </div>
+              </div>
+
+              <div className="bg-[#ff8f00]/10 border border-[#ff8f00]/30 p-4 rounded-xl text-xs text-white/80 leading-relaxed">
+                  <div className="font-extrabold text-[#ff8f00] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      ℹ️ Описание схемы турнира:
+                  </div>
+                  {settings.gslAdvanceCount === 2 ? (
+                      <>
+                          <div>
+                              • <strong>1 этап (Классический GSL):</strong> Победитель матча виннеров занимает <strong>1 место (2-0)</strong>. Проигравший падает в Решающий матч (Decider). Победитель Decider матча занимает <strong>2 место (2-1)</strong>. 3 и 4 места выбывают.
+                          </div>
+                          <div className="mt-1">
+                              • <strong>2 этап (Плей-офф):</strong> 1-е и 2-е места групп выходят в сетку плей-офф (1A vs 2B, 1B vs 2A).
+                          </div>
+                      </>
+                  ) : (settings.gslAdvanceCount || 3) === 3 ? (
+                      <>
+                          <div>
+                              • <strong>1 этап (IEM / BLAST):</strong> Финалист виннеров = <strong>1 место</strong> (напрямую в 1/2 финала), проигравший финала виннеров = <strong>2 место</strong> (в 1/4 финала), победитель матча лузеров = <strong>3 место</strong> (в 1/4 финала).
+                          </div>
+                          <div className="mt-1">
+                              • <strong>2 этап (Плей-офф):</strong> 2-е и 3-е места играют в 1/4 финала, победители выходят на победителей групп в 1/2 финала!
+                          </div>
+                      </>
+                  ) : (
+                      <>
+                          <div>
+                              • <strong>1 этап:</strong> Группы по системе Double Elimination. В финале виннеров победитель берет <strong>1 место</strong>, проигравший — <strong>2 место</strong>. В нижней сетке разыгрываются <strong>3 и 4 места</strong>.
+                          </div>
+                          <div className="mt-1">
+                              • <strong>2 этап (Плей-офф):</strong> 3 и 4 места играют в Раунде 1, победители выходят на 2-е места в Раунде 2, а затем на 1-е места в 1/4 финала!
+                          </div>
+                      </>
+                  )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                      <label className="block text-white/50 text-xs font-bold uppercase mb-1">Количество групп GSL</label>
+                      <select 
+                        value={settings.numberOfGroups || 2} 
+                        onChange={e => setSettings({...settings, numberOfGroups: parseInt(e.target.value) || 2})} 
+                        className="w-full bg-black p-3 rounded-xl text-white outline-none border border-white/10 focus:border-[#ff8f00]/50 font-bold"
+                      >
+                          <option value={2}>2 группы (по 8 или 4 команды)</option>
+                          <option value={4}>4 группы (по 8 или 4 команды)</option>
+                      </select>
+                  </div>
+
+                  <div>
+                      <label className="block text-white/50 text-xs font-bold uppercase mb-1">Формат 2 стадии (Плей-офф)</label>
+                      <select 
+                        value={settings.stage2Type || 'tiered'} 
+                        onChange={e => setSettings({...settings, stage2Type: e.target.value as any, eliminationType: e.target.value === 'double' ? 'double' : 'single' })} 
+                        className="w-full bg-black p-3 rounded-xl text-white outline-none border border-white/10 focus:border-[#ff8f00]/50 font-bold"
+                      >
+                          <option value="tiered">🏆 Ступенчатый Плей-офф (С прямым посевом в 1/2 или 1/4 финала)</option>
+                          <option value="single">🥇 Классический Сингл Элиминейшн (Single Elimination)</option>
+                          <option value="double">🥈 Дабл Элиминейшн (Double Elimination)</option>
+                      </select>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {settings.stage1Type === 'playoff' && (
+          <div className="bg-black/20 p-4 rounded-xl border border-white/5">
+              <label className="block text-white/50 text-sm mb-2">Формат Плей-офф</label>
+              <div className="flex gap-2">
+                  <button 
+                    onClick={() => setSettings({...settings, eliminationType: 'single'})}
+                    className={`flex-1 p-3 rounded-xl border ${(!settings.eliminationType || settings.eliminationType === 'single') ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+                  >
+                      Сингл Элиминейшн (1 жизнь)
+                  </button>
+                  <button 
+                    onClick={() => setSettings({...settings, eliminationType: 'double'})}
+                    className={`flex-1 p-3 rounded-xl border ${settings.eliminationType === 'double' ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+                  >
+                      Дабл Элиминейшн (2 жизни)
+                  </button>
+              </div>
+          </div>
+      )}
+
+      {settings.stage1Type === 'swiss' && (
+          <div className="flex flex-col gap-4 bg-black/20 p-5 rounded-xl border border-white/5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                      <label className="block text-white/50 text-sm mb-1">Побед для выхода (или победы в турнире)</label>
+                      <input type="number" value={settings.swissWinsToAdvance || 3} onChange={e => setSettings({...settings, swissWinsToAdvance: parseInt(e.target.value) || 3})} className="w-full bg-black p-2 rounded outline-none border border-white/10 focus:border-[#ff8f00]/50 text-white" />
+                  </div>
+                  <div>
+                      <label className="block text-white/50 text-sm mb-1">Поражений для вылета</label>
+                      <input type="number" value={settings.swissLossesToEliminate || 3} onChange={e => setSettings({...settings, swissLossesToEliminate: parseInt(e.target.value) || 3})} className="w-full bg-black p-2 rounded outline-none border border-white/10 focus:border-[#ff8f00]/50 text-white" />
+                  </div>
+              </div>
+
+              {/* Display Mode Toggle for Swiss Stage */}
+              <div className="pt-2 border-t border-white/5">
+                  <label className="block text-white/70 text-xs font-black uppercase tracking-wider mb-2">
+                      🛡️ Отображение команд в Швейцарской сетке
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                          type="button"
+                          onClick={() => setSettings({ ...settings, swissLogosOnly: false })}
+                          className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                              !settings.swissLogosOnly
+                                  ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_12px_rgba(255,143,0,0.25)]'
+                                  : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                      >
+                          <span>📝 Полный вид (Логотип + Название)</span>
+                          {!settings.swissLogosOnly && (
+                              <span className="w-2 h-2 rounded-full bg-[#ff8f00]" />
+                          )}
+                      </button>
+                      <button
+                          type="button"
+                          onClick={() => setSettings({ ...settings, swissLogosOnly: true })}
+                          className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                              settings.swissLogosOnly
+                                  ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_12px_rgba(255,143,0,0.25)]'
+                                  : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                      >
+                          <span>⚡ Только логотипы (Киберспорт / Компактно)</span>
+                          {settings.swissLogosOnly && (
+                              <span className="w-2 h-2 rounded-full bg-[#ff8f00]" />
+                          )}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {settings.stage1Type === 'groups' && (
+          <div className="grid grid-cols-2 gap-4 bg-black/20 p-4 rounded-xl border border-white/5">
+              <div>
+                  <label className="block text-white/50 text-sm mb-1">Количество групп</label>
+                  <input type="number" value={settings.numberOfGroups || 2} onChange={e => setSettings({...settings, numberOfGroups: parseInt(e.target.value) || 2})} className="w-full bg-black p-2 rounded text-white" />
+              </div>
+              <div>
+                  <label className="block text-white/50 text-sm mb-1">Выходят из группы (если есть 2 стадия)</label>
+                  <input type="number" value={settings.advancingPerGroup || 2} onChange={e => setSettings({...settings, advancingPerGroup: parseInt(e.target.value) || 2})} className="w-full bg-black p-2 rounded text-white" />
+              </div>
+              <div>
+                  <label className="block text-white/50 text-sm mb-1">Матчей между собой (1 или 2)</label>
+                  <select value={settings.matchesPerPairing || 1} onChange={e => setSettings({...settings, matchesPerPairing: parseInt(e.target.value) as 1|2})} className="w-full bg-black p-2 rounded text-white outline-none">
+                      <option value={1}>1 круг</option>
+                      <option value={2}>2 круга (Дома/В гостях)</option>
+                  </select>
+              </div>
+              <div className="col-span-2 grid grid-cols-3 gap-2 mt-2">
+                  <div>
+                      <label className="block text-white/50 text-xs mb-1">Очки за победу</label>
+                      <input type="number" value={settings.winPoints !== undefined ? settings.winPoints : 3} onChange={e => setSettings({...settings, winPoints: parseInt(e.target.value) || 0})} className="w-full bg-black p-2 rounded text-white" />
+                  </div>
+                  <div>
+                      <label className="block text-white/50 text-xs mb-1">Очки за ничью</label>
+                      <input type="number" value={settings.drawPoints !== undefined ? settings.drawPoints : 1} onChange={e => setSettings({...settings, drawPoints: parseInt(e.target.value) || 0})} className="w-full bg-black p-2 rounded text-white" />
+                  </div>
+                  <div>
+                      <label className="block text-white/50 text-xs mb-1">Очки за поражение</label>
+                      <input type="number" value={settings.lossPoints !== undefined ? settings.lossPoints : 0} onChange={e => setSettings({...settings, lossPoints: parseInt(e.target.value) || 0})} className="w-full bg-black p-2 rounded text-white" />
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {(settings.stage1Type === 'groups' || settings.stage1Type === 'swiss') && (
+          <div className="flex flex-col gap-4 bg-black/20 p-6 rounded-xl border border-white/5 mt-2">
+              <label className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                      type="checkbox" 
+                      checked={settings.hasStage2 || false} 
+                      onChange={(e) => setSettings({...settings, hasStage2: e.target.checked, mode: e.target.checked ? (settings.stage1Type === 'groups' ? 'two_stage' : 'swiss') : (settings.stage1Type === 'groups' ? 'single_stage' : 'swiss')})}
+                      className="w-5 h-5 accent-[#ff8f00]"
+                  />
+                  <span className="font-bold text-white uppercase tracking-widest text-sm">Включить 2 стадию (Плей-офф)</span>
+              </label>
+
+              {settings.hasStage2 && (
+                  <div className="mt-2 border-t border-white/5 pt-4">
+                      <label className="block text-white/50 text-sm mb-2">Формат Плей-офф (2 стадия)</label>
+                      <div className="flex gap-2">
+                          <button 
+                            onClick={() => setSettings({...settings, eliminationType: 'single'})}
+                            className={`flex-1 p-3 rounded-xl border ${(!settings.eliminationType || settings.eliminationType === 'single') ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+                          >
+                              Сингл Элиминейшн (1 жизнь)
+                          </button>
+                          <button 
+                            onClick={() => setSettings({...settings, eliminationType: 'double'})}
+                            className={`flex-1 p-3 rounded-xl border ${settings.eliminationType === 'double' ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+                          >
+                              Дабл Элиминейшн (2 жизни)
+                          </button>
+                      </div>
+                  </div>
+              )}
+          </div>
+      )}
+
+      {/* Bracket Mode Setting */}
+      <div className="bg-black/20 p-5 rounded-xl border border-white/5 flex flex-col gap-3">
+          <label className="block text-[#ff8f00] font-black uppercase tracking-widest text-sm">
+              ⚙️ Режим работы сетки
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                  type="button"
+                  onClick={() => setSettings({ ...settings, bracketMode: 'standard' })}
+                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                      (settings.bracketMode || 'standard') === 'standard'
+                          ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_15px_rgba(255,143,0,0.25)]'
+                          : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                  <div className="font-extrabold text-sm mb-1 flex items-center justify-between">
+                      <span>📝 Обычная сетка</span>
+                      {(settings.bracketMode || 'standard') === 'standard' && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#ff8f00] shadow-[0_0_8px_#ff8f00]" />
+                      )}
+                  </div>
+                  <div className="text-xs text-white/60 leading-relaxed">
+                      Ручной ввод счета (числа 1:0, 2:1) и кнопка «Завершить матч». Стандартный режим турниров.
+                  </div>
+              </button>
+
+              <button
+                  type="button"
+                  onClick={() => setSettings({ ...settings, bracketMode: 'realtime' })}
+                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                      settings.bracketMode === 'realtime'
+                          ? 'bg-purple-600/30 border-purple-400 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)]'
+                          : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                  <div className="font-extrabold text-sm mb-1 flex items-center justify-between">
+                      <span>🎮 Сетка в реальном времени</span>
+                      {settings.bracketMode === 'realtime' && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-[0_0_8px_#a855f7]" />
+                      )}
+                  </div>
+                  <div className="text-xs text-white/60 leading-relaxed">
+                      Вместо выбора цифр отображается кнопка «🎮 Сыграть Матч» для полноценной симуляции мато-вето.
+                  </div>
+              </button>
+          </div>
+      </div>
+
+      {/* Appearance & Bracket Customization Settings */}
+      <div className="bg-black/20 p-5 rounded-xl border border-white/5 flex flex-col gap-4">
+          <label className="block text-[#ff8f00] font-black uppercase tracking-widest text-sm flex items-center justify-between">
+              <span>🎨 Внешний вид и Оформление элементов</span>
+          </label>
+          
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <button
+                  type="button"
+                  onClick={() => setShowCustomizationModal(true)}
+                  className="bg-[#161726] border border-[#ff8f00]/50 text-[#ff8f00] font-black uppercase tracking-wider text-sm py-4 px-8 rounded-xl hover:bg-[#ff8f00]/20 transition-all flex items-center justify-center gap-3 shadow-[0_0_15px_rgba(255,143,0,0.15)] hover:shadow-[0_0_25px_rgba(255,143,0,0.3)] cursor-pointer"
+              >
+                  Настроить кастомизацию
+              </button>
+              
+              {hasCustomized && (
+                  <div className="flex items-center gap-3 text-emerald-400 font-bold text-sm bg-emerald-500/10 px-4 py-3 rounded-xl border border-emerald-500/20">
+                      <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                          <Check className="w-5 h-5" />
+                      </div>
+                      Настройки внешнего вида применены!
+                  </div>
+              )}
+          </div>
+      </div>
+      {/* Seeding & Team Management */}
+      <div>
+          <label className="block text-white/50 font-bold mb-2">Тип жеребьевки</label>
+          <div className="flex gap-2">
+              <button 
+                onClick={() => {
+                  setSettings({...settings, seedingType: 'random'});
+                  if (isGroupFormat) handleRandomizeGroups();
+                }}
+                className={`flex-1 p-3 rounded-xl border ${settings.seedingType === 'random' ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+              >
+                  🎲 Рандомно (Случайно)
+              </button>
+              <button 
+                onClick={() => setSettings({...settings, seedingType: 'manual'})}
+                className={`flex-1 p-3 rounded-xl border ${(settings.seedingType !== 'random') ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+              >
+                  ✍️ Вручную (По группам / списку)
+              </button>
+          </div>
+          <p className="text-white/40 text-xs mt-2">
+              {isGroupFormat 
+                ? 'Вы можете распределять команды по группам вручную, перемещать их между группами или воспользоваться случайным посевом.'
+                : 'Команды будут распределены в сетку в том порядке, в котором они указаны в списке. Для настройки пар используйте конструктор ниже.'}
+          </p>
+      </div>
+
+      {isGroupFormat ? (
+        /* ================= GROUP FORMAT MANAGEMENT (GSL / ROUND-ROBIN) ================= */
+        <div className="bg-black/30 p-5 rounded-2xl border border-white/10 flex flex-col gap-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div>
+              <h4 className="text-base font-black text-[#ff8f00] uppercase tracking-wider flex items-center gap-2">
+                <Grid className="w-5 h-5 text-[#ff8f00]" />
+                Формирование групп ({numGroups} {numGroups === 1 ? 'группа' : numGroups < 5 ? 'группы' : 'групп'})
+              </h4>
+              <p className="text-xs text-white/50 mt-1">
+                Всего команд: <span className="text-white font-bold">{teams.length}</span>. Добавляйте команды напрямую в нужную группу или перемещайте между ними.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRandomizeGroups}
+                className="px-3 py-1.5 bg-[#ff8f00]/10 hover:bg-[#ff8f00]/20 border border-[#ff8f00]/30 rounded-xl text-xs font-bold text-[#ff8f00] transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Случайно перемешать и распределить команды по группам"
+              >
+                <Shuffle className="w-3.5 h-3.5" />
+                Рандом по группам
+              </button>
+              <button
+                type="button"
+                onClick={handleSequentialGroups}
+                className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Равномерно раскидать команды по группам"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                По порядку (Змейка)
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Add Bar */}
+          <div className="bg-black/40 p-3.5 rounded-xl border border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <TeamAutocompleteInput 
+              value={newTeamName}
+              onChange={setNewTeamName}
+              onSelect={(val) => handleAddTeam(val)}
+              className="bg-black border border-white/10 px-3.5 py-2 rounded-xl text-white outline-none flex-1 text-sm placeholder:text-white/30"
+              placeholder="Добавить новую команду..."
+            />
+            <div className="flex items-center gap-2">
+              <select
+                value={targetAddGroupId}
+                onChange={(e) => setTargetAddGroupId(e.target.value)}
+                className="bg-black border border-white/10 px-3 py-2 rounded-xl text-white text-xs font-bold outline-none cursor-pointer"
+              >
+                <option value="auto">⚡ Авто-группа (поровну)</option>
+                {Array.from({ length: numGroups }).map((_, gIdx) => (
+                  <option key={gIdx} value={`gsl-group-${gIdx}`}>
+                    В Группу {String.fromCharCode(65 + gIdx)}
+                  </option>
+                ))}
+              </select>
+              <button 
+                type="button"
+                onClick={() => handleAddTeam()}
+                className="bg-[#ff8f00] hover:bg-[#ffa733] text-black font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Добавить
+              </button>
+            </div>
+          </div>
+
+          {/* Global saved teams */}
+          {globalTeams.length > 0 && (
+            <div className="border-t border-white/5 pt-3">
+              <p className="text-[11px] font-bold text-white/50 mb-2 uppercase tracking-wider">
+                Быстрое добавление из вашей базы:
+              </p>
+              <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto pr-1">
+                {globalTeams.filter(gt => !teams.find(t => t.name === gt.name)).map(gt => (
+                  <button 
+                    key={gt.id} 
+                    type="button"
+                    onClick={() => handleAddGlobalTeam(gt)}
+                    className="bg-white/5 hover:bg-[#ff8f00]/20 border border-white/10 hover:border-[#ff8f00]/50 px-2.5 py-1 rounded-lg text-xs text-white/80 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <TeamLogo teamName={gt.name} logoUrl={gt.logoUrl} sizeClassName="w-3.5 h-3.5" />
+                    <span>{gt.name}</span>
+                    <span className="text-[#ff8f00] font-bold">+</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Group Columns Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+            {Array.from({ length: numGroups }).map((_, gIdx) => {
+              const groupKey = `gsl-group-${gIdx}`;
+              const groupLetter = String.fromCharCode(65 + gIdx);
+              const groupTeamIds = groupAssignments[groupKey] || [];
+              const groupTeams = groupTeamIds.map(id => teams.find(t => t.id === id)).filter(Boolean) as Team[];
+
+              return (
+                <div key={groupKey} className="bg-[#0e0e14] border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-lg">
+                  {/* Group Header */}
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-[#ff8f00]/20 border border-[#ff8f00]/40 text-[#ff8f00] font-black text-xs flex items-center justify-center">
+                        {groupLetter}
+                      </span>
+                      <h5 className="font-black text-sm text-white uppercase tracking-wider">
+                        Группа {groupLetter}
+                      </h5>
+                    </div>
+                    <span className="text-[11px] font-bold text-white/40 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                      {groupTeams.length} {groupTeams.length === 1 ? 'команда' : groupTeams.length < 5 ? 'команды' : 'команд'}
+                    </span>
+                  </div>
+
+                  {/* Teams in Group */}
+                  <div className="flex flex-col gap-2 min-h-[140px]">
+                    {groupTeams.length === 0 ? (
+                      <div className="flex-1 flex flex-col items-center justify-center p-4 border border-dashed border-white/10 rounded-xl text-white/30 text-xs font-bold text-center">
+                        Нет команд в группе {groupLetter}
+                        <span className="text-[10px] text-white/20 mt-0.5">Добавьте команду выше или переместите из другой группы</span>
+                      </div>
+                    ) : (
+                      groupTeams.map((team, tIdx) => (
+                        <div key={team.id} className="bg-white/5 hover:bg-white/[0.08] p-2 rounded-xl border border-white/5 flex items-center justify-between gap-2 transition-all">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="text-white/30 font-mono text-[11px] w-4 shrink-0 text-center">
+                              {tIdx + 1}.
+                            </span>
+                            <TeamLogo teamName={team.name} logoUrl={team.logoUrl} sizeClassName="w-5 h-5 shrink-0" />
+                            
+                            {editingTeamId === team.id ? (
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                <TeamAutocompleteInput 
+                                  value={editingTeamName} 
+                                  onChange={setEditingTeamName} 
+                                  onSelect={() => handleUpdateTeam(team.id)} 
+                                  className="bg-black text-white px-2 py-0.5 text-xs rounded border border-[#ff8f00] outline-none flex-1 min-w-0" 
+                                />
+                                <button 
+                                  type="button"
+                                  onClick={() => handleUpdateTeam(team.id)} 
+                                  className="text-emerald-400 font-bold text-xs px-1.5 py-0.5 bg-emerald-500/10 rounded"
+                                >
+                                  OK
+                                </button>
+                              </div>
+                            ) : (
+                              <span 
+                                className="font-bold text-xs text-white truncate cursor-pointer hover:text-[#ff8f00] transition-colors"
+                                title="Нажмите, чтобы переименовать"
+                                onClick={() => {
+                                  setEditingTeamId(team.id);
+                                  setEditingTeamName(team.name);
+                                }}
+                              >
+                                {team.name}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Action controls */}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Swap selector */}
+                            <select
+                              value={team.id}
+                              onChange={(e) => handleSwapGroupTeams(groupKey, tIdx, e.target.value)}
+                              className="bg-black/60 border border-white/10 hover:border-white/30 text-white/80 text-[10px] font-bold py-1 px-1.5 rounded-lg outline-none cursor-pointer max-w-[90px] truncate"
+                              title="Заменить эту команду на другую из турнира"
+                            >
+                              <optgroup label="Заменить на:">
+                                {teams.map(t => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            </select>
+
+                            {/* Move to other group dropdown */}
+                            {numGroups > 1 && (
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  if (e.target.value) handleMoveTeamToGroup(team.id, e.target.value);
+                                }}
+                                className="bg-black/60 border border-white/10 hover:border-white/30 text-white/60 hover:text-white text-[10px] font-bold py-1 px-1.5 rounded-lg outline-none cursor-pointer"
+                                title="Переместить в другую группу"
+                              >
+                                <option value="" disabled>➡️ В группу...</option>
+                                {Array.from({ length: numGroups }).map((_, otherGIdx) => {
+                                  const targetKey = `gsl-group-${otherGIdx}`;
+                                  if (targetKey === groupKey) return null;
+                                  return (
+                                    <option key={targetKey} value={targetKey}>
+                                      Группа {String.fromCharCode(65 + otherGIdx)}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            )}
+
+                            {/* Remove button */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTeam(team.id)}
+                              className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors"
+                              title="Удалить команду из турнира"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Inline Add Team to this Group */}
+                  <div className="mt-1 pt-2.5 border-t border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = prompt(`Введите название команды для Группы ${groupLetter}:`);
+                        if (name && name.trim()) {
+                          handleAddTeam(name.trim(), groupKey);
+                        }
+                      }}
+                      className="w-full py-1.5 px-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 hover:border-white/20 rounded-xl text-white/50 hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#ff8f00]" />
+                      Быстро добавить в Группу {groupLetter}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* ================= SINGLE/DOUBLE PLAYOFF LIST & PAIR CONSTRUCTOR ================= */
+        <div>
+            <label className="block text-white/50 font-bold mb-2">Команды</label>
+            <div className="flex gap-2 mb-4">
+                <TeamAutocompleteInput 
+                  value={newTeamName}
+                  onChange={setNewTeamName}
+                  onSelect={handleAddTeam}
+                  className="bg-black border border-white/10 px-4 py-2 rounded-xl text-white outline-none flex-1"
+                  placeholder="Название команды..."
+                />
+                <button 
+                  type="button"
+                  onClick={() => handleAddTeam()}
+                  className="bg-[#333] hover:bg-[#444] px-4 rounded-xl font-bold transition-colors cursor-pointer"
+                >
+                    Добавить
+                </button>
+            </div>
+            {globalTeams.length > 0 && (
+               <div className="mt-4 border-t border-white/10 pt-4">
+                  <p className="text-xs font-bold text-white/50 mb-2 uppercase tracking-wider">Быстрый выбор команд с логотипом:</p>
+                  <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pr-1">
+                     {globalTeams.filter(gt => !teams.find(t => t.name === gt.name)).map(gt => (
+                        <button 
+                          key={gt.id} 
+                          type="button"
+                          onClick={() => handleAddGlobalTeam(gt)}
+                          className="bg-white/5 hover:bg-[#ff8f00]/20 border border-white/10 hover:border-[#ff8f00]/50 px-3 py-1.5 rounded-xl text-xs text-white/90 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                        >
+                           <TeamLogo teamName={gt.name} logoUrl={gt.logoUrl} sizeClassName="w-4 h-4" />
+                           <span className="font-bold">{gt.name}</span>
+                           <span className="text-[#ff8f00] font-black text-xs">+</span>
+                        </button>
+                     ))}
+                  </div>
+               </div>
+            )}
+            <div className="flex flex-col gap-2">
+                {teams.map((t, idx) => (
+                    <div key={t.id} className="bg-white/5 px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 border border-white/10">
+                        {settings.seedingType === 'manual' && (
+                            <div className="flex flex-col gap-1 mr-1">
+                                <button type="button" onClick={() => moveTeamUp(idx)} disabled={idx === 0} className="text-white/30 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <ChevronUp className="w-4 h-4" />
+                                </button>
+                                <button type="button" onClick={() => moveTeamDown(idx)} disabled={idx === teams.length - 1} className="text-white/30 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <ChevronDown className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+                        
+                        <span className="text-white/30 font-mono text-xs w-6">{idx + 1}.</span>
+                        <TeamLogo teamName={t.name} logoUrl={t.logoUrl} sizeClassName="w-5 h-5 shrink-0" />
+                        
+                        {editingTeamId === t.id ? (
+                            <div className="flex gap-2 flex-1">
+                                <TeamAutocompleteInput value={editingTeamName} onChange={setEditingTeamName} onSelect={() => handleUpdateTeam(t.id)} className="bg-black text-white px-2 py-0.5 rounded outline-none border border-[#ff8f00]/50 flex-1" />
+                                <button type="button" onClick={() => handleUpdateTeam(t.id)} className="text-green-400 text-xs uppercase font-bold px-2">ОК</button>
+                            </div>
+                        ) : (
+                            <>
+                                <span className="font-bold cursor-pointer hover:text-[#ff8f00] transition-colors flex-1" onClick={() => {
+                                    setEditingTeamId(t.id);
+                                    setEditingTeamName(t.name);
+                                }}>
+                                    {t.name}
+                                </span>
+                                <button type="button" onClick={() => handleRemoveTeam(t.id)} className="text-red-400 hover:text-red-300 ml-2 p-1">
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </>
+                        )}
+                    </div>
+                ))}
+                {teams.length === 0 && <span className="text-white/30 text-sm">Нет команд</span>}
+            </div>
+        </div>
+      )}
+
+      {/* Bracket Playoff Pairs Constructor for non-group formats */}
+      {settings.seedingType !== 'random' && teams.length >= 2 && !isGroupFormat && (() => {
+          const matchCount = Math.floor(teams.length / 2);
+          const pairs = [];
+          for (let i = 0; i < matchCount; i++) {
+              pairs.push({
+                  idx1: i * 2,
+                  idx2: i * 2 + 1,
+                  team1: teams[i * 2],
+                  team2: teams[i * 2 + 1]
+              });
+          }
+          const hasBye = teams.length % 2 !== 0;
+          const byeTeam = hasBye ? teams[teams.length - 1] : null;
+
+          return (
+              <div className="bg-black/30 p-5 rounded-2xl border border-white/5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                      <div>
+                          <h4 className="text-sm font-black text-[#ff8f00] uppercase tracking-wider">
+                              🤝 Конструктор пар 1-го раунда
+                          </h4>
+                          <p className="text-[11px] text-white/40 mt-0.5">
+                              Настройте, кто с кем играет в первом раунде. Выберите соперников из списка.
+                          </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                          <button
+                              type="button"
+                              onClick={handlePairFirstWithLast}
+                              className="px-2.5 py-1 bg-[#ff8f00]/10 hover:bg-[#ff8f00]/20 border border-[#ff8f00]/20 rounded-lg text-[10px] font-bold text-[#ff8f00] transition-all uppercase tracking-wider cursor-pointer"
+                              title="Распределить: 1-й против последнего, 2-й против предпоследнего и т.д."
+                          >
+                              👥 1-й против последнего
+                          </button>
+                          <button
+                              type="button"
+                              onClick={() => {
+                                  const shuffled = [...teams].sort(() => Math.random() - 0.5);
+                                  setTeams(shuffled);
+                              }}
+                              className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-bold text-white transition-all uppercase tracking-wider cursor-pointer"
+                          >
+                              🎲 Перемешать пары
+                          </button>
+                      </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[280px] overflow-y-auto pr-1">
+                      {pairs.map((pair, pIdx) => (
+                          <div key={pIdx} className="bg-white/[0.02] border border-white/5 p-3 rounded-xl flex flex-col gap-2">
+                              <div className="text-[10px] font-black text-white/30 uppercase tracking-widest">
+                                  Матч {pIdx + 1}
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                  {/* Team 1 Select */}
+                                  <div className="flex-1 min-w-0">
+                                      <select
+                                          value={pair.team1.id}
+                                          onChange={async (e) => {
+                                              const targetId = e.target.value;
+                                              const targetIdx = teams.findIndex(t => t.id === targetId);
+                                              if (targetIdx !== -1) {
+                                                  handleSwapTeams(pair.idx1, targetIdx);
+                                              }
+                                          }}
+                                          className="w-full bg-black border border-white/10 px-2 py-1.5 rounded-lg text-xs font-bold text-white outline-none focus:border-[#ff8f00]/50"
+                                      >
+                                          {teams.map(t => (
+                                              <option key={t.id} value={t.id}>{t.name}</option>
+                                          ))}
+                                      </select>
+                                  </div>
+
+                                  <span className="text-[10px] font-black text-[#ff8f00]/60 shrink-0">VS</span>
+
+                                  {/* Team 2 Select */}
+                                  <div className="flex-1 min-w-0">
+                                      <select
+                                          value={pair.team2.id}
+                                          onChange={async (e) => {
+                                              const targetId = e.target.value;
+                                              const targetIdx = teams.findIndex(t => t.id === targetId);
+                                              if (targetIdx !== -1) {
+                                                  handleSwapTeams(pair.idx2, targetIdx);
+                                              }
+                                          }}
+                                          className="w-full bg-black border border-white/10 px-2 py-1.5 rounded-lg text-xs font-bold text-white outline-none focus:border-[#ff8f00]/50"
+                                      >
+                                          {teams.map(t => (
+                                              <option key={t.id} value={t.id}>{t.name}</option>
+                                          ))}
+                                      </select>
+                                  </div>
+                              </div>
+                          </div>
+                      ))}
+
+                      {hasBye && byeTeam && (
+                          <div className="bg-[#ff8f00]/5 border border-[#ff8f00]/10 p-3 rounded-xl flex flex-col gap-2 sm:col-span-2">
+                              <div className="text-[10px] font-black text-[#ff8f00]/60 uppercase tracking-widest">
+                                  Пропускает 1-й раунд (BYE)
+                              </div>
+                              <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-lg border border-white/5">
+                                  <span className="text-xs font-bold text-white">{byeTeam.name}</span>
+                                  <select
+                                      value={byeTeam.id}
+                                      onChange={async (e) => {
+                                          const targetId = e.target.value;
+                                          const targetIdx = teams.findIndex(t => t.id === targetId);
+                                          if (targetIdx !== -1) {
+                                              handleSwapTeams(teams.length - 1, targetIdx);
+                                          }
+                                      }}
+                                      className="bg-black border border-white/10 px-2 py-1 rounded-lg text-xs font-bold text-white outline-none focus:border-[#ff8f00]/50"
+                                  >
+                                      {teams.map(t => (
+                                          <option key={t.id} value={t.id}>{t.name}</option>
+                                      ))}
+                                  </select>
+                              </div>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          );
+      })()}
+      {error && (
+        <div className="bg-red-500/20 border border-red-500 text-red-300 px-4 py-3 rounded-xl mt-4 text-center font-bold animate-fade-in">
+          {error}
+        </div>
+      )}
+      <button
+          onClick={handleFormSubmit}
+          className="w-full bg-[#ff8f00] text-black font-black uppercase tracking-wider py-4 rounded-xl hover:bg-[#ffa733] transition-colors mt-4 cursor-pointer"
+      >
+          {submitLabel}
+      </button>
+
+      {/* Customization Modal */}
+      {showCustomizationModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#12121a] border border-white/10 rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+              <h2 className="text-xl font-black text-white uppercase tracking-wider flex items-center gap-3">
+                <span className="text-2xl">🎨</span> Кастомизация Сетки и Карточек
+              </h2>
+              <button onClick={() => { setShowCustomizationModal(false); setHasCustomized(true); }} className="text-white/50 hover:text-white transition-colors cursor-pointer p-1 rounded-lg hover:bg-white/10">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
+              {/* Left Side: Settings */}
+              <div className="w-full md:w-1/2 p-6 overflow-y-auto border-r border-white/5 flex flex-col gap-8 custom-scrollbar">
+                  {/* Background Dimming & Blur Settings */}
+                  <div className="flex flex-col gap-4 bg-white/5 p-5 rounded-2xl border border-white/5">
+                      <h3 className="text-[#ff8f00] font-black uppercase tracking-widest text-xs">Фон Турнира</h3>
+                      <div className="flex flex-col gap-2">
+                          <div className="flex justify-between items-center">
+                              <label className="text-white text-xs font-bold">🌓 Затемнение фона (Тёмный фильтр):</label>
+                              <span className="text-xs font-mono text-[#ff8f00] font-extrabold bg-[#ff8f00]/10 px-2 py-0.5 rounded border border-[#ff8f00]/20">
+                                  {settings.bgOpacity !== undefined ? settings.bgOpacity : 50}%
+                              </span>
+                          </div>
+                          <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="5"
+                              value={settings.bgOpacity !== undefined ? settings.bgOpacity : 50}
+                              onChange={(e) => setSettings({ ...settings, bgOpacity: parseInt(e.target.value) })}
+                              className="w-full accent-[#ff8f00] cursor-pointer"
+                          />
+                      </div>
+          
+                      <div className="flex flex-col gap-2">
+                          <div className="flex justify-between items-center">
+                              <label className="text-white text-xs font-bold">🌫️ Блюр фона (Размытие):</label>
+                              <span className="text-xs font-mono text-[#ff8f00] font-extrabold bg-[#ff8f00]/10 px-2 py-0.5 rounded border border-[#ff8f00]/20">
+                                  {settings.bgBlur !== undefined ? settings.bgBlur : 10}px
+                              </span>
+                          </div>
+                          <input
+                              type="range"
+                              min="0"
+                              max="30"
+                              step="2"
+                              value={settings.bgBlur !== undefined ? settings.bgBlur : 10}
+                              onChange={(e) => setSettings({ ...settings, bgBlur: parseInt(e.target.value) })}
+                              className="w-full accent-[#ff8f00] cursor-pointer"
+                          />
+                      </div>
+                  </div>
+          
+                  {/* Match Box Style */}
+                  <div className="flex flex-col gap-3">
+                      <label className="block text-white/70 text-xs font-black uppercase tracking-widest">
+                          📦 Дизайн Карточек Матча
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                          {[
+                              { id: 'cyber', name: '🚀 Киберпанк' },
+                              { id: 'neon', name: '🔮 Яркий Неон' },
+                              { id: 'glass', name: '🧊 Матовое стекло' },
+                              { id: 'gold', name: '👑 Золото' },
+                              { id: 'dark', name: '🌑 Классик' },
+                              { id: 'brutalist', name: '⚡ Брутализм' },
+                              { id: 'retro', name: '📟 Ретро 8-бит' },
+                              { id: 'minimalist', name: '⚪ Минимализм' },
+                          ].map((styleItem) => (
+                              <button
+                                  key={styleItem.id}
+                                  type="button"
+                                  onClick={() => setSettings({ ...settings, boxStyle: styleItem.id as any })}
+                                  className={`p-3 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
+                                      (settings.boxStyle || 'dark') === styleItem.id
+                                          ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_15px_rgba(255,143,0,0.25)]'
+                                          : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                                  }`}
+                              >
+                                  <span>{styleItem.name}</span>
+                                  {(settings.boxStyle || 'dark') === styleItem.id && (
+                                      <span className="w-2.5 h-2.5 rounded-full bg-[#ff8f00] shadow-[0_0_8px_#ff8f00]" />
+                                  )}
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+        
+                  {/* Card Accent Color Palette */}
+                  <div className="flex flex-col gap-3">
+                      <label className="block text-white/70 text-xs font-black uppercase tracking-widest">
+                          🎨 Основной цвет элементов
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                          {[
+                              { id: '#ff8f00', name: 'Оранжевый', class: 'bg-[#ff8f00]' },
+                              { id: '#00f0ff', name: 'Неон Голубой', class: 'bg-[#00f0ff]' },
+                              { id: '#10b981', name: 'Изумруд', class: 'bg-[#10b981]' },
+                              { id: '#a855f7', name: 'Ультрафиолет', class: 'bg-[#a855f7]' },
+                              { id: '#ef4444', name: 'Алый Красный', class: 'bg-[#ef4444]' },
+                              { id: '#eab308', name: 'Золото', class: 'bg-[#eab308]' },
+                              { id: '#ec4899', name: 'Розовый', class: 'bg-[#ec4899]' },
+                          ].map((colorItem) => (
+                              <button
+                                  key={colorItem.id}
+                                  type="button"
+                                  onClick={() => setSettings({ ...settings, cardThemeColor: colorItem.id })}
+                                  className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                      (settings.cardThemeColor || '#ff8f00') === colorItem.id
+                                          ? 'bg-white/15 border-white text-white shadow-[0_0_10px_rgba(255,255,255,0.2)]'
+                                          : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'
+                                  }`}
+                              >
+                                  <span className={`w-3.5 h-3.5 rounded-full ${colorItem.class} shadow-sm border border-black/50`} />
+                                  <span>{colorItem.name}</span>
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+        
+                  {/* Button Style */}
+                  <div className="flex flex-col gap-3">
+                      <label className="block text-white/70 text-xs font-black uppercase tracking-widest">
+                          🔘 Дизайн кнопок (В турнире)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                          {[
+                              { id: 'gradient', name: '✨ Сочный Градиент' },
+                              { id: 'neon', name: '⚡ Неоновый Контур' },
+                              { id: 'solid', name: '⬛ Строгая Заливка' },
+                              { id: 'brutal', name: '🟥 3D Брутализм' },
+                          ].map((btnItem) => (
+                              <button
+                                  key={btnItem.id}
+                                  type="button"
+                                  onClick={() => setSettings({ ...settings, btnStyle: btnItem.id as any })}
+                                  className={`p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                                      (settings.btnStyle || 'gradient') === btnItem.id
+                                          ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_10px_rgba(255,143,0,0.2)]'
+                                          : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                                  }`}
+                              >
+                                  {btnItem.name}
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+                  
+                  {/* Swiss / Bracket Logos Only Display Mode */}
+                  <div className="flex flex-col gap-3">
+                      <label className="block text-white/70 text-xs font-black uppercase tracking-widest">
+                          🛡️ Отображение Команд в Сетке (Швейцарка)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                          <button
+                              type="button"
+                              onClick={() => setSettings({ ...settings, swissLogosOnly: false })}
+                              className={`p-3 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
+                                  !settings.swissLogosOnly
+                                      ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_12px_rgba(255,143,0,0.25)]'
+                                      : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                              }`}
+                          >
+                              <span>📝 С названиями</span>
+                              {!settings.swissLogosOnly && (
+                                  <span className="w-2 h-2 rounded-full bg-[#ff8f00]" />
+                              )}
+                          </button>
+                          <button
+                              type="button"
+                              onClick={() => setSettings({ ...settings, swissLogosOnly: true })}
+                              className={`p-3 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
+                                  settings.swissLogosOnly
+                                      ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_12px_rgba(255,143,0,0.25)]'
+                                      : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                              }`}
+                          >
+                              <span>⚡ Только логотипы</span>
+                              {settings.swissLogosOnly && (
+                                  <span className="w-2 h-2 rounded-full bg-[#ff8f00]" />
+                              )}
+                          </button>
+                      </div>
+                  </div>
+
+                  {/* Bracket Scale Setting */}
+                  <div className="flex flex-col gap-3">
+                      <label className="block text-white/70 text-xs font-black uppercase tracking-widest">
+                          🔍 Масштаб Сетки
+                      </label>
+                      <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+                          {[
+                              { label: '50%', val: 50 },
+                              { label: '75%', val: 75 },
+                              { label: '90%', val: 90 },
+                              { label: '100%', val: 100 },
+                              { label: '110%', val: 110 },
+                              { label: '125%', val: 125 },
+                              { label: '150%', val: 150 },
+                          ].map((preset) => (
+                              <button
+                                  key={preset.val}
+                                  type="button"
+                                  onClick={() => setSettings({ ...settings, bracketScale: preset.val })}
+                                  className={`py-2 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${
+                                      (settings.bracketScale || 100) === preset.val
+                                          ? 'bg-[#ff8f00] text-black border-[#ff8f00]'
+                                          : 'bg-black/40 text-white/50 border-white/5 hover:text-white hover:bg-white/5'
+                                  }`}
+                              >
+                                  {preset.label}
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+              </div>
+              
+              {/* Right Side: Preview */}
+              <div className="w-full md:w-1/2 p-6 overflow-y-auto flex flex-col items-center justify-center bg-[#0d0e15] border-t md:border-t-0 border-l-0 md:border-l border-white/5 relative min-h-[400px]">
+                 <div className="absolute inset-0 z-0 bg-black">
+                     <div 
+                         className="absolute inset-0 z-0 transition-all bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-[#050508]"
+                         style={{
+                             filter: settings.bgBlur ? `blur(${settings.bgBlur}px)` : undefined
+                         }}
+                     />
+                     <div 
+                         className="absolute inset-0 z-0 bg-black pointer-events-none transition-opacity duration-200" 
+                         style={{ opacity: (settings.bgOpacity !== undefined ? settings.bgOpacity : 50) / 100 }} 
+                     />
+                 </div>
+
+                 <div className="absolute top-6 left-1/2 -translate-x-1/2 text-white/40 font-black uppercase text-[10px] tracking-widest bg-black/40 px-4 py-1.5 rounded-full border border-white/5 z-10 backdrop-blur-md">
+                     Превью Карточки Матча
+                 </div>
+                 
+                 <div className="w-full max-w-sm flex items-center justify-center transition-transform duration-300 z-10" style={{ transform: `scale(${(settings.bracketScale || 100) / 100})`, transformOrigin: 'center center' }}>
+                   <div className="w-full relative pointer-events-none">
+                     <MatchCard 
+                        match={{
+                          id: 'mock-match',
+                          team1: { id: 'team1', name: 'Natus Vincere', logoUrl: 'https://img-cdn.hltv.org/teamlogo/9b5o0_R21E8qH8x8K4q_c_.svg?ixlib=java-2.1.0&s=9fcf2b0a6da9b552377b2f0a8d62da3e' },
+                          team2: { id: 'team2', name: 'FaZe Clan', logoUrl: 'https://img-cdn.hltv.org/teamlogo/gO-Fp-X6H2p-0o79eH99tB.svg?ixlib=java-2.1.0&s=e6fc339178cbcd253c0ddf3be23c21d8' },
+                          score1: 2,
+                          score2: 1,
+                          winnerId: 'team1',
+                          isFinished: true
+                        }} 
+                        bracketType="winners"
+                        rIdx={0}
+                        mIdx={0}
+                        onUpdateScore={() => {}}
+                        onAdvanceWinner={() => {}}
+                        boxStyle={settings.boxStyle}
+                        cardThemeColor={settings.cardThemeColor}
+                        btnStyle={settings.btnStyle}
+                        bracketMode={settings.bracketMode}
+                     />
+                   </div>
+                 </div>
+                 
+                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/30 text-[10px] uppercase tracking-widest text-center w-full max-w-[250px] leading-relaxed z-10">
+                   Внешний вид может незначительно отличаться в турнирной сетке. (Загрузка кастомного фона доступна внутри турнира)
+                 </div>
+              </div>
+            </div>
+            
+            <div className="p-5 border-t border-white/5 flex justify-end bg-black/40 shrink-0">
+               <button
+                  type="button"
+                  onClick={() => { setShowCustomizationModal(false); setHasCustomized(true); }}
+                  className="bg-[#ff8f00] text-black font-black uppercase tracking-wider py-3 px-8 rounded-xl hover:bg-[#ffa733] transition-colors flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(255,143,0,0.4)]"
+               >
+                  <Check className="w-5 h-5" /> Сохранить настройки
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

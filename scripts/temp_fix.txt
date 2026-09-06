@@ -1,0 +1,26 @@
+
+      const pickedIds = upda  };
+
+  const handleSimulateVetoMatch = async () => {, nextMatchesLeft);
+            } else if (nextMatchesLeft === 0 && matchesLeft > 0) {
+              sendContractExpiredBotNotification(user.uid, t.id, tData.name, p.nickname);
+            }
+
+            return {
+              ...p,
+              matchesLeft: nextMatchesLeft,
+              demandsIncrease,
+              demandedSalary
+            };
+          }
+          return p;
+        });
+        if (updated) {
+          await setDoc(teamRef, { players: updatedPlayers }, { merge: true });
+        }
+      }
+    }
+
+    return simResult;
+  };
+

@@ -1,0 +1,111 @@
+Running BASE TEST (2000 matches)...
+=== 1. BASE TEST ===
+Team A Win%: 51.4%
+Team B Win%: 48.6%
+T-side round win%: 50.4%
+CT-side round win%: 49.6%
+Avg Rounds: 19.83
+Avg Kills/Player: 14.05
+Avg Deaths/Player: 14.05
+Avg ADR: 78.6
+
+=== 2. BLOWOUT / SNOWBALL ===
+13-0: 31 (1.6%)
+13-1: 70 (3.5%)
+13-2: 119 (5.9%)
+13-3: 201 (10.1%)
+13-4: 199 (10.0%)
+13-5: 212 (10.6%)
+13-6: 230 (11.5%)
+13-7: 207 (10.3%)
+13-8: 186 (9.3%)
+13-9: 155 (7.8%)
+13-10: 161 (8.1%)
+13-11: 129 (6.5%)
+13-12: 0 (0.0%)
+OT: 100 (5.0%)
+Diff 7+ rounds: 1062 (53.1%)
+Diff 5+ rounds: 1466 (73.3%)
+Diff 3+ rounds: 1871 (93.5%)
+13-0 / 13-1 / 13-2: 220 (11.0%)
+Loser won >= 3 rounds: 1780 (89.0%)
+Comebacks:
+From 0:3 down: 5.5% (73/1330 cases)
+From 1:5 down: 3.6% (24/671 cases)
+From 2:6 down: 4.4% (27/613 cases)
+From 3:8 down: 2.6% (12/470 cases)
+From 4:9 down: 2.6% (11/421 cases)
+
+=== 3. MVP DISTRIBUTION & 4. SNIPER AUDIT ===
+[SNIPER]
+MVP Count: 335 (16.8%)
+Avg Kills: 14.86
+Avg Deaths: 15.54
+Avg ADR: 83.0
+Avg Damage/Match: 1645.6
+Avg Rating: 0.94
+Avg Opening (k1): 6.82
+[RIFLER]
+MVP Count: 138 (6.9%)
+Avg Kills: 12.86
+Avg Deaths: 14.92
+Avg ADR: 78.8
+Avg Damage/Match: 1562.3
+Avg Rating: 0.88
+Avg Opening (k1): 7.39
+[ENTRY]
+MVP Count: 1206 (60.3%)
+Avg Kills: 18.12
+Avg Deaths: 11.69
+Avg ADR: 85.0
+Avg Damage/Match: 1685.2
+Avg Rating: 1.20
+Avg Opening (k1): 6.78
+[SUPPORT]
+MVP Count: 283 (14.1%)
+Avg Kills: 14.61
+Avg Deaths: 14.67
+Avg ADR: 84.4
+Avg Damage/Match: 1674.0
+Avg Rating: 0.96
+Avg Opening (k1): 6.54
+[IGL]
+MVP Count: 38 (1.9%)
+Avg Kills: 9.79
+Avg Deaths: 13.43
+Avg ADR: 61.7
+Avg Damage/Match: 1222.6
+Avg Rating: 0.78
+Avg Opening (k1): 5.83
+
+=== 5. RATING TEST ===
+
+160 vs 150
+Win%: A=73.7%, B=26.4%
+Round Win%: A=57.7%, B=42.3%
+Avg Round Diff: 3.2
+Outsider won >=1 round: 99.5%
+Outsider won >=3 rounds: 92.1%
+Outsider won match (comeback): 26.4%
+Fav Avg K/D: 1.14
+Out Avg K/D: 0.88
+
+160 vs 140
+Win%: A=95.9%, B=4.2%
+Round Win%: A=72.7%, B=27.3%
+Avg Round Diff: 8.1
+Outsider won >=1 round: 91.3%
+Outsider won >=3 rounds: 62.8%
+Outsider won match (comeback): 4.2%
+Fav Avg K/D: 1.46
+Out Avg K/D: 0.68
+
+160 vs 130
+Win%: A=99.4%, B=0.7%
+Round Win%: A=81.0%, B=19.0%
+Avg Round Diff: 10.0
+Outsider won >=1 round: 79.5%
+Outsider won >=3 rounds: 43.3%
+Outsider won match (comeback): 0.7%
+Fav Avg K/D: 1.73
+Out Avg K/D: 0.58

@@ -1,0 +1,130 @@
+{
+  "entities": {
+    "Match": {
+      "title": "Match",
+      "description": "A simulated match result",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "gameMode": { "type": "string", "enum": ["s2", "cs2"] },
+        "tournamentName": { "type": "string" },
+        "format": { "type": "string" },
+        "bo": { "type": "number" },
+        "team1Name": { "type": "string" },
+        "team2Name": { "type": "string" },
+        "team1Score": { "type": "number" },
+        "team2Score": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "date", "gameMode", "userId"]
+    },
+    "PlayerStat": {
+      "title": "PlayerStat",
+      "description": "Global statistics for a player",
+      "type": "object",
+      "properties": {
+        "nickname": { "type": "string", "maxLength": 100 },
+        "teamName": { "type": "string" },
+        "matches": { "type": "number" },
+        "kills": { "type": "number" },
+        "deaths": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["nickname", "userId"]
+    },
+    "TeamRanking": {
+      "title": "TeamRanking",
+      "description": "RP ranking for a team",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "rp": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["name", "rp", "userId"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Custom team made of custom players in a channel",
+      "type": "object",
+      "properties": {
+        "channelId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "players": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["channelId", "name", "players"]
+    },
+    "Player": {
+      "title": "Player",
+      "description": "Custom player in a channel",
+      "type": "object",
+      "properties": {
+        "channelId": { "type": "string" },
+        "nickname": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string" },
+        "rating": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["channelId", "nickname", "role", "rating"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "A custom tournament",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 150 },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "matchIds": { "type": "array" }
+      },
+      "required": ["name", "userId"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Channel settings, starting money and Telegram Bot config",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "botToken": { "type": "string" },
+        "startingMoney": { "type": "number" }
+      },
+      "required": ["userId", "botToken", "startingMoney"]
+    }
+  },
+  "firestore": {
+    "/matches/{matchId}": {
+      "schema": { "$ref": "#/entities/Match" },
+      "description": "Matches simulated by the user"
+    },
+    "/playerStats/{statId}": {
+      "schema": { "$ref": "#/entities/PlayerStat" },
+      "description": "Player stats accumulated"
+    },
+    "/teamRankingsS2/{rankingId}": {
+      "schema": { "$ref": "#/entities/TeamRanking" },
+      "description": "Team rankings for S2"
+    },
+    "/teamRankingsCS2/{rankingId}": {
+      "schema": { "$ref": "#/entities/TeamRanking" },
+      "description": "Team rankings for CS2"
+    },
+    "/teams/{teamId}": {
+      "schema": { "$ref": "#/entities/Team" },
+      "description": "Teams created by a custom channel user"
+    },
+    "/players/{playerId}": {
+      "schema": { "$ref": "#/entities/Player" },
+      "description": "Players created by a custom channel user"
+    },
+    "/tournaments/{tournamentId}": {
+      "schema": { "$ref": "#/entities/Tournament" },
+      "description": "Tournaments created by the user"
+    },
+    "/settings/{settingsId}": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Channel and Telegram Bot settings"
+    }
+  }
+}
