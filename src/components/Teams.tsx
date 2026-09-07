@@ -90,26 +90,68 @@ export default function Teams({ user }: { user: any }) {
 
       const teamMap = new Map<string, any>();
       teams.forEach(t => teamMap.set(t.id || t.name, t));
+      
+      const playerMap = new Map<string, any>();
+      players.forEach(p => {
+        if (p.id) playerMap.set(p.id, p);
+        if (p.nickname) playerMap.set(p.nickname.toLowerCase(), p);
+      });
+
+      const newGlobalPlayers: any[] = [];
+
       incomingTeams.forEach((t: any) => {
         const id = t.id || "t_" + Math.random().toString(36).substring(2, 9);
         const autoLogo = t.logoUrl || getAutoMatchedVectorLogo(t.name);
-        teamMap.set(id, { ...t, id, logoUrl: autoLogo || t.logoUrl });
+        
+        const processedPlayers = (t.players || []).map((tp: any) => {
+            if (!tp || !tp.nickname) return tp;
+            let existingGlobal = playerMap.get(tp.id) || playerMap.get(tp.nickname.toLowerCase());
+            
+            if (!existingGlobal) {
+                existingGlobal = {
+                    id: tp.id || 'p_' + Math.random().toString(36).substr(2, 9),
+                    channelId: user.uid,
+                    nickname: tp.nickname.trim(),
+                    role: tp.role || 'rifler',
+                    rating: tp.rating || 100,
+                    valRating: 0,
+                    isAcademy: !!t.isAcademy,
+                    avatarUrl: tp.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tp.nickname}`,
+                    createdAt: new Date().toISOString()
+                };
+                playerMap.set(existingGlobal.id, existingGlobal);
+                playerMap.set(existingGlobal.nickname.toLowerCase(), existingGlobal);
+                newGlobalPlayers.push(existingGlobal);
+            }
+            
+            return {
+                ...tp,
+                id: existingGlobal.id,
+            };
+        });
+
+        teamMap.set(id, { ...t, id, logoUrl: autoLogo || t.logoUrl, players: processedPlayers });
       });
 
       const updatedTeams = Array.from(teamMap.values());
+      const updatedGlobalPlayers = [...players, ...newGlobalPlayers];
+
       setTeams(updatedTeams);
+      setPlayers(updatedGlobalPlayers);
+      
       safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+      safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
       window.dispatchEvent(new Event("db-user-updated"));
 
       if (user && !user.isLocalDemo) {
         fetch('/api/sync-cache', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.uid, teams: updatedTeams })
+          body: JSON.stringify({ userId: user.uid, teams: updatedTeams, players: updatedGlobalPlayers })
         }).catch(() => {});
       }
 
-      alert(`Успешно импортировано ${incomingTeams.length} команд!`);
+      alert(`Успешно импортировано ${incomingTeams.length} команд! Новых игроков добавлено: ${newGlobalPlayers.length}.`);
     } catch (err: any) {
       alert("Ошибка при чтении JSON файла: " + (err.message || 'Неверный формат'));
     } finally {
