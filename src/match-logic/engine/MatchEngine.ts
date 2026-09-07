@@ -243,7 +243,7 @@ export class MatchEngine {
     return state;
   }
   
-  static isMatchOver(s1: number, s2: number, format: string): boolean {
+  static isMatchOver(s1: number, s2: number, format: string, isCS2: boolean = true): boolean {
     const regTarget = format === 'MR15' ? 16 : 13;
     const regTie = regTarget - 1; // 12 in MR12, 15 in MR15
     
@@ -254,14 +254,23 @@ export class MatchEngine {
     // 2. Overtime logic (MR3 format: 6 rounds per OT set)
     // No artificial round caps (removed 21/22 limit). Overtime continues until a team secures a 2-round lead!
     if (s1 >= regTie && s2 >= regTie) {
-      const totalRounds = s1 + s2;
-      const otRounds = Math.max(1, totalRounds - (regTie * 2));
-      const otNumber = Math.floor((otRounds - 1) / 6);
-      const otTarget = regTie + 4 + (otNumber * 3); // 16 in OT1, 19 in OT2, 22 in OT3, 25 in OT4, etc.
-      
-      // Decisive 2-round margin win in OT
-      if (s1 >= otTarget && (s1 - s2) >= 2) return true;
-      if (s2 >= otTarget && (s2 - s1) >= 2) return true;
+      if (!isCS2) {
+        // SO2 OT logic: 2-round halves. Win if securing 3 or 2 rounds lead in OT block
+        const totalRounds = s1 + s2;
+        const otRounds = Math.max(1, totalRounds - (regTie * 2));
+        const otNumber = Math.floor((otRounds - 1) / 4);
+        const otTarget = regTie + 3 + (otNumber * 2);
+        if (s1 >= otTarget && (s1 - s2) >= 2) return true;
+        if (s2 >= otTarget && (s2 - s1) >= 2) return true;
+      } else {
+        // CS2 OT logic: MR3 (3-round halves)
+        const totalRounds = s1 + s2;
+        const otRounds = Math.max(1, totalRounds - (regTie * 2));
+        const otNumber = Math.floor((otRounds - 1) / 6);
+        const otTarget = regTie + 4 + (otNumber * 3);
+        if (s1 >= otTarget && (s1 - s2) >= 2) return true;
+        if (s2 >= otTarget && (s2 - s1) >= 2) return true;
+      }
     }
     return false;
   }
@@ -274,7 +283,7 @@ export class MatchEngine {
          const t1 = state.teams['t1'];
          const t2 = state.teams['t2'];
          
-         if (this.isMatchOver(t1.score, t2.score, state.format)) {
+         if (this.isMatchOver(t1.score, t2.score, state.format, state.isCS2)) {
            state.phase = 'MATCH_END';
            break;
          }

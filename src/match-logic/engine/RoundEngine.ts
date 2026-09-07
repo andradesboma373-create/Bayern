@@ -59,7 +59,9 @@ export class RoundEngine {
       }
     } else if (state.round > regulationMax) {
       const otRound = state.round - regulationMax;
-      if (otRound === 1 || (otRound - 1) % 6 === 0) {
+      const roundsPerHalf = state.isCS2 ? 3 : 2;
+      const roundsPerOT = roundsPerHalf * 2;
+      if (otRound === 1 || (otRound - 1) % roundsPerOT === 0) {
         if (teamIds[0] && state.teams[teamIds[0]]) state.teams[teamIds[0]].side = t1Orig;
         if (teamIds[1] && state.teams[teamIds[1]]) state.teams[teamIds[1]].side = t2Orig;
         for (const p of Object.values(state.players)) {
@@ -68,7 +70,7 @@ export class RoundEngine {
             p.money = 10000;
           }
         }
-      } else if ((otRound - 1) % 3 === 0) {
+      } else if ((otRound - 1) % roundsPerHalf === 0) {
         if (teamIds[0] && state.teams[teamIds[0]]) state.teams[teamIds[0]].side = t1Orig === 'T' ? 'CT' : 'T';
         if (teamIds[1] && state.teams[teamIds[1]]) state.teams[teamIds[1]].side = t2Orig === 'T' ? 'CT' : 'T';
         for (const p of Object.values(state.players)) {

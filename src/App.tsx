@@ -200,7 +200,6 @@ export default function App() {
       const savedCustom = localStorage.getItem('customUser');
       if (savedCustom) {
         const parsed = JSON.parse(savedCustom);
-        parsed.isLocalDemo = true;
         setUser(parsed);
       }
     } catch (err) {
@@ -220,7 +219,7 @@ export default function App() {
               displayName: parsed.displayName,
               isCustom: true,
               channelName: parsed.channelName,
-              isLocalDemo: true
+              isLocalDemo: parsed.isLocalDemo !== undefined ? parsed.isLocalDemo : true
             });
           } catch (e) {
             setUser({

@@ -552,18 +552,44 @@ export default function TournamentManager({ user }: { user: any }) {
       }
 
       const hasPlayedMatches = (() => {
+          const isMatchPlayed = (m: Match | undefined) => m && (m.score1 > 0 || m.score2 > 0 || (m.winnerId && m.team1 && m.team2 && m.team1.id !== 'BYE' && m.team2.id !== 'BYE'));
+          
           if (activeTournament.groups) {
               for (const g of activeTournament.groups) {
                   for (const m of g.matches) {
-                      if (m.score1 > 0 || m.score2 > 0 || m.winnerId) return true;
+                      if (isMatchPlayed(m)) return true;
                   }
+              }
+          }
+          if (activeTournament.gslGroups) {
+              for (const g of activeTournament.gslGroups) {
+                  for (const m of g.upperBracket.flat()) if (isMatchPlayed(m)) return true;
+                  for (const m of g.lowerBracket.flat()) if (isMatchPlayed(m)) return true;
+              }
+          }
+          if (activeTournament.swissRounds) {
+              for (const r of activeTournament.swissRounds) {
+                  for (const m of r.matches) if (isMatchPlayed(m)) return true;
               }
           }
           if (activeTournament.bracketRounds) {
               for (const r of activeTournament.bracketRounds) {
-                  for (const m of r) {
-                      if (m.score1 > 0 || m.score2 > 0 || (m.winnerId && m.team1 && m.team2 && m.team1.id !== 'BYE' && m.team2.id !== 'BYE')) return true;
-                  }
+                  for (const m of r) if (isMatchPlayed(m)) return true;
+              }
+          }
+          if (activeTournament.losersBracketRounds) {
+              for (const r of activeTournament.losersBracketRounds) {
+                  for (const m of r) if (isMatchPlayed(m)) return true;
+              }
+          }
+          if (activeTournament.tieredBracketRounds) {
+              for (const r of activeTournament.tieredBracketRounds) {
+                  for (const m of r) if (isMatchPlayed(m)) return true;
+              }
+          }
+          if (activeTournament.grandFinal) {
+              for (const m of activeTournament.grandFinal) {
+                  if (isMatchPlayed(m)) return true;
               }
           }
           return false;
