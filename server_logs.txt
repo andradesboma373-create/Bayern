@@ -1,112 +1,13 @@
-=== Server Log Started at 2026-09-07T00:38:02.063Z ===
-[2026-09-07T00:38:02.196Z] [INFO] Successfully loaded local database cache from disk.
-[2026-09-07T00:38:02.202Z] [INFO] Restoring custom maps from LocalDB...
-[2026-09-07T00:38:02.204Z] [INFO] Custom maps restored.
-[2026-09-07T00:38:02.205Z] [INFO] Loaded 0 Telegram bots from LocalDB.
-[2026-09-07T00:38:02.469Z] [INFO] Server running on http://0.0.0.0:3000
-[2026-09-07T00:38:03.328Z] [INFO] [DEBUG] Incoming request: GET /
-[2026-09-07T00:38:06.082Z] [INFO] [DEBUG] Incoming request: GET /api/admin/quota-stats
-[2026-09-07T00:38:06.086Z] [INFO] [DEBUG] Incoming request: GET /api/admin/rooms
-[2026-09-07T00:38:08.985Z] [INFO] [DEBUG] Incoming request: GET /
-[2026-09-07T00:38:09.145Z] [INFO] [DEBUG] Incoming request: GET /@vite/client
-[2026-09-07T00:38:09.147Z] [INFO] [DEBUG] Incoming request: GET /src/main.tsx
-[2026-09-07T00:38:09.342Z] [INFO] [DEBUG] Incoming request: GET /src/components/ErrorBoundary.tsx
-[2026-09-07T00:38:09.343Z] [INFO] [DEBUG] Incoming request: GET /src/App.tsx
-[2026-09-07T00:38:09.345Z] [INFO] [DEBUG] Incoming request: GET /src/index.css
-[2026-09-07T00:38:09.399Z] [INFO] [DEBUG] Incoming request: GET /node_modules/vite/dist/client/env.mjs
-[2026-09-07T00:38:09.533Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/storage.ts
-[2026-09-07T00:38:09.536Z] [INFO] [DEBUG] Incoming request: GET /src/firebase.ts
-[2026-09-07T00:38:09.537Z] [INFO] [DEBUG] Incoming request: GET /src/lib/utils.ts
-[2026-09-07T00:38:09.542Z] [INFO] [DEBUG] Incoming request: GET /src/components/Simulator.tsx
-[2026-09-07T00:38:09.543Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/TournamentBracket.tsx
-[2026-09-07T00:38:09.544Z] [INFO] [DEBUG] Incoming request: GET /src/components/Matches.tsx
-[2026-09-07T00:38:09.545Z] [INFO] [DEBUG] Incoming request: GET /src/components/Statistics.tsx
-[2026-09-07T00:38:09.546Z] [INFO] [DEBUG] Incoming request: GET /src/components/Transfers.tsx
-[2026-09-07T00:38:09.547Z] [INFO] [DEBUG] Incoming request: GET /src/components/Teams.tsx
-[2026-09-07T00:38:09.548Z] [INFO] [DEBUG] Incoming request: GET /src/components/News.tsx
-[2026-09-07T00:38:09.550Z] [INFO] [DEBUG] Incoming request: GET /src/components/Settings.tsx
-[2026-09-07T00:38:09.551Z] [INFO] [DEBUG] Incoming request: GET /src/components/AdminAnalytics.tsx
-[2026-09-07T00:38:09.553Z] [INFO] [DEBUG] Incoming request: GET /src/components/TgUsers.tsx
-[2026-09-07T00:38:09.553Z] [INFO] [DEBUG] Incoming request: GET /src/components/Players.tsx
-[2026-09-07T00:38:09.720Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/doubleEliminationLogic.ts
-[2026-09-07T00:38:09.730Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/TournamentManager.tsx
-[2026-09-07T00:38:09.736Z] [INFO] [DEBUG] Incoming request: GET /src/components/PlayerAvatar.tsx
-[2026-09-07T00:38:09.739Z] [INFO] [DEBUG] Incoming request: GET /src/components/TeamAutocompleteInput.tsx
-[2026-09-07T00:38:09.739Z] [INFO] [DEBUG] Incoming request: GET /src/lib/simulation.ts
-[2026-09-07T00:38:09.740Z] [INFO] [DEBUG] Incoming request: GET /src/components/TeamLogo.tsx
-[2026-09-07T00:38:09.744Z] [INFO] [DEBUG] Incoming request: GET /src/components/VetoModal.tsx
-[2026-09-07T00:38:09.747Z] [INFO] [DEBUG] Incoming request: GET /src/components/TeamProfileModal.tsx
-[2026-09-07T00:38:09.748Z] [INFO] [DEBUG] Incoming request: GET /src/components/MatchDetails.tsx
-[2026-09-07T00:38:09.751Z] [INFO] [DEBUG] Incoming request: GET /src/components/PlayerProfileModal.tsx
-[2026-09-07T00:38:09.752Z] [INFO] [DEBUG] Incoming request: GET /src/lib/logoMatcher.ts
-[2026-09-07T00:38:09.753Z] [INFO] [DEBUG] Incoming request: GET /src/lib/playerPerks.ts
-[2026-09-07T00:38:09.931Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/TournamentSettingsForm.tsx
-[2026-09-07T00:38:09.932Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/MatchCard.tsx
-[2026-09-07T00:38:09.934Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/TieredPlayoffStage.tsx
-[2026-09-07T00:38:09.935Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/GslGroupStage.tsx
-[2026-09-07T00:38:09.936Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/SingleEliminationStage.tsx
-[2026-09-07T00:38:09.937Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/GroupStage.tsx
-[2026-09-07T00:38:09.938Z] [INFO] [DEBUG] Incoming request: GET /src/lib/tournamentPreloader.ts
-[2026-09-07T00:38:09.939Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/SwissStage.tsx
-[2026-09-07T00:38:09.940Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/Top20Modal.tsx
-[2026-09-07T00:38:09.942Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/FinalistsModal.tsx
-[2026-09-07T00:38:09.943Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/MvpModal.tsx
-[2026-09-07T00:38:09.943Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/gslLogic.ts
-[2026-09-07T00:38:09.944Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/swissLogic.ts
-[2026-09-07T00:38:09.946Z] [INFO] [DEBUG] Incoming request: GET /src/teamsList.json?import
-[2026-09-07T00:38:09.948Z] [INFO] [DEBUG] Incoming request: GET /src/mapsList.json?import
-[2026-09-07T00:38:09.948Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/index.ts
-[2026-09-07T00:38:10.125Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/boxStyles.ts
-[2026-09-07T00:38:10.127Z] [INFO] [DEBUG] Incoming request: GET /src/components/setka_tourn/BracketRenderer.tsx
-[2026-09-07T00:38:10.146Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/models/index.ts
-[2026-09-07T00:38:10.149Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/systems/BombSystem.ts
-[2026-09-07T00:38:10.154Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/ai/PlayerAI.ts
-[2026-09-07T00:38:10.162Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/config/Weapons.ts
-[2026-09-07T00:38:10.167Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/engine/MatchEngine.ts
-[2026-09-07T00:38:10.172Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/ai/TeamAI.ts
-[2026-09-07T00:38:10.174Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/systems/CombatSystem.ts
-[2026-09-07T00:38:10.175Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/systems/MapSystem.ts
-[2026-09-07T00:38:10.180Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/engine/RoundEngine.ts
-[2026-09-07T00:38:10.182Z] [INFO] [DEBUG] Incoming request: GET /src/match-logic/systems/EconomySystem.ts
-[2026-09-07T00:38:10.401Z] [INFO] [DEBUG] Incoming request: GET /api/logo/Vitality?game=cs2
-[2026-09-07T00:38:10.405Z] [INFO] [DEBUG] Incoming request: GET /api/logo/NAVI?game=cs2
-[2026-09-07T00:38:10.406Z] [INFO] [DEBUG] Incoming request: GET /api/avatar/Player%201?game=cs2
-[2026-09-07T00:38:10.410Z] [INFO] [DEBUG] Incoming request: GET /api/avatar/Player%204?game=cs2
-[2026-09-07T00:38:10.412Z] [INFO] [DEBUG] Incoming request: GET /api/avatar/Player%205?game=cs2
-[2026-09-07T00:38:10.413Z] [INFO] [DEBUG] Incoming request: GET /api/avatar/Player%202?game=cs2
-[2026-09-07T00:38:10.415Z] [INFO] [DEBUG] Incoming request: GET /api/avatar/Player%203?game=cs2
-[2026-09-07T00:38:10.479Z] [INFO] [DEBUG] Incoming request: GET /src/lib/mapStats.ts
-[2026-09-07T00:38:10.506Z] [INFO] [DEBUG] Incoming request: GET /maps/dust2.jpg
-[2026-09-07T00:38:10.508Z] [INFO] [DEBUG] Incoming request: GET /maps/mirage.jpg
-[2026-09-07T00:38:10.509Z] [INFO] [DEBUG] Incoming request: GET /maps/ancient.jpg
-[2026-09-07T00:38:10.511Z] [INFO] [DEBUG] Incoming request: GET /maps/cache.jpg
-[2026-09-07T00:38:10.512Z] [INFO] [DEBUG] Incoming request: GET /maps/anubis.jpg
-[2026-09-07T00:38:10.513Z] [INFO] [DEBUG] Incoming request: GET /maps/nuke.jpg
-[2026-09-07T00:38:10.514Z] [INFO] [DEBUG] Incoming request: GET /maps/inferno.jpg
-[2026-09-07T00:38:10.741Z] [INFO] [DEBUG] Incoming request: POST /api/db/getDocs
-[2026-09-07T00:38:10.753Z] [INFO] [DEBUG] Incoming request: GET /api/backup-data/channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:38:10.754Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:38:12.406Z] [INFO] [DEBUG] Incoming request: POST /api/sync-cache
-[2026-09-07T00:38:12.409Z] [INFO] Received cache sync request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:38:12.409Z] [INFO] Sync settings for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:38:12.784Z] [INFO] Successfully synced cache for user channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:38:31.048Z] [INFO] [DEBUG] Incoming request: GET /api/admin/quota-stats
-[2026-09-07T00:38:31.050Z] [INFO] [DEBUG] Incoming request: GET /api/admin/rooms
-[2026-09-07T00:38:31.148Z] [INFO] [DEBUG] Incoming request: GET /api/admin/rooms
-[2026-09-07T00:38:31.150Z] [INFO] [DEBUG] Incoming request: GET /api/admin/quota-stats
-[2026-09-07T00:38:40.430Z] [INFO] [DEBUG] Incoming request: GET /api/backup-data/channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:38:40.431Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:38:46.025Z] [INFO] [DEBUG] Incoming request: GET /api/admin/quota-stats
-[2026-09-07T00:38:46.028Z] [INFO] [DEBUG] Incoming request: GET /api/admin/rooms
-[2026-09-07T00:39:01.026Z] [INFO] [DEBUG] Incoming request: GET /api/admin/quota-stats
-[2026-09-07T00:39:01.028Z] [INFO] [DEBUG] Incoming request: GET /api/admin/rooms
-[2026-09-07T00:39:10.432Z] [INFO] [DEBUG] Incoming request: GET /api/backup-data/channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:39:10.432Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:39:16.025Z] [INFO] [DEBUG] Incoming request: GET /api/admin/quota-stats
-[2026-09-07T00:39:16.027Z] [INFO] [DEBUG] Incoming request: GET /api/admin/rooms
-[2026-09-07T00:39:31.026Z] [INFO] [DEBUG] Incoming request: GET /api/admin/rooms
-[2026-09-07T00:39:31.028Z] [INFO] [DEBUG] Incoming request: GET /api/admin/quota-stats
-[2026-09-07T00:39:40.431Z] [INFO] [DEBUG] Incoming request: GET /api/backup-data/channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:39:40.431Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T00:39:46.031Z] [INFO] [DEBUG] Incoming request: GET /api/admin/rooms
-[2026-09-07T00:39:46.033Z] [INFO] [DEBUG] Incoming request: GET /api/admin/quota-stats
+=== Server Log Started at 2026-09-07T01:04:27.679Z ===
+[2026-09-07T01:04:27.815Z] [INFO] Successfully loaded local database cache from disk.
+[2026-09-07T01:04:27.820Z] [INFO] Restoring custom maps from LocalDB...
+[2026-09-07T01:04:27.823Z] [INFO] Custom maps restored.
+[2026-09-07T01:04:27.823Z] [INFO] Loaded 0 Telegram bots from LocalDB.
+[2026-09-07T01:04:28.056Z] [INFO] Server running on http://0.0.0.0:3000
+[2026-09-07T01:04:28.764Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-07T01:04:58.800Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-07T01:05:28.817Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-07T01:05:58.814Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-07T01:06:28.759Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-07T01:06:59.428Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-07T01:07:28.800Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com

@@ -1,7 +1,7 @@
 import { loadTournaments } from './components/setka_tourn/storage';
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity } from 'lucide-react';
+import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity } from 'lucide-react';
 import { auth, logout, db } from './firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from './firebase';
 import { collection, query, where, getDocs, onSnapshot } from './firebase';
@@ -19,7 +19,7 @@ import TgUsers from './components/TgUsers';
 import Transfers from './components/Transfers';
 import AdminAnalytics from './components/AdminAnalytics';
 
-function Sidebar() {
+function Sidebar({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const location = useLocation();
   
   const navItems = [
@@ -37,21 +37,28 @@ function Sidebar() {
   ];
 
   return (
-    <div className="w-64 bg-[#12121a] border-r border-white/5 h-full flex flex-col">
-      <div className="p-6 flex items-center gap-3 border-b border-white/5">
+    <>
+      {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm" onClick={onClose} />}
+      <div className={`fixed inset-y-0 left-0 w-64 bg-[#12121a] border-r border-white/5 h-full flex flex-col z-50 transform transition-transform duration-300 lg:relative lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="p-6 flex items-center justify-between gap-3 border-b border-white/5">
+          <div className="flex items-center gap-3">
         <div className="text-blue-500">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/>
           </svg>
+          </div>
+          <div className="font-black tracking-widest text-lg text-white">MATCH<br/><span className="text-sm font-semibold tracking-[0.2em] text-white/50">SIMULATOR</span></div>
         </div>
-        <div className="font-black tracking-widest text-lg text-white">MATCH<br/><span className="text-sm font-semibold tracking-[0.2em] text-white/50">SIMULATOR</span></div>
+        <button onClick={onClose} className="lg:hidden text-white/50 hover:text-white p-1">
+          <X className="w-6 h-6" />
+        </button>
       </div>
       
       <div className="flex-1 py-6 px-4 flex flex-col gap-2">
         {navItems.map((item, idx) => {
           const isActive = location.pathname === item.path;
           return (
-            <Link key={idx} to={item.path} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-blue-600/10 text-blue-500' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>
+            <Link key={idx} to={item.path} onClick={onClose} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-blue-600/10 text-blue-500' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>
               <item.icon className="w-5 h-5" />
               <span className="font-semibold text-sm">{item.label}</span>
             </Link>
@@ -59,6 +66,7 @@ function Sidebar() {
         })}
       </div>
     </div>
+    </>
   );
 }
 
@@ -69,7 +77,7 @@ const CHANNELS = [
   { username: 'zeixst', password: 'ze0707', channelId: 'channel_bamep_cs2', channelName: 'bamep cs2' }
 ];
 
-function TopBar({ user, onCustomLogin, onLogout }: { user: any, onCustomLogin: () => void, onLogout: () => void }) {
+function TopBar({ user, onCustomLogin, onLogout, onToggleSidebar }: { user: any, onCustomLogin: () => void, onLogout: () => void, onToggleSidebar: () => void }) {
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const [dbUser, setDbUser] = useState<any>(() => {
     if (!user) return null;
@@ -131,9 +139,12 @@ function TopBar({ user, onCustomLogin, onLogout }: { user: any, onCustomLogin: (
   const currentStatus = (rawStatus === 'Менеджер (Лидер)' || rawStatus === 'Менеджер' || rawStatus === 'Лидер') ? 'Участник' : rawStatus;
 
   return (
-    <div className="h-20 border-b border-white/5 px-8 flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl text-sm font-semibold text-white">
+    <div className="h-20 border-b border-white/5 px-4 lg:px-8 flex items-center justify-between">
+      <div className="flex items-center gap-3 lg:gap-4">
+        <button onClick={onToggleSidebar} className="lg:hidden p-2 -ml-2 text-white/70 hover:text-white rounded-xl hover:bg-white/5">
+          <MoreVertical className="w-6 h-6" />
+        </button>
+        <div className="flex items-center gap-2 bg-white/5 px-3 py-2 lg:px-4 rounded-xl text-sm font-semibold text-white">
           <Trophy className="w-4 h-4 text-yellow-500" />
           <span>Турниры</span>
         </div>
@@ -181,6 +192,7 @@ export default function App() {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     // Check if there is already a custom user saved in localStorage (including local demo ones)
@@ -540,15 +552,15 @@ export default function App() {
   return (
     <Router>
       <div className="flex h-screen bg-[#08080c] font-sans text-white overflow-hidden">
-        <Sidebar />
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
           {/* Background decorations */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/20 rounded-full blur-[100px] pointer-events-none -translate-y-1/2 translate-x-1/3"></div>
           <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none translate-y-1/3 -translate-x-1/3"></div>
           
-          <TopBar user={user} onCustomLogin={() => setShowLoginModal(true)} onLogout={handleLogout} />
+          <TopBar user={user} onCustomLogin={() => setShowLoginModal(true)} onLogout={handleLogout} onToggleSidebar={() => setIsSidebarOpen(true)} />
           
-          <div className="flex-1 overflow-y-auto z-10 p-8">
+          <div className="flex-1 overflow-y-auto z-10 p-4 lg:p-8">
             <Routes>
               <Route path="/" element={<Simulator user={user} />} />
               <Route path="/stats" element={<Statistics user={user} />} />
