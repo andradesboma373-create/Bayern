@@ -168,7 +168,7 @@ function TopBar({ user, onCustomLogin, onLogout, onToggleSidebar }: { user: any,
                 {currentStatus}
               </div>
             </div>
-            <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName || user.name}&background=random`} className="w-10 h-10 rounded-full border border-white/10" />
+            <img src={user.photoURL || `/api/avatar/${encodeURIComponent(user.displayName || user.name || "?")}`} className="w-10 h-10 rounded-full border border-white/10" />
             <button onClick={onLogout} className="p-2 text-white/50 hover:text-white cursor-pointer ml-1" title="Выйти">
               <LogOut className="w-5 h-5" />
             </button>

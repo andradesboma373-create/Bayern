@@ -565,7 +565,12 @@ app.get('/api/avatar/:name', (req, res) => {
   if (foundPath) {
     res.sendFile(foundPath);
   } else {
-    res.redirect(`https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=222338&color=ff8f00&bold=true`);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+      <circle cx="50" cy="50" r="48" fill="#1e1f32" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+      <text x="50" y="50" dominant-baseline="central" text-anchor="middle" font-family="sans-serif" font-size="45" font-weight="bold" fill="#ff8f00">?</text>
+    </svg>`;
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.send(svg);
   }
 });
 
@@ -602,8 +607,12 @@ app.get('/api/logo/:name', (req, res) => {
   if (foundPath) {
     res.sendFile(foundPath);
   } else {
-    const text = name.substring(0, 3).toUpperCase();
-    res.redirect(`https://ui-avatars.com/api/?name=${encodeURIComponent(text)}&background=000000&color=ffffff&bold=true&rounded=true`);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+      <rect width="100" height="100" rx="20" ry="20" fill="rgba(0,0,0,0.2)" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>
+      <text x="50" y="50" dominant-baseline="central" text-anchor="middle" font-family="sans-serif" font-size="45" font-weight="900" fill="#ffffff">?</text>
+    </svg>`;
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.send(svg);
   }
 });
 
@@ -2671,27 +2680,10 @@ class TelegramBotInstance {
       }
     }
 
-    // 5. Remote UI-Avatars fallback for players
-    if (!isTeam && cleanName && cleanName !== '?') {
-      try {
-        const uiAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=222338&color=ff8f00&bold=true`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1200);
-        const res = await fetch(uiAvatarUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const arrayBuf = await res.arrayBuffer();
-          const base64 = Buffer.from(arrayBuf).toString('base64');
-          return `data:image/png;base64,${base64}`;
-        }
-      } catch (e) {}
-    }
-
-    // 6. SVG Letter fallback
-    const char = (cleanName || '?').trim().charAt(0).toUpperCase() || '?';
+    // 5. SVG Question Mark fallback
     const svg = `<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
       <rect width="100%" height="100%" fill="${bgColor}"/>
-      <text x="50" y="65" font-family="sans-serif" font-size="50" font-weight="900" fill="#ffffff" text-anchor="middle">${char}</text>
+      <text x="50" y="65" font-family="sans-serif" font-size="50" font-weight="900" fill="#ffffff" text-anchor="middle">?</text>
     </svg>`;
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   }

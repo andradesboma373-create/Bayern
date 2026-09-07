@@ -897,7 +897,7 @@ export default function Transfers({ user }: { user: any }) {
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <img src={`https://ui-avatars.com/api/?name=${p.nickname}&background=random`} className="w-10 h-10 rounded-full" />
+                          <PlayerAvatar playerName={p.nickname} avatarUrl={p.avatarUrl} sizeClassName="w-10 h-10" />
                           <div>
                             <div className="font-black text-white">{p.nickname}</div>
                             <div className="text-[10px] text-white/40 uppercase tracking-widest">{p.role}</div>
@@ -936,7 +936,7 @@ export default function Transfers({ user }: { user: any }) {
               ) : (
                 <form onSubmit={handleOfferContract} className="flex flex-col gap-4">
                   <div className="bg-white/5 p-4 rounded-xl border border-white/10 text-center relative overflow-hidden">
-                    <img src={`https://ui-avatars.com/api/?name=${selectedFftPlayer.nickname}&background=random`} className="w-16 h-16 rounded-full mx-auto mb-2 border border-white/10" />
+                    <PlayerAvatar playerName={selectedFftPlayer.nickname} avatarUrl={selectedFftPlayer.avatarUrl} sizeClassName="w-16 h-16" className="mx-auto mb-2 border border-white/10" />
                     <span className="text-xs bg-amber-500/10 border border-amber-500/20 text-amber-500 px-2 py-0.5 rounded font-black tracking-widest uppercase">FFT AGENT</span>
                     <h3 className="text-xl font-black mt-2">{selectedFftPlayer.nickname}</h3>
                     <p className="text-white/40 text-xs font-mono font-bold uppercase mt-1">Роль: {selectedFftPlayer.role} | VAC: {(selectedFftPlayer.valRating || 0).toLocaleString()}</p>

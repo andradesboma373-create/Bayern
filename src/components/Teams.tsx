@@ -116,7 +116,7 @@ export default function Teams({ user }: { user: any }) {
                     rating: tp.rating || 100,
                     valRating: 0,
                     isAcademy: !!t.isAcademy,
-                    avatarUrl: tp.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tp.nickname}`,
+                    avatarUrl: tp.avatarUrl || "",
                     createdAt: new Date().toISOString()
                 };
                 playerMap.set(existingGlobal.id, existingGlobal);
