@@ -113,8 +113,8 @@ export class CombatSystem {
       }
     }
     
-    const aimRatio = Math.max(0.70, Math.min(1.45, effectiveAim / 100));
-    const targetIqRatio = Math.max(0.70, Math.min(1.45, effectiveIq / 100));
+    const aimRatio = Math.max(0.10, effectiveAim / 100);
+    const targetIqRatio = Math.max(0.10, effectiveIq / 100);
     const progress = Math.min(1.0, Math.max(0.50, shooter.aimProgress || 0.75));
     
     let hitChance = 0.46 + (aimRatio - 1.0) * 0.22 * progress;

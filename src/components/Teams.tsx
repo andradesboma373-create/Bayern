@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TeamAutocompleteInput } from './TeamAutocompleteInput';
-import { db, doc, updateDoc, writeBatch } from '../firebase';
+import { db, doc, updateDoc, setDoc, deleteDoc, writeBatch } from '../firebase';
 import { Users, Plus, Trash2, Edit2, Download, Trophy, ChevronLeft, ChevronRight, Check, ShieldAlert, FileDown, FileUp, AlertTriangle, Crown, DollarSign } from 'lucide-react';
 import PlayerAvatar from './PlayerAvatar';
 import TeamLogo from './TeamLogo';
@@ -283,6 +283,20 @@ export default function Teams({ user }: { user: any }) {
     safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
     window.dispatchEvent(new Event("db-user-updated"));
     
+    if (user && !user.isLocalDemo) {
+        if (editingTeamId) {
+            const tToSave = updatedTeams.find(t => t.id === editingTeamId);
+            if (tToSave) {
+                updateDoc(doc(db, 'teams', editingTeamId), tToSave).catch(e => console.warn(e));
+            }
+        } else {
+            const newT = updatedTeams[updatedTeams.length - 1];
+            if (newT) {
+                setDoc(doc(db, 'teams', newT.id), newT).catch(e => console.warn(e));
+            }
+        }
+    }
+    
     fetch('/api/sync-cache', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -306,6 +320,7 @@ export default function Teams({ user }: { user: any }) {
     window.dispatchEvent(new Event("db-user-updated"));
     
     if (user && !user.isLocalDemo) {
+      deleteDoc(doc(db, 'teams', id)).catch(e => console.warn(e));
       fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -998,9 +1013,18 @@ export default function Teams({ user }: { user: any }) {
                 </button>
               </div>
               {hasUnsavedChanges && (
-                <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 px-4 py-3 rounded-xl flex items-center gap-3 text-xs font-bold animate-pulse">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Внимание! Есть несохраненные изменения в рейтингах. Нажмите кнопку «Сохранить состав и рейтинги» внизу, иначе они не запишутся!</span>
+                <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 px-4 py-3 rounded-xl flex items-center justify-between gap-3 text-xs font-bold animate-pulse">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Внимание! Есть несохраненные изменения.</span>
+                  </div>
+                  <button 
+                    onClick={handleUpdateTeamRoster}
+                    className="bg-amber-500 hover:bg-amber-600 text-black px-4 py-1.5 rounded-lg flex items-center gap-2 transition-colors whitespace-nowrap"
+                  >
+                    <Check className="w-4 h-4" />
+                    Сохранить
+                  </button>
                 </div>
               )}
               <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">

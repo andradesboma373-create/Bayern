@@ -143,9 +143,9 @@ export class MatchEngine {
       
       // Blend: 70% individual skill + 30% team overall baseline + form + natural match performance variance
       const playerMatchLuck = (rng() + rng() - 1.0) * 10;
-      const baseRating = (rawRating * 0.70) + (teamOverall * 0.30) + teamForm + playerMatchLuck;
+      const baseRating = (rawRating * 0.90) + (teamOverall * 0.10) + teamForm + playerMatchLuck;
       const effectiveRating = baseRating * synergyMod * mapExpMod;
-      const rating = Math.max(65, Math.min(160, effectiveRating));
+      const rating = Math.max(1, effectiveRating);
       const skillVal = rating;
       
       let speedBonus = 0;

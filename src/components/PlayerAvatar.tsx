@@ -32,8 +32,11 @@ export function PlayerAvatar({
     );
   }
 
+  // Ignore external generated avatars to avoid "AI photos"
+  const isAiGenerated = avatarUrl && (avatarUrl.includes('dicebear.com') || avatarUrl.includes('ui-avatars.com'));
+  
   // Use explicitly provided URL or the backend resolver API
-  const src = avatarUrl || `/api/avatar/${encodeURIComponent(cleanName)}?game=${game || 'cs2'}`;
+  const src = (avatarUrl && !isAiGenerated) ? avatarUrl : `/api/avatar/${encodeURIComponent(cleanName)}?game=${game || 'cs2'}`;
 
   return (
     <div 

@@ -569,7 +569,7 @@ export default function TournamentManager({ user }: { user: any }) {
           }
           if (activeTournament.swissRounds) {
               for (const r of activeTournament.swissRounds) {
-                  for (const m of r.matches) if (isMatchPlayed(m)) return true;
+                  for (const m of r) if (isMatchPlayed(m)) return true;
               }
           }
           if (activeTournament.bracketRounds) {
@@ -740,6 +740,7 @@ export default function TournamentManager({ user }: { user: any }) {
           teams: [],
           createdAt: Date.now(),
           status: 'upcoming',
+          activeStage: 1,
       };
       
       // We use a custom flag for duck typing

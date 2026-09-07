@@ -140,11 +140,11 @@ export function concentrateOnTournament(tournament: Tournament | null | undefine
 
   // Extract from Swiss rounds (Match[][])
   if (Array.isArray(tournament.swissRounds)) {
-    tournament.swissRounds.forEach(extractMatchTeams);
+    tournament.swissRounds.forEach((matches) => extractMatchTeams(matches));
   }
 
   // Prepopulate in-memory logo cache for instantaneous O(1) sync access
-  prepopulateTeamLogos(collectedTeams);
+  prepopulateTeamLogos();
 
   // Preload team logo URLs into browser image cache
   for (const team of collectedTeams) {

@@ -59,7 +59,17 @@ export class MapSystem {
     return Math.hypot(n1.x - n2.x, n1.y - n2.y);
   }
   
+  private static pathCache = new Map<string, string[]>();
+
+  static clearCache() {
+      this.pathCache.clear();
+  }
+
   static findPath(startId: string, targetId: string): string[] {
+    const cacheKey = `${startId}-${targetId}`;
+    if (this.pathCache.has(cacheKey)) {
+        return this.pathCache.get(cacheKey);
+    }
     if (startId === targetId) return [targetId];
     
     const openSet = [startId];

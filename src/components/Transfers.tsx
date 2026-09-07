@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PlayerAvatar from './PlayerAvatar';
 import { Link } from 'react-router-dom';
 import { db } from '../firebase';
 import { 
@@ -326,7 +327,8 @@ export default function Transfers({ user }: { user: any }) {
             nickname: selectedFftPlayer.nickname,
             role: selectedFftPlayer.role,
             rating: selectedFftPlayer.rating,
-            valRating: selectedFftPlayer.valRating || 0
+            valRating: selectedFftPlayer.valRating || 0,
+            avatarUrl: selectedFftPlayer.avatarUrl || ""
           };
 
           if (!user.isLocalDemo) {
