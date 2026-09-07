@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, deleteDoc, doc } from '../firebase';
+import { collection, query, where, getDocs, deleteDoc, doc, limit, orderBy } from '../firebase';
 import { saveMatchesToLocalStorage } from '../lib/utils';
 import { Calendar, Trophy, Crosshair, Trash2 } from 'lucide-react';
 import MatchDetails from './MatchDetails';
@@ -45,12 +45,12 @@ export default function Matches({ user }: { user: any }) {
         if (user.isLocalDemo) {
           return;
         }
-        const q = query(collection(db, 'matches'), where('userId', '==', user.uid));
+        const q = query(collection(db, 'matches'), where('userId', '==', user.uid), orderBy('date', 'desc'), limit(150));
         const qs = await getDocs(q);
         
         let allDocs = qs.docs;
         if (allDocs.length === 0) {
-          const qChannel = query(collection(db, 'matches'), where('channelId', '==', user.uid));
+          const qChannel = query(collection(db, 'matches'), where('channelId', '==', user.uid), orderBy('date', 'desc'), limit(150));
           const qsChannel = await getDocs(qChannel);
           allDocs = qsChannel.docs;
         }

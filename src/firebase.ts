@@ -202,3 +202,5 @@ export function writeBatch(db: any) {
 }
 
 export const getDocFromServer = getDoc;
+
+export function limit(n: number) { return { field: 'limit', op: 'limit', value: n }; }

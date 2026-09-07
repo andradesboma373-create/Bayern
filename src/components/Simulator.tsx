@@ -536,6 +536,7 @@ export default function Simulator({ user }: { user: any }) {
       const selectedTourneyObj = tournaments.find(t => t.id === selectedTournament);
       const tourneyName = selectedTourneyObj ? selectedTourneyObj.name : 'Test Tournament';
 
+      await new Promise(r => setTimeout(r, 50));
       const simResult = simulateMatchSeries(
         team1, team2, team1Synergy, team2Synergy, 'default', 'default', pickedMaps, isCS2 ? 'MR12' : 'MR15', isCS2, tourneyName,
         team1Form, team2Form, team1MapExp, team2MapExp
