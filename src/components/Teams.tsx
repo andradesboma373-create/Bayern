@@ -67,9 +67,20 @@ export default function Teams({ user }: { user: any }) {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      const incomingTeams = Array.isArray(parsed) ? parsed : (parsed.teams || []);
-      if (!Array.isArray(incomingTeams) || incomingTeams.length === 0) {
-        alert("В файле не найден массив команд.");
+      let incomingTeams: any[] = [];
+      if (Array.isArray(parsed)) {
+        incomingTeams = parsed;
+      } else if (parsed.teams && Array.isArray(parsed.teams)) {
+        incomingTeams = parsed.teams;
+      } else if (parsed.teamName && Array.isArray(parsed.players)) {
+        incomingTeams = [{
+          name: parsed.teamName,
+          players: parsed.players
+        }];
+      }
+      
+      if (incomingTeams.length === 0) {
+        alert("В файле не найден массив команд или валидная команда.");
         return;
       }
 
