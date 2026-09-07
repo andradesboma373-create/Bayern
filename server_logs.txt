@@ -1,27 +1,6 @@
-=== Server Log Started at 2026-09-07T03:57:43.551Z ===
-[2026-09-07T03:57:43.683Z] [INFO] Successfully loaded local database cache from disk.
-[2026-09-07T03:57:43.688Z] [INFO] Restoring custom maps from LocalDB...
-[2026-09-07T03:57:43.691Z] [INFO] Custom maps restored.
-[2026-09-07T03:57:43.691Z] [INFO] Loaded 0 Telegram bots from LocalDB.
-[2026-09-07T03:57:43.958Z] [INFO] Server running on http://0.0.0.0:3000
-[2026-09-07T03:57:53.585Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T03:57:55.189Z] [INFO] Received cache sync request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T03:57:55.189Z] [INFO] Sync settings for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T03:57:55.527Z] [INFO] Successfully synced cache for user channel_bamep_cs2@matchsimulator.com
-[2026-09-07T03:58:23.465Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T03:58:53.521Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T03:59:23.525Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T03:59:53.525Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:00:23.542Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:00:53.484Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:01:23.484Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:01:53.606Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:02:23.538Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:02:54.269Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:03:23.475Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:03:53.529Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:04:23.530Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:04:53.531Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:05:23.474Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:05:53.540Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
-[2026-09-07T04:06:23.527Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+=== Server Log Started at 2026-09-07T12:32:28.927Z ===
+[2026-09-07T12:32:28.928Z] [INFO] Successfully loaded local database cache from disk.
+[2026-09-07T12:32:28.934Z] [INFO] Restoring custom maps from LocalDB...
+[2026-09-07T12:32:28.938Z] [INFO] Custom maps restored.
+[2026-09-07T12:32:28.938Z] [INFO] Loaded 0 Telegram bots from LocalDB.
+[2026-09-07T12:32:29.533Z] [INFO] Server running on http://0.0.0.0:3000

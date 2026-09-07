@@ -76,11 +76,13 @@ let rooms: Room[] = [];
 const auditLogs: AuditLogEntry[] = [];
 const requestWindowMap = new Map<string, number[]>(); // roomId -> array of request timestamps in ms
 
+const QUOTA_FILE = path.join(DATA_DIR, "quota.json");
+
 // Quota usage counters
 let dailyQuota = {
   date: new Date().toISOString().slice(0, 10),
-  readsToday: 1420,
-  writesToday: 210,
+  readsToday: 0,
+  writesToday: 0,
   maxReads: 50000,
   maxWrites: 20000
 };
@@ -89,6 +91,18 @@ function ensureStorage() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
+  
+  if (fs.existsSync(QUOTA_FILE)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(QUOTA_FILE, 'utf-8'));
+      if (parsed.date === new Date().toISOString().slice(0, 10)) {
+        dailyQuota = { ...dailyQuota, ...parsed };
+      }
+    } catch (e) {
+      console.warn("Failed to load quota file", e);
+    }
+  }
+
   if (!fs.existsSync(ROOMS_FILE)) {
     rooms = [...DEFAULT_ROOMS];
     fs.writeFileSync(ROOMS_FILE, JSON.stringify(rooms, null, 2), 'utf-8');
@@ -111,6 +125,7 @@ function persistRooms() {
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(ROOMS_FILE, JSON.stringify(rooms, null, 2), 'utf-8');
+    fs.writeFileSync(QUOTA_FILE, JSON.stringify(dailyQuota, null, 2), 'utf-8');
   } catch (e) {
     console.error("Failed to persist rooms to disk", e);
   }
@@ -271,6 +286,10 @@ export function getRoomAuditLogs(roomIdOrUsername: string): AuditLogEntry[] {
     search === 'bamep'
   );
 }
+
+setInterval(() => {
+  persistRooms();
+}, 5 * 60 * 1000); // Save to disk every 5 minutes
 
 export function getQuotaStats() {
   ensureStorage();

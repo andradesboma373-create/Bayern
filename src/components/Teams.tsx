@@ -130,7 +130,7 @@ export default function Teams({ user }: { user: any }) {
             };
         });
 
-        teamMap.set(id, { ...t, id, logoUrl: autoLogo || t.logoUrl, players: processedPlayers });
+        teamMap.set(id, { ...t, id, channelId: user.uid, logoUrl: autoLogo || t.logoUrl, players: processedPlayers });
       });
 
       const updatedTeams = Array.from(teamMap.values());
@@ -268,6 +268,7 @@ export default function Teams({ user }: { user: any }) {
     } else {
       const newTeam = {
         id: "t_" + Math.random().toString(36).substring(2, 9),
+        channelId: user.uid,
         name: newTeamName.trim(),
         isAcademy: !!newTeamIsAcademy,
         players: roster,
@@ -303,6 +304,15 @@ export default function Teams({ user }: { user: any }) {
     setTeams(updated);
     safeLocalStorageSet(`teams_${user.uid}`, updated);
     window.dispatchEvent(new Event("db-user-updated"));
+    
+    if (user && !user.isLocalDemo) {
+      fetch('/api/sync-cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid, teams: updated })
+      }).catch(() => {});
+    }
+    
     setConfirmDeleteId(null);
   };
 

@@ -3649,12 +3649,12 @@ app.post("/api/sync-cache", async (req, res) => {
         const itemId = item.id || (item.chatId ? `${userId}_${item.chatId}` : null);
         if (!itemId) continue;
         
-        fallbackDb.set(collectionName, itemId, item);
+        const enhancedItem = { ...item, [userField]: item[userField] || userId };
+        fallbackDb.set(collectionName, itemId, enhancedItem);
 
         // Crucial: also save to Firestore so queries from client never revert to old rating!
         try {
-          const docData = { ...item, [userField]: item[userField] || userId };
-          setDoc(doc(db, collectionName, itemId), docData, { merge: true }).catch(() => {});
+          setDoc(doc(db, collectionName, itemId), enhancedItem, { merge: true }).catch(() => {});
         } catch (e) {
           // ignore doc errors
         }
