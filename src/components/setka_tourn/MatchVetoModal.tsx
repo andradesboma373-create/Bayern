@@ -216,7 +216,8 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
     const t2P = preparePlayers(team2);
 
     setTimeout(() => {
-        const result = simulateMatchSeries(
+        try {
+            const result = simulateMatchSeries(
             t1P,
             t2P,
             100,
@@ -224,7 +225,7 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
             'Balanced',
             'Balanced',
             mapsToSim,
-            `BO${bo}`,
+            game === 'cs2' ? 'MR12' : 'MR15',
             game === 'cs2',
             'Турнирный Матч'
         );
@@ -233,7 +234,13 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
         result.team1Name = team1.name;
         result.team2Name = team2.name;
 
-        setLiveMatchData(result);
+        setSimulationResult(result);
+        } catch (err: any) {
+            console.error("Simulation error", err);
+            alert("Error: " + (err.message || err));
+        } finally {
+            setSimulating(false);
+        }
     }, 50);
   };
 
@@ -285,8 +292,17 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
         </div>
         
         <div className="p-6 overflow-y-auto flex-1">
-            {/* If simulation completed, display match results view */}
-            {simulationResult ? (
+            {/* If currently simulating, show progress skeleton */}
+            {simulating ? (
+              <div className="flex flex-col gap-6 animate-fade-in items-center justify-center min-h-[50vh]">
+                <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+                <h2 className="text-2xl font-black text-white tracking-widest uppercase mb-2">Генерация матча...</h2>
+                <p className="text-white/50 text-sm font-semibold tracking-wider">Идёт расчет раундов</p>
+                <div className="w-64 h-2 bg-white/5 rounded-full mt-6 overflow-hidden relative">
+                  <div className="absolute top-0 left-0 h-full bg-purple-500 w-full animate-pulse"></div>
+                </div>
+              </div>
+            ) : simulationResult ? (
                 <div className="flex flex-col gap-6 animate-fade-in">
                     {/* Winner Banner */}
                     <div className="bg-gradient-to-r from-purple-900/40 via-purple-600/30 to-purple-900/40 border border-purple-500/40 rounded-2xl p-6 text-center flex flex-col items-center shadow-[0_0_30px_rgba(168,85,247,0.2)]">

@@ -751,6 +751,21 @@ export default function Simulator({ user }: { user: any }) {
     }
   };
 
+  if (isSimulating) {
+    return (
+      <div className="flex flex-col gap-6 w-full animate-fade-in">
+        <div className="flex flex-col items-center justify-center p-20 bg-[#12121a] rounded-2xl border border-white/5 h-[60vh]">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+          <h2 className="text-2xl font-black text-white tracking-widest uppercase mb-2">Генерация матча...</h2>
+          <p className="text-white/50 text-sm font-semibold tracking-wider">Это может занять несколько секунд</p>
+          <div className="w-64 h-2 bg-white/5 rounded-full mt-6 overflow-hidden relative">
+            <div className="absolute top-0 left-0 h-full bg-blue-500 w-full animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (view === 'result') {
     const isSequentialActive = isSequential && result?.bo !== 1;
     const isOverall = selectedResultTab === 'overall';
