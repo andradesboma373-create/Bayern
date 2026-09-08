@@ -1,6 +1,6 @@
-=== Server Log Started at 2026-09-07T19:09:37.125Z ===
-[2026-09-07T19:09:37.158Z] [ERROR] Error loading local database cache: Unexpected end of JSON input
-[2026-09-07T19:09:37.163Z] [INFO] Restoring custom maps from LocalDB...
-[2026-09-07T19:09:37.166Z] [INFO] Custom maps restored.
-[2026-09-07T19:09:37.166Z] [INFO] Loaded 0 Telegram bots from LocalDB.
-[2026-09-07T19:09:37.392Z] [ERROR] WebSocket server error: Port 24678 is already in use
+=== Server Log Started at 2026-09-08T04:48:35.463Z ===
+[2026-09-08T04:48:35.465Z] [INFO] Successfully loaded local database cache from disk.
+[2026-09-08T04:48:35.470Z] [INFO] Restoring custom maps from LocalDB...
+[2026-09-08T04:48:35.472Z] [INFO] Custom maps restored.
+[2026-09-08T04:48:35.472Z] [INFO] Loaded 0 Telegram bots from LocalDB.
+[2026-09-08T04:48:35.732Z] [ERROR] WebSocket server error: Port 24678 is already in use

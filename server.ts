@@ -114,12 +114,18 @@ class FallbackDB {
     }
   }
 
+  private saveTimeout: any = null;
   private save() {
-    try {
-      fs.writeFileSync(this.cachePath, JSON.stringify(this.data, null, 2), 'utf8');
-    } catch (err: any) {
-      console.error("Error saving local database cache to disk:", err.message);
-    }
+    if (this.saveTimeout) clearTimeout(this.saveTimeout);
+    this.saveTimeout = setTimeout(() => {
+      try {
+        fs.writeFile(this.cachePath, JSON.stringify(this.data, null, 2), 'utf8', (err) => {
+           if(err) console.error("Error saving local database cache to disk:", err.message);
+        });
+      } catch (err: any) {
+        console.error("Error saving local database cache to disk:", err.message);
+      }
+    }, 2000);
   }
 
   public get(collectionName: string, id: string): any {
