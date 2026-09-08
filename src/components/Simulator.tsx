@@ -136,7 +136,7 @@ export default function Simulator({ user }: { user: any }) {
   const [game, setGame] = useState('cs2');
   const [format, setFormat] = useState('BO3');
   const [isSimulating, setIsSimulating] = useState(false);
-  const [result, setResult] = useState<any>(null);
+    const [result, setResult] = useState<any>(null);
 
   const [team1, setTeam1] = useState(DEFAULT_TEAM_T);
   const [team2, setTeam2] = useState(DEFAULT_TEAM_CT);

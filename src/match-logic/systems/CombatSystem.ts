@@ -117,10 +117,10 @@ export class CombatSystem {
     const targetIqRatio = Math.max(0.10, effectiveIq / 100);
     const progress = Math.min(1.0, Math.max(0.50, shooter.aimProgress || 0.75));
     
-    let hitChance = 0.46 + (aimRatio - 1.0) * 0.30 * progress;
+    let hitChance = 0.46 + (aimRatio - 1.0) * 0.22 * progress;
     if (weapon.type === 'SNIPER') {
         // High accuracy for scoped snipers holding angles or distance
-        hitChance = 0.90 + (aimRatio - 1.0) * 0.16 * Math.max(0.80, progress);
+        hitChance = 0.90 + (aimRatio - 1.0) * 0.12 * Math.max(0.80, progress);
         hitChance *= (weapon.accuracy / 100);
         if (dist < 15) {
             // Close range un-scoped penalty
@@ -134,7 +134,7 @@ export class CombatSystem {
     }
     
     // Target defensive movement / IQ positioning
-    const targetEvasion = Math.max(0.65, Math.min(1.35, 1.0 - (targetIqRatio - 1.0) * 0.15));
+    const targetEvasion = Math.max(0.75, Math.min(1.25, 1.0 - (targetIqRatio - 1.0) * 0.10));
     hitChance *= targetEvasion;
     
     // Stationary / angle holding advantage

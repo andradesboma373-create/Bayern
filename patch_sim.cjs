@@ -1,37 +1,70 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/lib/simulation.ts', 'utf8');
+let code = fs.readFileSync('src/components/Simulator.tsx', 'utf8');
 
-// Insert import mapsList from '../mapsList.json' at top if not exists
-if (!code.includes("import mapsList")) {
-    code = `import mapsList from '../mapsList.json';\n` + code;
+code = code.replace(
+    'import VetoModal from "./VetoModal";',
+    'import VetoModal from "./VetoModal";\nimport LiveMatchOverlay from "./LiveMatchOverlay";'
+);
+
+code = code.replace(
+    'const [isSimulating, setIsSimulating] = useState(false);',
+    'const [isSimulating, setIsSimulating] = useState(false);\n  const [liveMatchData, setLiveMatchData] = useState<any>(null);'
+);
+
+const replaceTarget = `      setResult(newMatch);
+      if (isSequential && newMatch.bo !== 1) {
+        setSequentialRevealedIndex(0);
+        setSelectedResultTab(0);
+      } else {
+        setSequentialRevealedIndex((newMatch.maps?.length || 1) - 1);
+        setSelectedResultTab(newMatch.bo === 1 ? 0 : 'overall');
+      }
+      setView('result');
+    } catch (e: any) {
+      console.error(e);
+      alert('Ошибка симуляции: ' + (e.message || e));
+    } finally {
+      setIsSimulating(false);
+    }`;
+
+const newCode = `      setResult(newMatch);
+      if (isSequential && newMatch.bo !== 1) {
+        setSequentialRevealedIndex(0);
+        setSelectedResultTab(0);
+      } else {
+        setSequentialRevealedIndex((newMatch.maps?.length || 1) - 1);
+        setSelectedResultTab(newMatch.bo === 1 ? 0 : 'overall');
+      }
+      setLiveMatchData(newMatch);
+    } catch (e: any) {
+      console.error(e);
+      alert('Ошибка симуляции: ' + (e.message || e));
+      setIsSimulating(false);
+    }`;
+
+if (code.includes(replaceTarget)) {
+    code = code.replace(replaceTarget, newCode);
+    console.log("Replaced handleSimulate successfully");
+} else {
+    console.log("Could not find replace target in handleSimulate");
 }
 
-const addLogic = `
-// --- Auto-inject custom maps from public/maps ---
-try {
-    const existingCS2 = new Set(MAP_POOL_CS2.map(m => m.id.toLowerCase()));
-    const existingS2 = new Set(MAP_POOL_S2.map(m => m.id.toLowerCase()));
-    
-    (mapsList || []).forEach(mapName => {
-        const id = mapName.toLowerCase();
-        const formattedName = mapName.charAt(0).toUpperCase() + mapName.slice(1);
-        const mapObj = { id, name: formattedName, tSideBias: 0.50, ctSideBias: 0.50 };
-        
-        // If the map isn't natively known in either CS2 or S2, add to BOTH as custom map
-        if (!existingCS2.has(id) && !existingS2.has(id)) {
-            MAP_POOL_CS2.push(mapObj);
-            MAP_POOL_S2.push(mapObj);
-        }
-    });
-} catch(e) {
-    console.error("Failed to inject custom maps", e);
-}
-// ------------------------------------------------
-`;
+code = code.replace(
+    'return (',
+    `return (
+    <>
+      {liveMatchData && (
+        <LiveMatchOverlay 
+          matchResult={liveMatchData} 
+          onComplete={() => {
+            setLiveMatchData(null);
+            setIsSimulating(false);
+            setView('result');
+          }} 
+        />
+      )}`
+);
 
-// Insert after MAP_POOL_S2 definition
-if (!code.includes("Auto-inject custom maps")) {
-    code = code.replace(/(export const MAP_POOL_S2 = \[[\s\S]*?\];)/, "$1" + addLogic);
-}
+code = code.replace(/<\/div>\s*$/i, '</div>\n    </>\n');
 
-fs.writeFileSync('src/lib/simulation.ts', code);
+fs.writeFileSync('src/components/Simulator.tsx', code);

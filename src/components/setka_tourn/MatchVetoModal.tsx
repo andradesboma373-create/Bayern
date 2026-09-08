@@ -88,7 +88,7 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
   const [vetoPicked, setVetoPicked] = useState<{mapId: string, pickedBy: string}[]>([]);
   const [vetoLogs, setVetoLogs] = useState<string[]>([]);
   const [simulating, setSimulating] = useState(false);
-  const [simulationResult, setSimulationResult] = useState<any>(null);
+    const [simulationResult, setSimulationResult] = useState<any>(null);
   
   const vetoFormat = bo === 1 ? 'bo1' : bo === 3 ? 'bo3' : 'bo5';
   const MAP_POOL = game === 'cs2' ? MAP_POOL_CS2 : MAP_POOL_S2;
@@ -233,9 +233,8 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
         result.team1Name = team1.name;
         result.team2Name = team2.name;
 
-        setSimulationResult(result);
-        setSimulating(false);
-    }, 400);
+        setLiveMatchData(result);
+    }, 50);
   };
 
   const handleApplyResult = () => {
