@@ -18,21 +18,30 @@ import SettingsComponent from './components/Settings';
 import TgUsers from './components/TgUsers';
 import Transfers from './components/Transfers';
 import AdminAnalytics from './components/AdminAnalytics';
+import ChannelLogin from './components/ChannelLogin';
+import AccessDenied from './components/AccessDenied';
 
-function Sidebar({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
+function Sidebar({ isOpen, onClose, user }: { isOpen: boolean, onClose: () => void, user: any }) {
   const location = useLocation();
   
+  const isBamepAdmin = 
+    (user?.name || user?.username || user?.displayName || '').toLowerCase() === 'bamep' ||
+    user?.role === 'superadmin' ||
+    (user?.channelName || '').toLowerCase().includes('bamep');
+
   const navItems = [
     { icon: Gamepad2, label: 'Симулятор', path: '/' },
     { icon: BarChart2, label: 'Статистика', path: '/stats' },
     { icon: Calendar, label: 'Матчи', path: '/matches' },
     { icon: Trophy, label: 'Турниры', path: '/tournaments' },
-        { icon: Users, label: 'Команды', path: '/teams' },
+    { icon: Users, label: 'Команды', path: '/teams' },
     { icon: User, label: 'Игроки', path: '/players' },
     { icon: Newspaper, label: 'Новости', path: '/news' },
     { icon: Zap, label: 'Трансферы', path: '/transfers' },
-    { icon: Database, label: 'База ТГ Бота', path: '/tg-users' },
-    { icon: Activity, label: 'Аналитика', path: '/analytics' },
+    ...(isBamepAdmin ? [
+      { icon: Database, label: 'База ТГ Бота', path: '/tg-users', admin: true },
+      { icon: Activity, label: 'Аналитика', path: '/analytics', admin: true },
+    ] : []),
     { icon: Settings, label: 'Настройки', path: '/settings' },
   ];
 
@@ -42,30 +51,67 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) 
       <div className={`fixed inset-y-0 left-0 w-64 bg-[#12121a] border-r border-white/5 h-full flex flex-col z-50 transform transition-transform duration-300 lg:relative lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="p-6 flex items-center justify-between gap-3 border-b border-white/5">
           <div className="flex items-center gap-3">
-        <div className="text-blue-500">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/>
-          </svg>
+            <div className="text-blue-500">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/>
+              </svg>
+            </div>
+            <div className="font-black tracking-widest text-lg text-white">MATCH<br/><span className="text-sm font-semibold tracking-[0.2em] text-white/50">SIMULATOR</span></div>
           </div>
-          <div className="font-black tracking-widest text-lg text-white">MATCH<br/><span className="text-sm font-semibold tracking-[0.2em] text-white/50">SIMULATOR</span></div>
+          <button onClick={onClose} className="lg:hidden text-white/50 hover:text-white p-1">
+            <X className="w-6 h-6" />
+          </button>
         </div>
-        <button onClick={onClose} className="lg:hidden text-white/50 hover:text-white p-1">
-          <X className="w-6 h-6" />
-        </button>
-      </div>
       
-      <div className="flex-1 py-6 px-4 flex flex-col gap-2">
-        {navItems.map((item, idx) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <Link key={idx} to={item.path} onClick={onClose} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-blue-600/10 text-blue-500' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>
-              <item.icon className="w-5 h-5" />
-              <span className="font-semibold text-sm">{item.label}</span>
-            </Link>
-          )
-        })}
+        <div className="flex-1 py-6 px-4 flex flex-col gap-1.5 overflow-y-auto">
+          {navItems.map((item, idx) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link 
+                key={idx} 
+                to={item.path} 
+                onClick={onClose} 
+                className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+                  isActive 
+                    ? 'bg-blue-600/15 text-blue-400 font-bold border border-blue-500/20' 
+                    : 'text-white/60 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <item.icon className={`w-5 h-5 ${item.admin ? 'text-amber-400' : ''}`} />
+                  <span className="font-semibold text-sm">{item.label}</span>
+                </div>
+                {item.admin && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                    bamep
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Current Room Info Card */}
+        <div className="p-4 border-t border-white/5 bg-black/30 m-3 rounded-2xl">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[10px] text-white/40 uppercase font-black tracking-wider">Текущий канал</div>
+              <div className="text-xs font-bold text-white truncate font-mono">
+                {user?.displayName || user?.name || 'Гость'}
+              </div>
+            </div>
+            {isBamepAdmin ? (
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
+                👑 Админ
+              </span>
+            ) : (
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 shrink-0">
+                🎮 Игрок
+              </span>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
     </>
   );
 }
@@ -195,59 +241,43 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // Check if there is already a custom user saved in localStorage (including local demo ones)
+    // Check if there is already a custom user saved in localStorage
     try {
       const savedCustom = localStorage.getItem('customUser');
       if (savedCustom) {
         const parsed = JSON.parse(savedCustom);
         setUser(parsed);
+      } else {
+        setUser(null);
       }
     } catch (err) {
       console.error("Failed to parse custom user", err);
+      setUser(null);
     }
 
     const unsub = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        let saved = null;
-        try { saved = localStorage.getItem('customUser'); } catch (e) {}
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            setUser({
-              uid: firebaseUser.uid,
-              name: parsed.name,
-              displayName: parsed.displayName,
-              isCustom: true,
-              channelName: parsed.channelName,
-              isLocalDemo: parsed.isLocalDemo !== undefined ? parsed.isLocalDemo : true
-            });
-          } catch (e) {
-            setUser({
-              uid: firebaseUser.uid,
-              name: firebaseUser.email?.split('@')[0] || 'Участник',
-              displayName: firebaseUser.email?.split('@')[0] || 'Участник',
-              isCustom: true,
-              channelName: 'bamep cs2',
-              isLocalDemo: true
-            });
-          }
-        } else {
+      let saved = null;
+      try { saved = localStorage.getItem('customUser'); } catch (e) {}
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
           setUser({
-            uid: firebaseUser.uid,
-            name: firebaseUser.email?.split('@')[0] || 'Участник',
-            displayName: firebaseUser.email?.split('@')[0] || 'Участник',
+            uid: firebaseUser ? firebaseUser.uid : (parsed.uid || parsed.channelId || parsed.name),
+            name: parsed.name,
+            username: parsed.username || parsed.name,
+            displayName: parsed.displayName || parsed.name,
             isCustom: true,
-            channelName: 'bamep cs2',
-            isLocalDemo: true
+            channelName: parsed.channelName,
+            channelId: parsed.channelId,
+            role: parsed.role,
+            isLocalDemo: parsed.isLocalDemo !== undefined ? parsed.isLocalDemo : false
           });
-        }
-      } else {
-        // If there is no custom user in localStorage, set user to null
-        let hasCustom = false;
-        try { hasCustom = !!localStorage.getItem('customUser'); } catch (e) {}
-        if (!hasCustom) {
+        } catch (e) {
           setUser(null);
         }
+      } else {
+        // No custom user in localStorage -> user is strictly null (showing channel entrance)
+        setUser(null);
       }
     });
     return unsub;
@@ -548,10 +578,19 @@ export default function App() {
     }
   };
 
+  const isBamepAdmin = 
+    (user?.name || user?.username || user?.displayName || '').toLowerCase() === 'bamep' ||
+    user?.role === 'superadmin' ||
+    (user?.channelName || '').toLowerCase().includes('bamep');
+
+  if (!user) {
+    return <ChannelLogin onLoginSuccess={(u) => setUser(u)} />;
+  }
+
   return (
     <Router>
       <div className="flex h-screen bg-[#08080c] font-sans text-white overflow-hidden">
-        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={user} />
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
           {/* Background decorations */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/20 rounded-full blur-[100px] pointer-events-none -translate-y-1/2 translate-x-1/3"></div>
@@ -565,12 +604,18 @@ export default function App() {
               <Route path="/stats" element={<Statistics user={user} />} />
               <Route path="/matches" element={<Matches user={user} />} />
               <Route path="/tournaments" element={<TournamentBracket user={user} />} />
-                            <Route path="/teams" element={<Teams user={user} />} />
+              <Route path="/teams" element={<Teams user={user} />} />
               <Route path="/players" element={<Players user={user} />} />
               <Route path="/news" element={<News user={user} />} />
               <Route path="/transfers" element={<Transfers user={user} />} />
-              <Route path="/tg-users" element={<TgUsers user={user} />} />
-              <Route path="/analytics" element={<AdminAnalytics user={user} />} />
+              <Route 
+                path="/tg-users" 
+                element={isBamepAdmin ? <TgUsers user={user} /> : <AccessDenied sectionName="База ТГ Бота" roomName={user?.name} />} 
+              />
+              <Route 
+                path="/analytics" 
+                element={isBamepAdmin ? <AdminAnalytics user={user} /> : <AccessDenied sectionName="Аналитика и Управление Комнатами" roomName={user?.name} />} 
+              />
               <Route path="/settings" element={<SettingsComponent user={user} />} />
             </Routes>
           </div>

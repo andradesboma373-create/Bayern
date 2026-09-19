@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AccessDenied from './AccessDenied';
 import { 
   ShieldAlert, 
   Activity, 
@@ -83,7 +84,14 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const isSuperAdmin = user?.name === 'bamep' || user?.role === 'superadmin';
+  const isSuperAdmin = 
+    (user?.name || user?.username || user?.displayName || '').toLowerCase() === 'bamep' || 
+    user?.role === 'superadmin' ||
+    (user?.channelName || '').toLowerCase().includes('bamep');
+
+  if (!isSuperAdmin) {
+    return <AccessDenied sectionName="Аналитика и Управление Комнатами" roomName={user?.name || user?.username} />;
+  }
 
   const fetchData = async () => {
     try {

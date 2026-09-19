@@ -25,6 +25,11 @@ export default function Settings({ user }: { user: any }) {
   const [isBamepUnlocked, setIsBamepUnlocked] = useState<boolean>(false);
   const [passwordError, setPasswordError] = useState('');
 
+  const isBamepAdmin = 
+    (user?.name || user?.username || user?.displayName || '').toLowerCase() === 'bamep' ||
+    user?.role === 'superadmin' ||
+    (user?.channelName || '').toLowerCase().includes('bamep');
+
   // Individual perk form state
   const [individualPerksList, setIndividualPerksList] = useState<PlayerPerk[]>([]);
   const [editNickname, setEditNickname] = useState('');
@@ -36,15 +41,20 @@ export default function Settings({ user }: { user: any }) {
   const [editClutchBonus, setEditClutchBonus] = useState('0.00');
 
   useEffect(() => {
+    // If not in bamep admin room, enforce general tab only
+    if (!isBamepAdmin && (activeTab === 'individual' || activeTab === 'database')) {
+      setActiveTab('general');
+    }
+
     // Check if user account is naturally bamep/bamepys or previously unlocked
     const userEmail = (user?.email || '').toLowerCase();
-    const userName = (user?.displayName || user?.nickname || '').toLowerCase();
-    if (userEmail.includes('bamep') || userName.includes('bamep') || localStorage.getItem('bamep_room_unlocked') === 'true') {
+    const userName = (user?.displayName || user?.nickname || user?.name || '').toLowerCase();
+    if (userEmail.includes('bamep') || userName.includes('bamep') || isBamepAdmin || localStorage.getItem('bamep_room_unlocked') === 'true') {
       setIsBamepUnlocked(true);
     }
 
     setIndividualPerksList(getAllPlayerPerks());
-  }, [user]);
+  }, [user, isBamepAdmin, activeTab]);
 
   const handleUnlockBamepRoom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,20 +328,26 @@ export default function Settings({ user }: { user: any }) {
           <SettingsIcon className="w-4 h-4" />
           Основные настройки
         </button>
-        <button
-          onClick={() => setActiveTab('individual')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTab === 'individual' ? 'bg-[#ff8f00]/20 text-[#ff8f00] border border-[#ff8f00]/40' : 'text-white/50 hover:bg-white/5'}`}
-        >
-          <UserCheck className="w-4 h-4" />
-          Индивидуальные Рейты {isBamepUnlocked ? '👑' : '🔒'}
-        </button>
-        <button
-          onClick={() => setActiveTab('database')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTab === 'database' ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'text-white/50 hover:bg-white/5'}`}
-        >
-          <Database className="w-4 h-4" />
-          База Данных
-        </button>
+
+        {isBamepAdmin && (
+          <button
+            onClick={() => setActiveTab('individual')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTab === 'individual' ? 'bg-[#ff8f00]/20 text-[#ff8f00] border border-[#ff8f00]/40' : 'text-white/50 hover:bg-white/5'}`}
+          >
+            <UserCheck className="w-4 h-4" />
+            Индивидуальные Рейты 👑
+          </button>
+        )}
+
+        {isBamepAdmin && (
+          <button
+            onClick={() => setActiveTab('database')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTab === 'database' ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'text-white/50 hover:bg-white/5'}`}
+          >
+            <Database className="w-4 h-4" />
+            База Данных
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -389,7 +405,7 @@ export default function Settings({ user }: { user: any }) {
             </form>
           )}
 
-          {activeTab === 'database' && (
+          {activeTab === 'database' && isBamepAdmin && (
             <div className="flex flex-col gap-6">
               <div className="bg-[#12121a] border border-white/5 rounded-2xl p-8 space-y-6 text-center relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-2xl rounded-full pointer-events-none"></div>
@@ -417,7 +433,7 @@ export default function Settings({ user }: { user: any }) {
             </div>
           )}
 
-      {activeTab === 'individual' && (
+      {activeTab === 'individual' && isBamepAdmin && (
         <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 space-y-6">
               {!isBamepUnlocked ? (
                 /* LOCKED BAMEP ROOM VIEW */

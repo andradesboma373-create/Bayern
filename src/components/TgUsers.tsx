@@ -4,8 +4,18 @@ import { collection, query, where, getDocs, updateDoc, doc, db } from '../fireba
 import { ShieldAlert, UserPlus, X, Search, User, ArrowRightLeft, Check, CheckCircle2, Clock, XCircle, Zap, RefreshCw, Coins } from 'lucide-react';
 import TeamLogo from './TeamLogo';
 import { safeLocalStorageSet } from '../lib/utils';
+import AccessDenied from './AccessDenied';
 
 export default function TgUsers({ user }: { user: any }) {
+  const isBamepAdmin = 
+    (user?.name || user?.username || user?.displayName || '').toLowerCase() === 'bamep' ||
+    user?.role === 'superadmin' ||
+    (user?.channelName || '').toLowerCase().includes('bamep');
+
+  if (!isBamepAdmin) {
+    return <AccessDenied sectionName="База ТГ Бота" roomName={user?.name || user?.username} />;
+  }
+
   const [activeTab, setActiveTab] = useState<'users' | 'transfers'>('users');
   const [tgUsersList, setTgUsersList] = useState<any[]>([]);
   const [swapOffersList, setSwapOffersList] = useState<any[]>([]);
