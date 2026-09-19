@@ -15,9 +15,16 @@
 }
 
 /* Fix for html-to-image / SVG foreignObject canvas rendering glitches:
-   backdrop-filter causes severe smearing/blurring artifacts and gray fog in canvas export engines */
+   backdrop-filter causes severe smearing/blurring artifacts and gray fog in canvas export engines.
+   Disabling animations and transitions prevents intermediate half-rendered frames. */
 [data-exporting="true"] * {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+    animation: none !important;
+    transition: none !important;
+}
+
+[data-exporting="true"] {
+    transform: none !important;
 }
 

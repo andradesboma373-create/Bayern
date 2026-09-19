@@ -72,7 +72,7 @@ console.warn = (...args: any[]) => {
 };
 // ==========================================
 
-import { MAP_POOL_CS2, MAP_POOL_S2 } from "./src/lib/simulation";
+import { MAP_POOL_CS2, MAP_POOL_S2, simulateMatchSeries } from "./src/lib/simulation";
 // Suppress benign Firebase idle stream warnings
 const originalConsoleError = console.error;
 console.error = (...args) => {
@@ -536,6 +536,17 @@ export function renderVetoMessageStatic(vetoDoc: any, teamIndex: number) {
 
 const app = express();
 
+// Enable universal CORS for all API routes (essential for client html-to-image canvas rendering)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 
 // Resolvers for images to avoid client 404 spam
 app.get('/api/avatar/:name', (req, res) => {
@@ -619,6 +630,35 @@ app.get('/api/logo/:name', (req, res) => {
     </svg>`;
     res.setHeader('Content-Type', 'image/svg+xml');
     res.send(svg);
+  }
+});
+
+// Proxy image with CORS to allow client html-to-image canvas exports to load any external logos or background images safely
+app.get('/api/proxy-image', async (req, res) => {
+  const imageUrl = req.query.url as string;
+  if (!imageUrl) return res.status(400).send('No URL provided');
+  try {
+    const parsed = new URL(imageUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return res.status(400).send('Invalid protocol');
+    }
+    const response = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+      }
+    });
+    if (!response.ok) {
+      return res.status(response.status).send('Failed to fetch image');
+    }
+    const contentType = response.headers.get('content-type') || 'image/png';
+    const buffer = await response.arrayBuffer();
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(Buffer.from(buffer));
+  } catch (err: any) {
+    res.status(500).send('Error proxying image: ' + (err?.message || 'Unknown error'));
   }
 });
 
@@ -725,6 +765,132 @@ app.post("/api/db/deleteDoc", async (req, res) => {
     await deleteDoc(docRef);
     res.json({ success: true });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/db/batch", async (req, res) => {
+  try {
+    const { operations } = req.body;
+    if (!Array.isArray(operations)) {
+      return res.status(400).json({ error: "operations array is required" });
+    }
+    for (const op of operations) {
+      if (op.type === 'set') {
+        await setDoc(op.docRef, op.data, op.options);
+      } else if (op.type === 'update') {
+        await updateDoc(op.docRef, op.data);
+      } else if (op.type === 'delete') {
+        await deleteDoc(op.docRef);
+      }
+    }
+    res.json({ success: true, count: operations.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- MATCH SIMULATION BACKGROUND JOB SYSTEM ---
+interface ServerSimulationJob {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  createdAt: number;
+  result?: any;
+  perfReport?: any;
+  error?: string;
+}
+
+const serverSimulationJobs = new Map<string, ServerSimulationJob>();
+
+// Cleanup older jobs
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, job] of serverSimulationJobs.entries()) {
+    if (now - job.createdAt > 30 * 60 * 1000) {
+      serverSimulationJobs.delete(id);
+    }
+  }
+}, 5 * 60 * 1000);
+
+app.post("/api/matches/simulate", async (req, res) => {
+  const jobId = 'sim_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+  const {
+    team1, team2,
+    team1Synergy, team2Synergy,
+    team1Tactic, team2Tactic,
+    maps, format, isCS2,
+    tournamentName,
+    team1Form, team2Form,
+    team1MapExp, team2MapExp,
+    mapPickByArr,
+    isAsync
+  } = req.body;
+
+  const job: ServerSimulationJob = {
+    id: jobId,
+    status: 'running',
+    createdAt: Date.now()
+  };
+  serverSimulationJobs.set(jobId, job);
+
+  const executeSimulation = () => {
+    try {
+      const startTime = performance.now();
+      const simResult = simulateMatchSeries(
+        team1, team2,
+        team1Synergy || 100, team2Synergy || 100,
+        team1Tactic || 'default', team2Tactic || 'default',
+        maps || ['mirage'],
+        format || 'MR12',
+        isCS2 !== false,
+        tournamentName || 'Simulation',
+        team1Form || 0, team2Form || 0,
+        team1MapExp || {}, team2MapExp || {},
+        mapPickByArr || null
+      );
+      const executionTime = performance.now() - startTime;
+      job.status = 'completed';
+      job.result = simResult;
+      job.perfReport = {
+        executionTimeMs: executionTime,
+        mapsCount: simResult.maps?.length || 1,
+        team1Score: simResult.team1Score,
+        team2Score: simResult.team2Score
+      };
+    } catch (err: any) {
+      job.status = 'failed';
+      job.error = err.message || String(err);
+    }
+  };
+
+  if (isAsync) {
+    setTimeout(executeSimulation, 0);
+    return res.json({ jobId, status: 'running' });
+  } else {
+    executeSimulation();
+    if (job.status === 'failed') {
+      return res.status(500).json({ error: job.error, jobId });
+    }
+    return res.json({
+      jobId,
+      status: 'completed',
+      result: job.result,
+      perfReport: job.perfReport
+    });
+  }
+});
+
+app.get("/api/matches/jobs/:jobId/status", (req, res) => {
+  const { jobId } = req.params;
+  const job = serverSimulationJobs.get(jobId);
+  if (!job) {
+    return res.status(404).json({ error: "Simulation job not found" });
+  }
+  res.json({
+    jobId: job.id,
+    status: job.status,
+    result: job.result,
+    perfReport: job.perfReport,
+    error: job.error
+  });
 });
 
 // 1. Text-to-Speech

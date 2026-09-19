@@ -15,6 +15,7 @@ import { generateNextSwissRound } from './swissLogic';
 import { generateGslGroups, generateTieredPlayoffBracket, generateTieredPlayoffFromStandings, getGslGroupStandings, updateGslMatch, advanceTieredPlayoffMatch } from './gslLogic';
 import TeamLogo from '../TeamLogo';
 import { concentrateOnTournament, preloadImage, isImagePreloaded } from '../../lib/tournamentPreloader';
+import { downloadElementAsImage } from '../../lib/exportImage';
 import Top20Modal from './Top20Modal';
 import FinalistsModal from './FinalistsModal';
 import MvpModal from './MvpModal';
@@ -1134,64 +1135,23 @@ export default function TournamentManager({ user }: { user: any }) {
       }
 
       const handleExport = async () => {
-          if (!stageRef.current) return;
+          if (!stageRef.current || !activeTournament) return;
           setIsExporting(true);
           try {
-              // Wait a bit for the UI to update and re-render plain text instead of selects
-              await new Promise(resolve => setTimeout(resolve, 300));
+              // Wait for UI to update, normalize zoom and reveal text representation
+              await new Promise(resolve => setTimeout(resolve, 350));
               const themeConfig = BG_THEMES[bgTheme as keyof typeof BG_THEMES] || BG_THEMES.cyber_grid;
               const defaultBgColor = themeConfig ? (themeConfig.className.replace('bg-[', '').replace(']', '') || '#050508') : '#050508';
-              const { toPng } = await import('html-to-image');
-              
-              const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-              const el = stageRef.current;
-              const origBg = el.style.background;
-              const origBgImage = el.style.backgroundImage;
-              const origBgColor = el.style.backgroundColor;
+              const safeName = (activeTournament.name || 'tournament')
+                .replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, '_')
+                .replace(/_+/g, '_');
+              const stageLabel = activeTournament.activeStage === 2 ? 'playoff' : 'stage';
+              const fileName = `${safeName}-${stageLabel}-bracket.png`;
 
-              if (bgImage) {
-                  el.style.backgroundImage = `url("${bgImage}")`;
-                  el.style.backgroundSize = 'cover';
-                  el.style.backgroundPosition = 'center';
-              } else if (themeConfig && themeConfig.style) {
-                  el.style.backgroundColor = defaultBgColor;
-                  if (themeConfig.style.backgroundImage) {
-                      el.style.backgroundImage = themeConfig.style.backgroundImage;
-                  }
-              }
-
-              let dataUrl: string;
-              try {
-                  dataUrl = await toPng(el, { 
-                      quality: 0.95, 
-                      pixelRatio: 2,
-                      backgroundColor: defaultBgColor,
-                      skipFonts: true,
-                      fontEmbedCSS: '',
-                      imagePlaceholder: transparentPlaceholder,
-                      cacheBust: true
-                  });
-              } catch (retryErr) {
-                  // Fallback without cacheBust or high pixelRatio in case of CORS/Event errors
-                  dataUrl = await toPng(el, { 
-                      quality: 0.9, 
-                      pixelRatio: 1.5,
-                      backgroundColor: defaultBgColor,
-                      skipFonts: true,
-                      fontEmbedCSS: '',
-                      imagePlaceholder: transparentPlaceholder
-                  });
-              } finally {
-                  el.style.background = origBg;
-                  el.style.backgroundImage = origBgImage;
-                  el.style.backgroundColor = origBgColor;
-              }
-
-              const link = document.createElement('a');
-              link.download = `${activeTournament.name}-bracket.png`;
-              link.href = dataUrl;
-              link.click();
+              await downloadElementAsImage(stageRef.current, fileName, {
+                  backgroundColor: defaultBgColor
+              });
           } catch (err: any) {
               console.error('Failed to export image', err?.message || err);
               alert('Ошибка при сохранении изображения: ' + (err?.message || 'Не удалось обработать некоторые изображения или шрифты'));
@@ -1625,7 +1585,7 @@ export default function TournamentManager({ user }: { user: any }) {
                   data-exporting={isExporting}
                   className="w-full relative p-8 rounded-2xl overflow-hidden min-h-[500px] border border-white/5 transition-all"
                   style={{
-                      zoom: `${activeTournament.settings.bracketScale || 100}%`
+                      zoom: isExporting ? '100%' : `${activeTournament.settings.bracketScale || 100}%`
                   }}
               >
                   {/* Background Layer (Custom Image or Theme) with Zero Delay & Smooth Transition */}

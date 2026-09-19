@@ -349,24 +349,35 @@ export class CombatSystem {
 
   static createSoundEvent(state: MatchState, nodeId: string, sourceId: string) {
      const sourceNode = MapSystem.getNode(nodeId);
-     const players = Object.values(state.players).filter(p => p.alive && p.id !== sourceId);
-     for (const p of players) {
-         const pNode = MapSystem.getNode(p.currentNodeId);
-         if (pNode && sourceNode) {
-             const dist = MapSystem.getDistance(pNode, sourceNode);
-             if (dist < 80) { 
-                 const sourcePlayer = state.players[sourceId];
-                 if (sourcePlayer && sourcePlayer.teamId !== p.teamId) {
-                     p.knownEnemies.set(sourceId, {
-                         enemyId: sourceId,
-                         position: { ...sourcePlayer.position },
-                         nodeId: sourceNode.id,
-                         timestamp: state.tick,
-                         confidence: Math.max(0.2, 1 - (dist / 80)) 
-                     });
-                 }
-             }
-         }
+     const sourcePlayer = state.players[sourceId];
+     if (!sourceNode || !sourcePlayer) return;
+
+     for (const id in state.players) {
+       const p = state.players[id];
+       if (!p || !p.alive || p.id === sourceId || p.teamId === sourcePlayer.teamId) continue;
+       const pNode = MapSystem.getNode(p.currentNodeId);
+       if (pNode) {
+           const dist = MapSystem.getDistance(pNode, sourceNode);
+           if (dist < 80) { 
+               const mem = p.knownEnemies.get(sourceId);
+               const conf = Math.max(0.2, 1 - (dist / 80));
+               if (mem) {
+                   mem.position.x = sourcePlayer.position.x;
+                   mem.position.y = sourcePlayer.position.y;
+                   mem.nodeId = sourceNode.id;
+                   mem.timestamp = state.tick;
+                   mem.confidence = Math.max(mem.confidence, conf);
+               } else {
+                   p.knownEnemies.set(sourceId, {
+                       enemyId: sourceId,
+                       position: { x: sourcePlayer.position.x, y: sourcePlayer.position.y },
+                       nodeId: sourceNode.id,
+                       timestamp: state.tick,
+                       confidence: conf
+                   });
+               }
+           }
+       }
      }
   }
   

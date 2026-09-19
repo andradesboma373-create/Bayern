@@ -186,17 +186,29 @@ export function onSnapshot(ref: any, callback: any) {
 export function writeBatch(db: any) {
   const operations: any[] = [];
   return {
-    set: (ref: any, data: any, options?: any) => { operations.push({ type: 'set', ref, data, options }); },
-    update: (ref: any, data: any) => { operations.push({ type: 'update', ref, data }); },
-    delete: (ref: any) => { operations.push({ type: 'delete', ref }); },
+    set: (ref: any, data: any, options?: any) => { operations.push({ type: 'set', docRef: ref, data, options }); },
+    update: (ref: any, data: any) => { operations.push({ type: 'update', docRef: ref, data }); },
+    delete: (ref: any) => { operations.push({ type: 'delete', docRef: ref }); },
     commit: async () => {
       if (operations.length === 0) return;
-      await Promise.allSettled(operations.map(op => {
-        if (op.type === 'set') return setDoc(op.ref, op.data, op.options);
-        if (op.type === 'update') return updateDoc(op.ref, op.data);
-        if (op.type === 'delete') return deleteDoc(op.ref);
-        return Promise.resolve();
-      }));
+      try {
+        const response = await fetch("/api/db/batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operations })
+        });
+        if (!response.ok) {
+          throw new Error(`Batch request failed with status ${response.status}`);
+        }
+      } catch (err) {
+        // Safe fallback in case endpoint fails or offline
+        await Promise.allSettled(operations.map(op => {
+          if (op.type === 'set') return setDoc(op.docRef, op.data, op.options);
+          if (op.type === 'update') return updateDoc(op.docRef, op.data);
+          if (op.type === 'delete') return deleteDoc(op.docRef);
+          return Promise.resolve();
+        }));
+      }
     }
   };
 }

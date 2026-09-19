@@ -16,28 +16,54 @@ export class PlayerAI {
   
   static updatePerception(state: MatchState, alivePlayers: Player[]) {
     // 1. Direct visual detection
+    // Track shared spots per team per tick to avoid redundant multi-broadcasts
+    const sharedSpotsTeamT = new Set<string>();
+    const sharedSpotsTeamCT = new Set<string>();
+
     for (const p1 of alivePlayers) {
       for (const p2 of alivePlayers) {
         if (p1.teamId !== p2.teamId) {
           if (MapSystem.hasLineOfSight(p1.currentNodeId, p2.currentNodeId)) {
-             p1.knownEnemies.set(p2.id, { 
-                 enemyId: p2.id,
-                 position: { ...p2.position }, 
-                 nodeId: p2.currentNodeId,
-                 timestamp: state.tick,
-                 confidence: 1.0
-             });
-
-             // Team radar & voice comms: share spotted enemy info with all alive teammates
-             for (const teammate of alivePlayers) {
-               if (teammate.teamId === p1.teamId && teammate.id !== p1.id) {
-                 teammate.knownEnemies.set(p2.id, {
-                   enemyId: p2.id,
-                   position: { ...p2.position },
-                   nodeId: p2.currentNodeId,
-                   timestamp: state.tick,
-                   confidence: 0.9
+             const existingMem = p1.knownEnemies.get(p2.id);
+             if (existingMem) {
+                 existingMem.position.x = p2.position.x;
+                 existingMem.position.y = p2.position.y;
+                 existingMem.nodeId = p2.currentNodeId;
+                 existingMem.timestamp = state.tick;
+                 existingMem.confidence = 1.0;
+             } else {
+                 p1.knownEnemies.set(p2.id, { 
+                     enemyId: p2.id,
+                     position: { x: p2.position.x, y: p2.position.y }, 
+                     nodeId: p2.currentNodeId,
+                     timestamp: state.tick,
+                     confidence: 1.0
                  });
+             }
+
+             // Team radar & voice comms: share spotted enemy info once per team per tick
+             const teamSharedSet = p1.side === 'T' ? sharedSpotsTeamT : sharedSpotsTeamCT;
+             if (!teamSharedSet.has(p2.id)) {
+               teamSharedSet.add(p2.id);
+               for (const teammate of alivePlayers) {
+                 if (teammate.teamId === p1.teamId && teammate.id !== p1.id) {
+                   const tMem = teammate.knownEnemies.get(p2.id);
+                   if (tMem) {
+                     tMem.position.x = p2.position.x;
+                     tMem.position.y = p2.position.y;
+                     tMem.nodeId = p2.currentNodeId;
+                     tMem.timestamp = state.tick;
+                     tMem.confidence = Math.max(tMem.confidence, 0.9);
+                   } else {
+                     teammate.knownEnemies.set(p2.id, {
+                       enemyId: p2.id,
+                       position: { x: p2.position.x, y: p2.position.y },
+                       nodeId: p2.currentNodeId,
+                       timestamp: state.tick,
+                       confidence: 0.9
+                     });
+                   }
+                 }
                }
              }
           }
@@ -474,6 +500,16 @@ export class PlayerAI {
   }
 
   static routeTo(p: Player, targetNodeId: string) {
+     if (p.currentNodeId === targetNodeId) {
+         p.state = 'HOLDING';
+         p.actionTimer = 0;
+         p.path = [];
+         p.targetNodeId = null;
+         return;
+     }
+     if (p.state === 'MOVING' && p.path && p.path.length > 0 && p.path[p.path.length - 1] === targetNodeId) {
+         return;
+     }
      const path = MapSystem.findPath(p.currentNodeId, targetNodeId);
      if (path.length > 1) {
          p.path = path.slice(1);

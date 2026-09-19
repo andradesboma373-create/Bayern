@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { X, Trophy, Download } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import { downloadElementAsImage } from '../../lib/exportImage';
 import TeamLogo from '../TeamLogo';
 import PlayerAvatar from '../PlayerAvatar';
 
@@ -19,34 +19,13 @@ export default function FinalistsModal({ user, tournamentId, onClose }: Props) {
     setIsExporting(true);
     try {
       await new Promise(r => setTimeout(r, 150));
-      const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-      let dataUrl: string;
-      try {
-        dataUrl = await toPng(modalRef.current, {
-          quality: 0.95,
-          pixelRatio: 2,
-          backgroundColor: '#1a1b26',
-          skipFonts: true,
-          fontEmbedCSS: '',
-          imagePlaceholder: transparentPlaceholder,
-          cacheBust: true
-        });
-      } catch (e) {
-        dataUrl = await toPng(modalRef.current, {
-          quality: 0.9,
-          pixelRatio: 1.5,
-          backgroundColor: '#1a1b26',
-          skipFonts: true,
-          fontEmbedCSS: '',
-          imagePlaceholder: transparentPlaceholder
-        });
-      }
-      const link = document.createElement('a');
-      link.download = `champions-${winnerInfo?.teamName || 'tournament'}.png`;
-      link.href = dataUrl;
-      link.click();
+      const filename = `champions-${(winnerInfo?.teamName || 'tournament').replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, '_')}.png`;
+      await downloadElementAsImage(modalRef.current, filename, {
+        backgroundColor: '#1a1b26'
+      });
     } catch (err) {
       console.error('Failed to export finalists image:', err);
+      alert('Ошибка при сохранении финалистов: ' + (err instanceof Error ? err.message : 'Ошибка рендеринга'));
     } finally {
       setIsExporting(false);
     }

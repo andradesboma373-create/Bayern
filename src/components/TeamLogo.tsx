@@ -48,7 +48,11 @@ export function TeamLogo({
     );
   }
 
-  const src = logoUrl || `/api/logo/${encodeURIComponent(cleanName)}?game=${game || 'cs2'}`;
+  let src = logoUrl || `/api/logo/${encodeURIComponent(cleanName)}?game=${game || 'cs2'}`;
+  if (logoUrl && (logoUrl.startsWith('http://') || logoUrl.startsWith('https://'))) {
+    // Route external URLs through server proxy with CORS headers so canvas export won't be tainted
+    src = `/api/proxy-image?url=${encodeURIComponent(logoUrl)}`;
+  }
 
   return (
     <div 
@@ -59,6 +63,7 @@ export function TeamLogo({
       <img
         src={src}
         alt={teamName}
+        crossOrigin="anonymous"
         referrerPolicy="no-referrer"
         className="max-w-full max-h-full object-contain drop-shadow-lg"
         onError={(e) => {

@@ -2,11 +2,12 @@ import { TeamAutocompleteInput } from './TeamAutocompleteInput';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs, updateDoc} from '../firebase';
+import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs, updateDoc, writeBatch } from '../firebase';
 import TeamLogo from './TeamLogo';
 import PlayerAvatar from './PlayerAvatar';
 
 import { simulateMatchSeries, MAP_POOL_CS2, MAP_POOL_S2 } from '../lib/simulation';
+import { simulationPerf } from '../lib/simulationPerformance';
 import VetoModal from "./VetoModal";
 import { saveMatchesToLocalStorage, safeLocalStorageSet } from '../lib/utils';
 import { updateBetaTournamentMatchResult, loadTournaments, saveTournament } from './setka_tourn/storage';
@@ -35,18 +36,18 @@ const FORMS = [
   { label: 'Устали', value: -5, color: 'text-red-500' }
 ];
 
-async function updatePlayerStats(db: any, userId: string, matchResult: any, isLocal: boolean = false) {
+async function updatePlayerStats(db: any, userId: string, matchResult: any, isLocal: boolean = false, batch?: any) {
   if (!userId || userId === 'anonymous') return;
   const allPlayers = [
-    ...matchResult.team1Stats.map((p: any) => ({ ...p, team: matchResult.team1Name || 'Team 1' })),
-    ...matchResult.team2Stats.map((p: any) => ({ ...p, team: matchResult.team2Name || 'Team 2' }))
+    ...(matchResult.team1Stats || []).map((p: any) => ({ ...p, team: matchResult.team1Name || 'Team 1' })),
+    ...(matchResult.team2Stats || []).map((p: any) => ({ ...p, team: matchResult.team2Name || 'Team 2' }))
   ];
 
   if (isLocal) {
     try {
       const localStats = JSON.parse(localStorage.getItem(`playerStats_${userId}`) || '{}');
-      await Promise.all(allPlayers.map(async (player) => {
-        if (!player.nickname) return;
+      for (const player of allPlayers) {
+        if (!player.nickname) continue;
         const key = `${player.team.toLowerCase().replace(/[^a-z0-9]/g, '')}_${player.nickname.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
         const d = localStats[key] || { matches: 0, kills: 0, deaths: 0, ratingSum: 0 };
         
@@ -66,7 +67,7 @@ async function updatePlayerStats(db: any, userId: string, matchResult: any, isLo
           rating: (newRatingSum / newMatches).toFixed(2),
           ratingSum: newRatingSum
         };
-      }));
+      }
       safeLocalStorageSet(`playerStats_${userId}`, localStats);
     } catch (err) {
       console.error('Error updating local player stats', err);
@@ -74,52 +75,60 @@ async function updatePlayerStats(db: any, userId: string, matchResult: any, isLo
     return;
   }
 
-  await Promise.all(allPlayers.map(async (player) => {
-    if (!player.nickname) return;
+  const validPlayers = allPlayers.filter(p => p.nickname);
+  const fetchedDocs = await Promise.all(validPlayers.map(async (player) => {
     const statId = `${userId}_${player.team.toLowerCase().replace(/[^a-z0-9]/g, '')}_${player.nickname.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
     const docRef = doc(db, 'playerStats', statId);
     try {
       const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        const d = snap.data();
-        let matchRating = parseFloat(player.hltvRating || player.rating);
-        if (isNaN(matchRating)) matchRating = 1.0;
-        
-        let oldMatches = d.matches || 0;
-        let oldKills = Number(d.kills) || 0;
-        let oldDeaths = Number(d.deaths) || 0;
-        let oldRating = parseFloat(d.rating);
-        if (isNaN(oldRating)) oldRating = 1.0;
-
-        await setDoc(docRef, {
-          userId,
-          nickname: player.nickname,
-          teamName: player.team,
-          matches: oldMatches + 1,
-          kills: oldKills + player.kills,
-          deaths: oldDeaths + player.deaths,
-          kd: ((oldKills + player.kills) / Math.max(1, oldDeaths + player.deaths)).toFixed(2),
-          rating: ((oldRating * oldMatches + matchRating) / (oldMatches + 1)).toFixed(2)
-        }, { merge: true });
-      } else {
-        let matchRating = parseFloat(player.hltvRating || player.rating);
-        if (isNaN(matchRating)) matchRating = 1.0;
-
-        await setDoc(docRef, {
-          userId,
-          nickname: player.nickname,
-          teamName: player.team,
-          matches: 1,
-          kills: player.kills,
-          deaths: player.deaths,
-          kd: player.kd || (player.deaths > 0 ? (player.kills / player.deaths).toFixed(2) : player.kills),
-          rating: matchRating.toFixed(2)
-        });
-      }
+      return { player, docRef, snap };
     } catch (e) {
-      console.error(e);
+      return { player, docRef, snap: null };
     }
   }));
+
+  for (const { player, docRef, snap } of fetchedDocs) {
+    let matchRating = parseFloat(player.hltvRating || player.rating);
+    if (isNaN(matchRating)) matchRating = 1.0;
+
+    let payload: any;
+    if (snap && snap.exists()) {
+      const d = snap.data();
+      const oldMatches = d.matches || 0;
+      const oldKills = Number(d.kills) || 0;
+      const oldDeaths = Number(d.deaths) || 0;
+      let oldRating = parseFloat(d.rating);
+      if (isNaN(oldRating)) oldRating = 1.0;
+
+      payload = {
+        userId,
+        nickname: player.nickname,
+        teamName: player.team,
+        matches: oldMatches + 1,
+        kills: oldKills + player.kills,
+        deaths: oldDeaths + player.deaths,
+        kd: ((oldKills + player.kills) / Math.max(1, oldDeaths + player.deaths)).toFixed(2),
+        rating: ((oldRating * oldMatches + matchRating) / (oldMatches + 1)).toFixed(2)
+      };
+    } else {
+      payload = {
+        userId,
+        nickname: player.nickname,
+        teamName: player.team,
+        matches: 1,
+        kills: player.kills,
+        deaths: player.deaths,
+        kd: player.kd || (player.deaths > 0 ? (player.kills / player.deaths).toFixed(2) : player.kills),
+        rating: matchRating.toFixed(2)
+      };
+    }
+
+    if (batch) {
+      batch.set(docRef, payload, { merge: true });
+    } else {
+      await setDoc(docRef, payload, { merge: true });
+    }
+  }
 
   // Contract mechanic disabled per user request
   try {
@@ -520,7 +529,11 @@ export default function Simulator({ user }: { user: any }) {
   const handleSimulate = async () => {
     setIsSimulating(true);
     setSelectedResultTab(format === 'BO1' ? 0 : 'overall');
+    simulationPerf.reset();
+    const tTotalStart = performance.now();
+
     try {
+      const tPrepStart = performance.now();
       const isCS2 = game === 'cs2';
       const bo = parseInt(format.replace('BO', ''));
       
@@ -535,15 +548,23 @@ export default function Simulator({ user }: { user: any }) {
 
       const selectedTourneyObj = tournaments.find(t => t.id === selectedTournament);
       const tourneyName = selectedTourneyObj ? selectedTourneyObj.name : 'Test Tournament';
+      simulationPerf.recordPrepareMatch(performance.now() - tPrepStart);
 
-      await new Promise(r => setTimeout(r, 50));
+      // Simulation engine execution (100% in-memory)
+      const tSimStart = performance.now();
       const simResult = simulateMatchSeries(
         team1, team2, team1Synergy, team2Synergy, 'default', 'default', pickedMaps, isCS2 ? 'MR12' : 'MR15', isCS2, tourneyName,
         team1Form, team2Form, team1MapExp, team2MapExp
       );
+      const simDuration = performance.now() - tSimStart;
+      simulationPerf.recordSimulationEngine(simDuration);
       
+      const totalRounds = (simResult.maps || []).reduce((acc: number, m: any) => acc + (m.rounds?.length || (m.team1Score + m.team2Score) || 0), 0);
+      simulationPerf.addRounds(totalRounds);
+
+      const newMatchId = 'match_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
       const newMatch: any = {
-        id: Date.now().toString(),
+        id: newMatchId,
         date: new Date().toISOString(),
         gameMode: simResult.gameMode,
         tournamentName: simResult.tournamentName,
@@ -571,6 +592,7 @@ export default function Simulator({ user }: { user: any }) {
       const isLocal = !user || user.isLocalDemo;
       const matchToSave = { ...newMatch, maps: newMatch.maps.map((m: any) => { const { roundLogs, ...rest } = m; return rest; }) };
 
+      const tSaveStart = performance.now();
       if (user) {
         if (isLocal) {
           const localMatches = JSON.parse(localStorage.getItem(`matches_${user.uid}`) || '[]');
@@ -603,12 +625,16 @@ export default function Simulator({ user }: { user: any }) {
           }
         } else {
           try {
-            const docRef = await addDoc(collection(db, 'matches'), matchToSave);
-            newMatch.id = docRef.id;
-            await updatePlayerStats(db, user.uid, matchToSave, false);
+            // Atomic Batch Write to Firebase / DB (Requirement 6, 9)
+            const batch = writeBatch(db);
+            const matchDocRef = doc(db, 'matches', newMatchId);
+            batch.set(matchDocRef, matchToSave);
+
+            await updatePlayerStats(db, user.uid, matchToSave, false, batch);
+            
             try {
               const { updateMapStats } = await import('../lib/mapStats');
-              await updateMapStats(user.uid, matchToSave, false);
+              await updateMapStats(user.uid, matchToSave, false, batch);
             } catch (e) {}
             
             if (selectedTournament) {
@@ -624,11 +650,15 @@ export default function Simulator({ user }: { user: any }) {
                  const tDoc = await getDoc(doc(db, 'tournaments', selectedTournament));
                  if (tDoc.exists()) {
                      const tData = tDoc.data();
-                     const newMatchIds = [...(tData.matchIds || []), docRef.id];
-                     await setDoc(doc(db, 'tournaments', selectedTournament), { matchIds: newMatchIds }, { merge: true });
+                     const newMatchIds = [...(tData.matchIds || []), newMatchId];
+                     batch.set(doc(db, 'tournaments', selectedTournament), { matchIds: newMatchIds }, { merge: true });
                  }
                } catch(e) { console.error('Error attaching to tournament', e); }
             }
+
+            // Single atomic commit for all match data
+            await batch.commit();
+            simulationPerf.addFirebaseWrites(1);
           } catch (e) {
             console.warn("Saving simulated match locally as fallback", e);
             const localMatches = JSON.parse(localStorage.getItem(`matches_${user.uid}`) || '[]');
@@ -638,10 +668,16 @@ export default function Simulator({ user }: { user: any }) {
             try {
               const { updateMapStats } = await import('../lib/mapStats');
               await updateMapStats(user.uid, matchToSave, true);
-            } catch (e) {}
+            } catch (err) {}
           }
         }
       }
+
+      simulationPerf.recordSaveResult(performance.now() - tSaveStart);
+      simulationPerf.recordTotalExecution(performance.now() - tTotalStart);
+
+      // Print comprehensive diagnostic report (Requirement 1, 13)
+      simulationPerf.printReport();
 
       setResult(newMatch);
       if (isSequential && newMatch.bo !== 1) {

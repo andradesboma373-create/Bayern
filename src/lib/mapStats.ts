@@ -2,7 +2,7 @@ import { db } from '../firebase';
 import { collection, doc, setDoc, getDoc } from '../firebase';
 import { safeLocalStorageSet } from './utils';
 
-export async function updateMapStats(userId: string, matchResult: any, isLocal: boolean = false) {
+export async function updateMapStats(userId: string, matchResult: any, isLocal: boolean = false, batch?: any) {
   if (!userId || userId === 'anonymous') return;
   const mapsPlayed = matchResult.maps || [];
   if (mapsPlayed.length === 0) return;
@@ -59,9 +59,22 @@ export async function updateMapStats(userId: string, matchResult: any, isLocal: 
   // Sync to Firestore if not local demo
   if (!isLocal) {
     try {
-      for (const stat of updatedStats) {
-        const docId = `${userId}_${stat.id}`;
-        await setDoc(doc(db, 'mapStats', docId), stat, { merge: true });
+      const changedIds = new Set();
+      for (const m of mapsPlayed) {
+          if (m.mapName) {
+              changedIds.add(`${team1Name.toLowerCase().trim()}_${m.mapName.toLowerCase().trim()}`);
+              changedIds.add(`${team2Name.toLowerCase().trim()}_${m.mapName.toLowerCase().trim()}`);
+          }
+      }
+      
+      const toSave = updatedStats.filter(stat => changedIds.has(stat.id));
+      if (batch) {
+        toSave.forEach(stat => {
+          batch.set(doc(db, 'mapStats', `${userId}_${stat.id}`), stat, { merge: true });
+        });
+      } else {
+        const promises = toSave.map(stat => setDoc(doc(db, 'mapStats', `${userId}_${stat.id}`), stat, { merge: true }));
+        await Promise.all(promises);
       }
     } catch (e) {
       console.warn("Failed to save mapStats to Firestore, kept locally:", e);
@@ -69,7 +82,9 @@ export async function updateMapStats(userId: string, matchResult: any, isLocal: 
   }
 
   // Trigger cache sync
-  window.dispatchEvent(new Event('db-user-updated'));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('db-user-updated'));
+  }
 }
 
 export function migrateMatchesToMapStats(userId: string, historyMatches: any[]) {

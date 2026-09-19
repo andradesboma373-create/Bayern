@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { X, Award, Medal, Trophy, Download, Sparkles, Check, ChevronDown } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import { downloadElementAsImage } from '../../lib/exportImage';
 import TeamLogo from '../TeamLogo';
 import PlayerAvatar from '../PlayerAvatar';
 import { loadTournaments, saveTournament } from './storage';
@@ -154,34 +154,13 @@ export default function MvpModal({ user, tournamentId, onClose }: Props) {
     setIsEditMode(false);
     try {
       await new Promise(r => requestAnimationFrame(() => setTimeout(r, 250)));
-      const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-      let dataUrl: string;
-      try {
-        dataUrl = await toPng(modalRef.current, {
-          quality: 0.95,
-          pixelRatio: 2,
-          backgroundColor: '#0d0e15',
-          skipFonts: true,
-          fontEmbedCSS: '',
-          imagePlaceholder: transparentPlaceholder,
-          cacheBust: true
-        });
-      } catch (e) {
-        dataUrl = await toPng(modalRef.current, {
-          quality: 0.9,
-          pixelRatio: 1.5,
-          backgroundColor: '#0d0e15',
-          skipFonts: true,
-          fontEmbedCSS: '',
-          imagePlaceholder: transparentPlaceholder
-        });
-      }
-      const link = document.createElement('a');
-      link.download = `awards-${tourney?.name || 'tournament'}.png`;
-      link.href = dataUrl;
-      link.click();
+      const filename = `awards-${(tourney?.name || 'tournament').replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, '_')}.png`;
+      await downloadElementAsImage(modalRef.current, filename, {
+        backgroundColor: '#0d0e15'
+      });
     } catch (err) {
       console.error('Failed to export Awards image:', err);
+      alert('Ошибка при сохранении наград: ' + (err instanceof Error ? err.message : 'Ошибка рендеринга'));
     } finally {
       setIsExporting(false);
     }

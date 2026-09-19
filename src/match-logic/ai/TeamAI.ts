@@ -64,8 +64,12 @@ export class TeamAI {
          team.strategy = 'RECOVER_BOMB';
       }
     } else {
-      if (state.bomb.state === 'PLANTED' || state.bomb.state === 'PLANTING') {
-        const tCount = Object.values(state.players).filter(p => p.teamId !== team.id && p.alive).length;
+      if ((state.bomb.state === 'PLANTED' || state.bomb.state === 'PLANTING') && team.strategy !== 'SAVE' && team.strategy !== 'RETAKE') {
+        let tCount = 0;
+        for (const id in state.players) {
+          const p = state.players[id];
+          if (p && p.teamId !== team.id && p.alive) tCount++;
+        }
         const ctCount = alivePlayers.length;
         
         if (ctCount === 0) return;
@@ -78,12 +82,10 @@ export class TeamAI {
         if (team.tactic === 'ECO') saveChance -= 0.5; 
         else if (team.tactic === 'FULL_BUY') saveChance += 0.2; 
         
-        if (team.strategy !== 'SAVE' && team.strategy !== 'RETAKE') {
-            if (CombatSystem.random() < saveChance) {
-                team.strategy = 'SAVE';
-            } else {
-                team.strategy = 'RETAKE';
-            }
+        if (CombatSystem.random() < saveChance) {
+            team.strategy = 'SAVE';
+        } else {
+            team.strategy = 'RETAKE';
         }
       }
     }

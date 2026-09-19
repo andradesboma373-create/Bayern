@@ -187,13 +187,19 @@ export class RoundEngine {
   }
   
   static checkRoundEnd(state: MatchState) {
-    const tTeams = Object.values(state.teams).filter(t => t && t.side === 'T');
-    const ctTeams = Object.values(state.teams).filter(t => t && t.side === 'CT');
-    const tTeam = tTeams[0];
-    const ctTeam = ctTeams[0];
+    const tTeam = state.teams['t1']?.side === 'T' ? state.teams['t1'] : state.teams['t2'];
+    const ctTeam = state.teams['t1']?.side === 'CT' ? state.teams['t1'] : state.teams['t2'];
+    if (!tTeam || !ctTeam) return;
     
-    const tAlive = Object.values(state.players).filter(p => p && tTeam && p.teamId === tTeam.id && p.alive).length;
-    const ctAlive = Object.values(state.players).filter(p => p && ctTeam && p.teamId === ctTeam.id && p.alive).length;
+    let tAlive = 0;
+    let ctAlive = 0;
+    for (const id in state.players) {
+      const p = state.players[id];
+      if (p && p.alive) {
+        if (p.teamId === tTeam.id) tAlive++;
+        else if (p.teamId === ctTeam.id) ctAlive++;
+      }
+    }
     
     if (state.bomb.state === 'EXPLODED') {
         this.endRound(state, 'EXPLOSION');
@@ -216,11 +222,18 @@ export class RoundEngine {
   static endRound(state: MatchState, reason: 'ELIMINATION' | 'DEFUSE' | 'EXPLOSION' | 'TIME') {
     state.phase = 'ROUND_END';
     
-    const tTeam = Object.values(state.teams).find(t => t && t.side === 'T');
-    const ctTeam = Object.values(state.teams).find(t => t && t.side === 'CT');
+    const tTeam = state.teams['t1']?.side === 'T' ? state.teams['t1'] : state.teams['t2'];
+    const ctTeam = state.teams['t1']?.side === 'CT' ? state.teams['t1'] : state.teams['t2'];
     
-    const tAlive = Object.values(state.players).filter(p => p && tTeam && p.teamId === tTeam.id && p.alive).length;
-    const ctAlive = Object.values(state.players).filter(p => p && ctTeam && p.teamId === ctTeam.id && p.alive).length;
+    let tAlive = 0;
+    let ctAlive = 0;
+    for (const id in state.players) {
+      const p = state.players[id];
+      if (p && p.alive) {
+        if (tTeam && p.teamId === tTeam.id) tAlive++;
+        else if (ctTeam && p.teamId === ctTeam.id) ctAlive++;
+      }
+    }
     
     let winnerId = '';
     if (reason === 'ELIMINATION') {

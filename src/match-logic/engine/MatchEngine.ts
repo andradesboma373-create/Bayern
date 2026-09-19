@@ -343,8 +343,8 @@ export class MatchEngine {
       winner: t1.score > t2.score ? 1 : 2,
       team1Stats: t1Stats,
       team2Stats: t2Stats,
-      events: state.events,
-      roundLogs: (state as any).roundLogs || []
+      events: [],
+      roundLogs: []
     };
   }
 }

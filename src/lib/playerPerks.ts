@@ -153,15 +153,21 @@ export const CUSTOM_PLAYER_PERKS: PlayerPerk[] = [
 // Key for local storage persistence
 const LOCAL_PERKS_KEY = 'custom_player_perks_v1';
 
+let cachedPerks: PlayerPerk[] | null = null;
+let cachedPerksMap: Map<string, PlayerPerk> | null = null;
+
 export function getAllPlayerPerks(): PlayerPerk[] {
+  if (cachedPerks) return cachedPerks;
   let dynamic: PlayerPerk[] = [];
   try {
-    const raw = localStorage.getItem(LOCAL_PERKS_KEY);
-    if (raw) {
-      dynamic = JSON.parse(raw);
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(LOCAL_PERKS_KEY);
+      if (raw) {
+        dynamic = JSON.parse(raw);
+      }
     }
   } catch (e) {
-    console.error("Failed to parse custom player perks from localStorage:", e);
+    // Graceful fallback for SSR/node
   }
 
   // Merge dynamic over base perks
@@ -169,10 +175,14 @@ export function getAllPlayerPerks(): PlayerPerk[] {
   CUSTOM_PLAYER_PERKS.forEach(p => mergedMap.set(p.nickname.toLowerCase().trim(), p));
   dynamic.forEach(p => mergedMap.set(p.nickname.toLowerCase().trim(), p));
 
-  return Array.from(mergedMap.values());
+  cachedPerks = Array.from(mergedMap.values());
+  cachedPerksMap = mergedMap;
+  return cachedPerks;
 }
 
 export function savePlayerPerk(perk: PlayerPerk): PlayerPerk[] {
+  cachedPerks = null;
+  cachedPerksMap = null;
   const current = getAllPlayerPerks();
   const index = current.findIndex(p => p.nickname.toLowerCase().trim() === perk.nickname.toLowerCase().trim());
   
@@ -183,7 +193,9 @@ export function savePlayerPerk(perk: PlayerPerk): PlayerPerk[] {
   }
 
   try {
-    localStorage.setItem(LOCAL_PERKS_KEY, JSON.stringify(current));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(LOCAL_PERKS_KEY, JSON.stringify(current));
+    }
   } catch (e) {
     console.error("Failed to save player perks to localStorage:", e);
   }
@@ -191,12 +203,16 @@ export function savePlayerPerk(perk: PlayerPerk): PlayerPerk[] {
 }
 
 export function deletePlayerPerk(nickname: string): PlayerPerk[] {
+  cachedPerks = null;
+  cachedPerksMap = null;
   const current = getAllPlayerPerks().filter(
     p => p.nickname.toLowerCase().trim() !== nickname.toLowerCase().trim()
   );
 
   try {
-    localStorage.setItem(LOCAL_PERKS_KEY, JSON.stringify(current));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(LOCAL_PERKS_KEY, JSON.stringify(current));
+    }
   } catch (e) {
     console.error("Failed to delete player perk from localStorage:", e);
   }
@@ -209,6 +225,8 @@ export function deletePlayerPerk(nickname: string): PlayerPerk[] {
 export function getPlayerPerks(nickname: string | undefined): PlayerPerk | null {
   if (!nickname) return null;
   const cleanNickname = nickname.trim().toLowerCase();
-  const all = getAllPlayerPerks();
-  return all.find(p => p.nickname.trim().toLowerCase() === cleanNickname) || null;
+  if (!cachedPerksMap) {
+    getAllPlayerPerks();
+  }
+  return cachedPerksMap?.get(cleanNickname) || null;
 }

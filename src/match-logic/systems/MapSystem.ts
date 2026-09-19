@@ -104,6 +104,7 @@ export class MapSystem {
           current = cameFrom.get(current)!;
           path.unshift(current);
         }
+        this.pathCache.set(cacheKey, path);
         return path; // includes startId at 0
       }
       
@@ -124,6 +125,7 @@ export class MapSystem {
       }
     }
     
+    this.pathCache.set(cacheKey, []);
     return []; // No path
   }
 }

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { X, Trophy, Download, Award, Trash2, Calendar, Crosshair } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import { downloadElementAsImage } from '../../lib/exportImage';
 import TeamLogo from '../TeamLogo';
 import PlayerAvatar from '../PlayerAvatar';
 import FinalistsModal from './FinalistsModal';
@@ -83,28 +83,10 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
 
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-      let dataUrl: string;
-      try {
-        dataUrl = await toPng(el, {
-          quality: 0.95,
-          pixelRatio: 2,
-          backgroundColor: '#1a1b26',
-          skipFonts: true,
-          fontEmbedCSS: '',
-          imagePlaceholder: transparentPlaceholder,
-          cacheBust: true
-        });
-      } catch (e) {
-        dataUrl = await toPng(el, {
-          quality: 0.9,
-          pixelRatio: 1.5,
-          backgroundColor: '#1a1b26',
-          skipFonts: true,
-          fontEmbedCSS: '',
-          imagePlaceholder: transparentPlaceholder
-        });
-      }
+      const filename = `top-20-${(tourney?.name || 'tournament').replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, '_')}.png`;
+      await downloadElementAsImage(el, filename, {
+        backgroundColor: '#1a1b26'
+      });
 
       // Restore
       el.style.maxHeight = originalMaxHeight;
@@ -112,13 +94,9 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
       if (tableContainer) {
         tableContainer.style.overflow = originalScrollOverflow;
       }
-
-      const link = document.createElement('a');
-      link.download = `top-20-${tourney?.name || 'tournament'}.png`;
-      link.href = dataUrl;
-      link.click();
     } catch (err) {
       console.error('Failed to export Top 20 image:', err);
+      alert('Ошибка сохранения Top-20: ' + (err instanceof Error ? err.message : 'Ошибка рендеринга'));
     } finally {
       setIsDownloading(false);
     }
