@@ -54,17 +54,31 @@ export default function ChannelLogin({ onLoginSuccess }: ChannelLoginProps) {
         console.warn('Backend login endpoint unavailable, trying fallback', err);
       }
 
-      // 2. Fallback на встроенные каналы
+      // 2. Fallback на локально сохраненные комнаты и встроенные каналы
       if (!targetChannel) {
         const hardcodedList = [
           { username: 'bamep', password: 'bamepys06', channelId: 'channel_bamep_cs2', channelName: 'bamep cs2', role: 'superadmin' },
           { username: 'simu', password: 'si0607', channelId: 'channel_simu', channelName: 'simu', role: 'user' },
-          { username: 'zeixst', password: 'ze0707', channelId: 'channel_bamep_cs2', channelName: 'bamep cs2', role: 'admin' }
+          { username: 'zeixst', password: 'ze0707', channelId: 'channel_bamep_cs2', channelName: 'bamep cs2', role: 'admin' },
+          { username: 'airy', password: '212121', channelId: 'channel_airy', channelName: 'бомбардиро крокодило', role: 'user' }
         ];
 
-        const found = hardcodedList.find(c => c.username === cleanUsername && c.password === cleanPassword);
+        let localSavedRooms: any[] = [];
+        try {
+          const raw = localStorage.getItem('persistent_admin_rooms');
+          if (raw) localSavedRooms = JSON.parse(raw);
+        } catch (e) {}
+
+        const allAvailable = [...hardcodedList, ...localSavedRooms];
+        const found = allAvailable.find(c => c && c.username?.toLowerCase() === cleanUsername && c.password === cleanPassword);
         if (found) {
           targetChannel = found;
+          // Trigger silent auto-restoration sync on backend
+          fetch('/api/admin/rooms/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rooms: [found] })
+          }).catch(() => {});
         }
       }
 

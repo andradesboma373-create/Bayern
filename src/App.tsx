@@ -120,7 +120,8 @@ function Sidebar({ isOpen, onClose, user }: { isOpen: boolean, onClose: () => vo
 const CHANNELS = [
   { username: 'simu', password: 'si0607', channelId: 'channel_simu', channelName: 'simu' },
   { username: 'bamep', password: 'bamepys06', channelId: 'channel_bamep_cs2', channelName: 'bamep cs2' },
-  { username: 'zeixst', password: 'ze0707', channelId: 'channel_bamep_cs2', channelName: 'bamep cs2' }
+  { username: 'zeixst', password: 'ze0707', channelId: 'channel_bamep_cs2', channelName: 'bamep cs2' },
+  { username: 'airy', password: '212121', channelId: 'channel_airy', channelName: 'бомбардиро крокодило' }
 ];
 
 function TopBar({ user, onCustomLogin, onLogout, onToggleSidebar }: { user: any, onCustomLogin: () => void, onLogout: () => void, onToggleSidebar: () => void }) {
@@ -520,7 +521,34 @@ export default function App() {
 
   const handleCustomLogin = async (e: any) => {
     e.preventDefault();
-    const found = CHANNELS.find(c => c.username === loginForm.username && c.password === loginForm.password);
+    const cleanUser = loginForm.username.trim().toLowerCase();
+    const cleanPass = loginForm.password.trim();
+
+    let localRooms: any[] = [];
+    try {
+      const raw = localStorage.getItem('persistent_admin_rooms');
+      if (raw) localRooms = JSON.parse(raw);
+    } catch (e) {}
+
+    const allChannels = [...CHANNELS, ...localRooms];
+    let found = allChannels.find(c => c && c.username?.toLowerCase() === cleanUser && c.password === cleanPass);
+
+    if (!found) {
+      try {
+        const resp = await fetch('/api/auth/channel-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: cleanUser, password: cleanPass })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.success && data.room) {
+            found = data.room;
+          }
+        }
+      } catch (e) {}
+    }
+
     if (found) {
       try {
         setLoginError('');

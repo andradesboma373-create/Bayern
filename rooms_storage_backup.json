@@ -1,0 +1,50 @@
+[
+  {
+    "id": "room_bamep",
+    "username": "bamep",
+    "password": "bamepys06",
+    "channelId": "channel_bamep_cs2",
+    "channelName": "bamep cs2 (Мастер Админ)",
+    "role": "superadmin",
+    "createdAt": "2026-09-01T00:00:00.000Z",
+    "isLocked": false,
+    "totalRequestsToday": 5,
+    "lastActive": "2026-09-19T14:48:00.243Z"
+  },
+  {
+    "id": "room_zeixst",
+    "username": "zeixst",
+    "password": "ze0707",
+    "channelId": "channel_bamep_cs2",
+    "channelName": "bamep cs2 (Модератор)",
+    "role": "admin",
+    "createdAt": "2026-09-01T00:00:00.000Z",
+    "isLocked": false,
+    "totalRequestsToday": 0,
+    "lastActive": "2026-09-19T13:53:05.351Z"
+  },
+  {
+    "id": "room_simu",
+    "username": "simu",
+    "password": "si0607",
+    "channelId": "channel_simu",
+    "channelName": "simu",
+    "role": "user",
+    "createdAt": "2026-09-02T00:00:00.000Z",
+    "isLocked": false,
+    "totalRequestsToday": 0,
+    "lastActive": "2026-09-19T13:53:05.351Z"
+  },
+  {
+    "id": "room_airy",
+    "username": "airy",
+    "password": "212121",
+    "channelId": "channel_airy",
+    "channelName": "бомбардиро крокодило",
+    "role": "user",
+    "createdAt": "2026-09-19T00:00:00.000Z",
+    "isLocked": false,
+    "totalRequestsToday": 0,
+    "lastActive": "2026-09-19T14:54:17.632Z"
+  }
+]

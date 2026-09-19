@@ -16,7 +16,9 @@ import {
   resetRoomQuota, 
   getRoomAuditLogs, 
   getQuotaStats, 
-  trackRoomRequest 
+  trackRoomRequest,
+  syncRooms,
+  deleteRoom
 } from "./server/roomsManager";
 
 // =========================================================================
@@ -4156,7 +4158,7 @@ app.post("/api/veto/start", async (req, res) => {
 // ==========================================
 
 // Authenticate Room (Secure login, hides room list from frontend bundle)
-app.post("/api/auth/login", (req, res) => {
+app.post(["/api/auth/login", "/api/auth/channel-login"], (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -4203,6 +4205,32 @@ app.post("/api/admin/rooms/create", (req, res) => {
     }
     const { password: _, ...safeRoom } = result.room;
     res.json({ success: true, room: safeRoom });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sync Rooms with Client persistent storage (prevents room disappearance across restarts)
+app.post("/api/admin/rooms/sync", (req, res) => {
+  try {
+    const { rooms: incomingRooms } = req.body;
+    const updatedRooms = syncRooms(incomingRooms);
+    const safeRooms = updatedRooms.map(({ password: _, ...r }) => r);
+    res.json({ success: true, rooms: safeRooms });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete Room (Admin bamep only, requires manual confirmation)
+app.post("/api/admin/rooms/delete", (req, res) => {
+  try {
+    const { roomId } = req.body;
+    const result = deleteRoom(roomId);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

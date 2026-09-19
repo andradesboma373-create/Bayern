@@ -15,7 +15,8 @@ import {
   Copy,
   Check,
   Clock,
-  Search
+  Search,
+  Trash2
 } from 'lucide-react';
 
 interface RoomData {
@@ -73,6 +74,7 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
   const [newChannelName, setNewChannelName] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccessData, setCreateSuccessData] = useState<any>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Audit Log modal
   const [selectedRoomForLog, setSelectedRoomForLog] = useState<RoomData | null>(null);
@@ -97,6 +99,26 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
     try {
       setLoading(true);
       setError(null);
+
+      // Check if we have persistent rooms locally to restore if server was restarted
+      let localRooms: any[] = [];
+      try {
+        const raw = localStorage.getItem('persistent_admin_rooms');
+        if (raw) localRooms = JSON.parse(raw);
+      } catch (e) {}
+
+      if (localRooms.length > 0) {
+        try {
+          await fetch('/api/admin/rooms/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rooms: localRooms })
+          });
+        } catch (syncErr) {
+          console.warn("Could not sync local rooms to server", syncErr);
+        }
+      }
+
       const [statsRes, roomsRes] = await Promise.all([
         fetch('/api/admin/quota-stats'),
         fetch('/api/admin/rooms')
@@ -115,7 +137,23 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
       const roomsData = await roomsRes.json();
 
       setStats(statsData);
-      setRooms(roomsData.rooms || []);
+      const serverRooms: RoomData[] = roomsData.rooms || [];
+      setRooms(serverRooms);
+
+      // Persist to local storage to survive any server restart or page reload
+      try {
+        const map = new Map<string, any>();
+        for (const lr of localRooms) {
+          if (lr && lr.username) map.set(lr.username.toLowerCase(), lr);
+        }
+        for (const sr of serverRooms) {
+          if (sr && sr.username) {
+            const existing = map.get(sr.username.toLowerCase()) || {};
+            map.set(sr.username.toLowerCase(), { ...existing, ...sr });
+          }
+        }
+        localStorage.setItem('persistent_admin_rooms', JSON.stringify(Array.from(map.values())));
+      } catch (e) {}
     } catch (e: any) {
       setError(e.message || 'Не удалось получить данные');
     } finally {
@@ -155,12 +193,20 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
       setTimeout(() => setActionFeedback(null), 4000);
       fetchData();
     } catch (e: any) {
-      alert(e.message);
+      setActionFeedback(e.message || 'Ошибка изменения статуса');
+      setTimeout(() => setActionFeedback(null), 4000);
     }
   };
 
   const handleResetQuota = async (room: RoomData) => {
-    if (!confirm(`Сбросить счетчик активности и разблокировать комнату "${room.username}"?`)) return;
+    let confirmed = true;
+    try {
+      confirmed = window.confirm(`Сбросить счетчик активности и разблокировать комнату "${room.username}"?`);
+    } catch (e) {
+      confirmed = true;
+    }
+    if (!confirmed) return;
+
     try {
       const res = await fetch('/api/admin/rooms/reset', {
         method: 'POST',
@@ -174,7 +220,8 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
       setTimeout(() => setActionFeedback(null), 4000);
       fetchData();
     } catch (e: any) {
-      alert(e.message);
+      setActionFeedback(e.message || 'Ошибка сброса');
+      setTimeout(() => setActionFeedback(null), 4000);
     }
   };
 
@@ -194,36 +241,106 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUsername || !newPassword) return;
+    setCreateError(null);
+
+    const cleanU = newUsername.trim().toLowerCase();
+    const cleanP = newPassword.trim();
+    const cleanC = (newChannelName.trim() || cleanU);
+
+    if (!cleanU || cleanU.length < 3) {
+      setCreateError("Логин должен быть не менее 3 символов");
+      return;
+    }
+    if (!cleanP || cleanP.length < 4) {
+      setCreateError("Пароль должен быть не менее 4 символов");
+      return;
+    }
 
     try {
       setCreateLoading(true);
+
       const res = await fetch('/api/admin/rooms/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: newUsername.trim().toLowerCase(),
-          password: newPassword.trim(),
-          channelName: newChannelName.trim() || newUsername.trim()
+          username: cleanU,
+          password: cleanP,
+          channelName: cleanC
         })
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Не удалось создать комнату');
 
+      // Persist newly created room immediately in browser storage
+      try {
+        const stored = JSON.parse(localStorage.getItem('persistent_admin_rooms') || '[]');
+        const updated = [...stored.filter((r: any) => r.username.toLowerCase() !== cleanU), {
+          id: data.room?.id || `room_${Date.now()}`,
+          username: cleanU,
+          password: cleanP,
+          channelId: data.room?.channelId || `channel_${cleanU}`,
+          channelName: cleanC,
+          role: 'user',
+          createdAt: new Date().toISOString()
+        }];
+        localStorage.setItem('persistent_admin_rooms', JSON.stringify(updated));
+      } catch (storeErr) {
+        console.warn("Could not save to localStorage", storeErr);
+      }
+
       setCreateSuccessData({
-        username: newUsername.trim().toLowerCase(),
-        password: newPassword.trim(),
-        channelName: newChannelName.trim() || newUsername.trim()
+        username: cleanU,
+        password: cleanP,
+        channelName: cleanC
       });
       setNewUsername('');
       setNewPassword('');
       setNewChannelName('');
+      setCreateError(null);
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      setCreateError(err.message || 'Ошибка при создании комнаты');
     } finally {
       setCreateLoading(false);
+    }
+  };
+
+  const handleDeleteRoom = async (room: RoomData) => {
+    if (room.username === 'bamep') {
+      setActionFeedback("Нельзя удалить мастер-комнату bamep");
+      setTimeout(() => setActionFeedback(null), 4000);
+      return;
+    }
+    let confirmed = true;
+    try {
+      confirmed = window.confirm(`Вы действительно хотите удалить комнату "${room.channelName}" (@${room.username})?`);
+    } catch (e) {
+      confirmed = true;
+    }
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch('/api/admin/rooms/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: room.id })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка при удалении комнаты');
+
+      try {
+        const existing = JSON.parse(localStorage.getItem('persistent_admin_rooms') || '[]');
+        const filtered = existing.filter((r: any) => r.id !== room.id && r.username !== room.username);
+        localStorage.setItem('persistent_admin_rooms', JSON.stringify(filtered));
+      } catch (e) {}
+
+      setActionFeedback(`Комната ${room.channelName} успешно удалена.`);
+      setTimeout(() => setActionFeedback(null), 4000);
+      fetchData();
+    } catch (e: any) {
+      setActionFeedback(e.message || 'Ошибка удаления');
+      setTimeout(() => setActionFeedback(null), 4000);
     }
   };
 
@@ -520,17 +637,27 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
 
                         {/* Lock / Unlock Toggle */}
                         {!isMaster && (
-                          <button
-                            onClick={() => handleToggleLock(room)}
-                            className={`p-2 rounded-lg transition-colors cursor-pointer ${
-                              room.isLocked 
-                                ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400' 
-                                : 'bg-red-500/10 hover:bg-red-500/20 text-red-400'
-                            }`}
-                            title={room.isLocked ? 'Разблокировать (вернуть доступ)' : 'Заблокировать на проверку'}
-                          >
-                            {room.isLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleToggleLock(room)}
+                              className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                                room.isLocked 
+                                  ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400' 
+                                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400'
+                              }`}
+                              title={room.isLocked ? 'Разблокировать (вернуть доступ)' : 'Заблокировать на проверку'}
+                            >
+                              {room.isLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteRoom(room)}
+                              className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors cursor-pointer"
+                              title="Удалить комнату навсегда"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -585,6 +712,12 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
               </div>
             ) : (
               <form onSubmit={handleCreateRoom} className="space-y-4">
+                {createError && (
+                  <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-300 text-xs font-medium flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>{createError}</span>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-bold text-white/60 mb-1">
                     Название комнаты / Канала

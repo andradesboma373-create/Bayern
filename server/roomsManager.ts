@@ -30,6 +30,8 @@ export interface AuditLogEntry {
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const ROOMS_FILE = path.join(DATA_DIR, 'rooms_storage.json');
+const BACKUP_ROOMS_FILE = path.join(process.cwd(), 'rooms_storage_backup.json');
+const CACHE_DB_FILE = path.join(process.cwd(), 'local_database_cache.json');
 
 // Default initial rooms
 const DEFAULT_ROOMS: Room[] = [
@@ -68,11 +70,24 @@ const DEFAULT_ROOMS: Room[] = [
     isLocked: false,
     totalRequestsToday: 0,
     lastActive: new Date().toISOString()
+  },
+  {
+    id: 'room_airy',
+    username: 'airy',
+    password: '212121',
+    channelId: 'channel_airy',
+    channelName: 'бомбардиро крокодило',
+    role: 'user',
+    createdAt: '2026-09-19T00:00:00.000Z',
+    isLocked: false,
+    totalRequestsToday: 0,
+    lastActive: new Date().toISOString()
   }
 ];
 
 // In-memory runtime state
 let rooms: Room[] = [];
+let isStorageInitialized = false;
 const auditLogs: AuditLogEntry[] = [];
 const requestWindowMap = new Map<string, number[]>(); // roomId -> array of request timestamps in ms
 
@@ -87,9 +102,34 @@ let dailyQuota = {
   maxWrites: 20000
 };
 
-function ensureStorage() {
+function mergeRooms(primary: Room[], secondary: Room[]): Room[] {
+  const map = new Map<string, Room>();
+  // First load default rooms
+  for (const r of DEFAULT_ROOMS) {
+    map.set(r.username.toLowerCase(), { ...r });
+  }
+  // Then load secondary rooms
+  for (const r of secondary) {
+    if (r && r.username) {
+      map.set(r.username.toLowerCase(), { ...map.get(r.username.toLowerCase()), ...r });
+    }
+  }
+  // Then load primary rooms
+  for (const r of primary) {
+    if (r && r.username) {
+      map.set(r.username.toLowerCase(), { ...map.get(r.username.toLowerCase()), ...r });
+    }
+  }
+  return Array.from(map.values());
+}
+
+function ensureStorage(forceReload = false) {
+  if (isStorageInitialized && !forceReload && rooms.length > 0) {
+    return;
+  }
+
   if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+    try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
   }
   
   if (fs.existsSync(QUOTA_FILE)) {
@@ -103,28 +143,86 @@ function ensureStorage() {
     }
   }
 
-  if (!fs.existsSync(ROOMS_FILE)) {
-    rooms = [...DEFAULT_ROOMS];
-    fs.writeFileSync(ROOMS_FILE, JSON.stringify(rooms, null, 2), 'utf-8');
-  } else {
+  let loadedRooms: Room[] = [];
+
+  // Source 1: Main rooms storage file
+  if (fs.existsSync(ROOMS_FILE)) {
     try {
-      const data = fs.readFileSync(ROOMS_FILE, 'utf-8');
-      rooms = JSON.parse(data);
-      // Ensure default admin always exists
-      if (!rooms.some(r => r.username === 'bamep')) {
-        rooms.unshift(DEFAULT_ROOMS[0]);
+      const raw = fs.readFileSync(ROOMS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        loadedRooms = parsed;
       }
     } catch (e) {
-      console.warn("Error reading rooms storage, fallback to defaults", e);
-      rooms = [...DEFAULT_ROOMS];
+      console.warn("Error reading primary rooms storage:", e);
     }
   }
+
+  // Source 2: Backup rooms file
+  if (fs.existsSync(BACKUP_ROOMS_FILE)) {
+    try {
+      const raw = fs.readFileSync(BACKUP_ROOMS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        loadedRooms = mergeRooms(loadedRooms, parsed);
+      }
+    } catch (e) {
+      console.warn("Error reading backup rooms storage:", e);
+    }
+  }
+
+  // Source 3: Local database cache (rooms section)
+  if (fs.existsSync(CACHE_DB_FILE)) {
+    try {
+      const raw = fs.readFileSync(CACHE_DB_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && parsed.rooms && typeof parsed.rooms === 'object') {
+        const dbRooms = Object.values(parsed.rooms) as Room[];
+        if (Array.isArray(dbRooms) && dbRooms.length > 0) {
+          loadedRooms = mergeRooms(loadedRooms, dbRooms);
+        }
+      }
+    } catch (e) {
+      console.warn("Error reading rooms from cache DB:", e);
+    }
+  }
+
+  // Fallback to default rooms if nothing was found
+  if (loadedRooms.length === 0) {
+    rooms = [...DEFAULT_ROOMS];
+  } else {
+    rooms = mergeRooms(loadedRooms, DEFAULT_ROOMS);
+  }
+
+  isStorageInitialized = true;
+  persistRooms();
 }
 
 function persistRooms() {
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    
+    // 1. Write to primary rooms storage
     fs.writeFileSync(ROOMS_FILE, JSON.stringify(rooms, null, 2), 'utf-8');
+    
+    // 2. Write to secondary root backup file
+    fs.writeFileSync(BACKUP_ROOMS_FILE, JSON.stringify(rooms, null, 2), 'utf-8');
+    
+    // 3. Sync to local_database_cache.json
+    try {
+      let cacheObj: any = {};
+      if (fs.existsSync(CACHE_DB_FILE)) {
+        cacheObj = JSON.parse(fs.readFileSync(CACHE_DB_FILE, 'utf-8'));
+      }
+      if (!cacheObj.rooms) cacheObj.rooms = {};
+      for (const r of rooms) {
+        cacheObj.rooms[r.id || r.username] = r;
+      }
+      fs.writeFileSync(CACHE_DB_FILE, JSON.stringify(cacheObj, null, 2), 'utf-8');
+    } catch (dbErr) {
+      console.warn("Non-fatal: could not sync rooms to cache DB", dbErr);
+    }
+
     fs.writeFileSync(QUOTA_FILE, JSON.stringify(dailyQuota, null, 2), 'utf-8');
   } catch (e) {
     console.error("Failed to persist rooms to disk", e);
@@ -259,6 +357,41 @@ export function resetRoomQuota(roomId: string): { success: boolean; error?: stri
     path: '/api/admin/rooms/reset',
     ip: 'admin',
     details: 'Счетчик активности сброшен, блокировка снята'
+  });
+
+  return { success: true };
+}
+
+export function syncRooms(incomingRooms: any[]): Room[] {
+  ensureStorage();
+  if (Array.isArray(incomingRooms) && incomingRooms.length > 0) {
+    rooms = mergeRooms(rooms, incomingRooms);
+    persistRooms();
+  }
+  return rooms;
+}
+
+export function deleteRoom(roomIdOrUsername: string): { success: boolean; error?: string } {
+  ensureStorage();
+  const search = roomIdOrUsername.trim().toLowerCase();
+  if (search === 'bamep' || search === 'room_bamep') {
+    return { success: false, error: "Нельзя удалить комнату главного администратора bamep" };
+  }
+  const index = rooms.findIndex(r => r.id.toLowerCase() === search || r.username.toLowerCase() === search);
+  if (index === -1) {
+    return { success: false, error: "Комната не найдена" };
+  }
+  const [removed] = rooms.splice(index, 1);
+  persistRooms();
+  
+  logAudit({
+    roomId: removed.id,
+    username: removed.username,
+    action: 'ROOM_DELETED',
+    method: 'POST',
+    path: '/api/admin/rooms/delete',
+    ip: 'admin',
+    details: `Комната ${removed.channelName} (${removed.username}) удалена администратором`
   });
 
   return { success: true };
