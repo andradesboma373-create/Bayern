@@ -850,7 +850,7 @@ export default function Teams({ user }: { user: any }) {
                           <span className="truncate">{t.name}</span>
                         </h3>
                         <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-white/40 mt-1">
-                          <span>Игроков: {(t.players || []).filter((p: any) => p && p.id).length}/5</span>
+                          <span>Игроков: {(t.players || []).filter((p: any) => p && p.id).length}</span>
                           <span className="w-1 h-1 bg-white/20 rounded-full"></span>
                           <span>TP: {teamplay.toFixed(0)}</span>
                           <span className="w-1 h-1 bg-white/20 rounded-full"></span>
@@ -876,32 +876,30 @@ export default function Teams({ user }: { user: any }) {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between gap-1.5 p-2 bg-black/40 rounded-xl border border-white/5 sm:w-1/3 md:w-2/5">
-                      {t.players?.map((p: any, pIdx: number) => {
-                        const isEmpty = !p || !p.id;
+                    <div className="flex items-center justify-start gap-1.5 p-2 bg-black/40 rounded-xl border border-white/5 sm:w-1/3 md:w-2/5 overflow-x-auto custom-scrollbar">
+                      {(t.players || []).filter((p: any) => p && p.id).map((p: any, pIdx: number) => {
+                        const isBench = pIdx >= 5;
                         return (
-                          <div key={pIdx} className="relative group/player cursor-help">
-                            {isEmpty ? (
-                              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-                                <span className="text-[10px] text-white/20">?</span>
-                              </div>
-                            ) : (
-                              <>
-                                <PlayerAvatar 
-                                   playerName={p.nickname} 
-                                   avatarUrl={p.avatarUrl} 
-                                   sizeClassName="w-8 h-8 md:w-10 md:h-10" 
-                                   className="border border-white/10 hover:border-white/30 transition-colors"
-                                />
-                                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black/90 border border-white/10 px-2 py-1 rounded text-[10px] font-bold text-white whitespace-nowrap opacity-0 group-hover/player:opacity-100 pointer-events-none transition-opacity z-10 flex flex-col items-center">
-                                  <span>{p.nickname}</span>
-                                  <span className="text-[#ff8f00] font-mono text-[9px]">{p.valRating || 0} pts</span>
-                                </div>
-                              </>
-                            )}
+                          <div key={p.id || pIdx} className="relative group/player cursor-help shrink-0">
+                            <PlayerAvatar 
+                               playerName={p.nickname} 
+                               avatarUrl={p.avatarUrl} 
+                               sizeClassName="w-8 h-8 md:w-10 md:h-10" 
+                               className={`border ${isBench ? 'border-blue-500/50 hover:border-blue-400' : 'border-white/10 hover:border-white/30'} transition-colors`}
+                            />
+                            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black/90 border border-white/10 px-2 py-1 rounded text-[10px] font-bold text-white whitespace-nowrap opacity-0 group-hover/player:opacity-100 pointer-events-none transition-opacity z-10 flex flex-col items-center">
+                              <span className="flex items-center gap-1">
+                                {p.nickname}
+                                {isBench && <span className="text-[8px] bg-blue-500/30 text-blue-300 px-1 py-0.2 rounded font-mono">Бенч</span>}
+                              </span>
+                              <span className="text-[#ff8f00] font-mono text-[9px]">{p.valRating || 0} pts</span>
+                            </div>
                           </div>
                         );
                       })}
+                      {(t.players || []).filter((p: any) => p && p.id).length === 0 && (
+                        <span className="text-xs text-white/20 italic px-2">Нет состава</span>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-2 sm:mt-0 sm:ml-4 sm:w-24 md:w-32">
                       <button onClick={() => setSelectedTeamRoster(t)} className="flex items-center justify-center bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded py-1.5 text-[10px] font-bold uppercase cursor-pointer" title="Состав">

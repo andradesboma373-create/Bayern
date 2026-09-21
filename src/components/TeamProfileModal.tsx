@@ -277,8 +277,8 @@ export default function TeamProfileModal({ team, user, onClose, onUpdateTeam, al
     // Real stats calculation (no mock fallback - show 0 if no matches played)
     const winrate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
 
-    // Roster players enriched with detailed data
-    const teamPlayers = currentTeam.players || [];
+    // Roster players enriched with detailed data (filter out empty slot objects)
+    const teamPlayers = (currentTeam.players || []).filter((tp: any) => tp && (tp.id || tp.nickname));
     const rosterList = teamPlayers.map((tp: any) => {
       // Find matching full player if available
       const fullP = allPlayers.find((ap: any) => ap.id === tp.id || ap.nickname?.toLowerCase() === tp.nickname?.toLowerCase()) || tp;
@@ -468,38 +468,44 @@ export default function TeamProfileModal({ team, user, onClose, onUpdateTeam, al
             </div>
           </div>
 
-          {/* 5 PLAYER ROSTER SHOWCASE ROW */}
-          <div className="grid grid-cols-5 gap-2 sm:gap-3 bg-black/40 border border-white/5 rounded-2xl p-2 sm:p-3">
-            {teamStats.rosterList.slice(0, 5).map((p: any, idx: number) => (
-              <div
-                key={p.id || idx}
-                onClick={() => setSelectedPlayer(p)}
-                className="group/p flex flex-col items-center bg-white/[0.02] hover:bg-white/[0.08] border border-white/5 hover:border-blue-500/40 rounded-xl p-2 transition-all cursor-pointer relative overflow-hidden"
-                title={`Открыть профиль ${p.nickname}`}
-              >
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white/10 group-hover/p:border-blue-400 transition-colors mb-1 bg-black/50">
-                  <PlayerAvatar playerName={p.nickname} avatarUrl={p.avatarUrl} sizeClassName="w-12 h-12 sm:w-16 sm:h-16" />
-                </div>
-                <div className="font-black text-xs sm:text-sm text-white group-hover/p:text-blue-400 transition-colors truncate max-w-full text-center">
-                  {p.nickname}
-                </div>
-                <div className="text-[10px] text-white/40 uppercase font-bold tracking-wider truncate">
-                  {p.role || 'rifler'}
-                </div>
-                <div className="mt-1 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-mono font-bold px-1.5 py-0.2 rounded">
-                  {(p.rating || 1000).toLocaleString()}
-                </div>
-              </div>
-            ))}
-
-            {/* Empty slots if roster < 5 */}
-            {Array.from({ length: Math.max(0, 5 - teamStats.rosterList.length) }).map((_, idx) => (
-              <div key={idx} className="flex flex-col items-center justify-center bg-white/[0.01] border border-dashed border-white/10 rounded-xl p-2 text-white/20">
-                <Users className="w-6 h-6 mb-1 opacity-30" />
-                <span className="text-[10px] uppercase font-bold">Свободно</span>
-              </div>
-            ))}
-          </div>
+          {/* ROSTER SHOWCASE ROW */}
+          {teamStats.rosterList.length > 0 ? (
+            <div className="flex flex-wrap gap-2 sm:gap-3 bg-black/40 border border-white/5 rounded-2xl p-2 sm:p-3">
+              {teamStats.rosterList.map((p: any, idx: number) => {
+                const isBench = idx >= 5;
+                return (
+                  <div
+                    key={p.id || idx}
+                    onClick={() => setSelectedPlayer(p)}
+                    className={`group/p flex flex-col items-center bg-white/[0.02] hover:bg-white/[0.08] border ${isBench ? 'border-blue-500/30 hover:border-blue-400' : 'border-white/5 hover:border-blue-500/40'} rounded-xl p-2 transition-all cursor-pointer relative overflow-hidden flex-1 min-w-[70px] max-w-[130px]`}
+                    title={`Открыть профиль ${p.nickname}${isBench ? ' (Замена)' : ''}`}
+                  >
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white/10 group-hover/p:border-blue-400 transition-colors mb-1 bg-black/50 relative">
+                      <PlayerAvatar playerName={p.nickname} avatarUrl={p.avatarUrl} sizeClassName="w-12 h-12 sm:w-16 sm:h-16" />
+                      {isBench && (
+                        <div className="absolute bottom-0 inset-x-0 bg-blue-600/90 text-white text-[8px] font-black uppercase text-center leading-tight py-0.5">
+                          Бенч
+                        </div>
+                      )}
+                    </div>
+                    <div className="font-black text-xs sm:text-sm text-white group-hover/p:text-blue-400 transition-colors truncate max-w-full text-center">
+                      {p.nickname}
+                    </div>
+                    <div className="text-[10px] text-white/40 uppercase font-bold tracking-wider truncate">
+                      {p.role || 'rifler'}
+                    </div>
+                    <div className="mt-1 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-mono font-bold px-1.5 py-0.2 rounded">
+                      {(p.rating || 1000).toLocaleString()}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-black/40 border border-white/5 rounded-2xl p-4 text-center text-white/30 text-xs">
+              В команде нет игроков
+            </div>
+          )}
         </div>
 
         {/* TEAM HEADER & MAIN INFO */}
@@ -724,9 +730,11 @@ export default function TeamProfileModal({ team, user, onClose, onUpdateTeam, al
                 </div>
               )}
 
-              {/* Starting 5 */}
+              {/* Starting Roster */}
               <div>
-                <h4 className="text-xs font-black uppercase tracking-widest text-[#ff8f00] mb-2">Основной состав (5/5)</h4>
+                <h4 className="text-xs font-black uppercase tracking-widest text-[#ff8f00] mb-2">
+                  Основной состав ({Math.min(5, teamStats.rosterList.length)})
+                </h4>
                 <div className="space-y-2">
                   {teamStats.rosterList.slice(0, 5).map((p: any, idx: number) => {
                     const currentPtsInput = editingPts[p.id || p.nickname] !== undefined 
@@ -793,10 +801,12 @@ export default function TeamProfileModal({ team, user, onClose, onUpdateTeam, al
                 </div>
               </div>
 
-              {/* Bench 3 */}
+              {/* Bench */}
               {teamStats.rosterList.length > 5 && (
                 <div className="pt-2 border-t border-white/5">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-2">Скамейка запасных / Замена ({teamStats.rosterList.length - 5}/3)</h4>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-2">
+                    Скамейка запасных / Замена ({teamStats.rosterList.length - 5})
+                  </h4>
                   <div className="space-y-2">
                     {teamStats.rosterList.slice(5).map((p: any, idx: number) => {
                       const currentPtsInput = editingPts[p.id || p.nickname] !== undefined 
