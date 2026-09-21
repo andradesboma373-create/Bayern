@@ -1,6 +1,30 @@
-=== Server Log Started at 2026-09-19T14:54:16.539Z ===
-[2026-09-19T14:54:16.540Z] [INFO] Successfully loaded local database cache from disk.
-[2026-09-19T14:54:16.547Z] [INFO] Restoring custom maps from LocalDB...
-[2026-09-19T14:54:16.551Z] [INFO] Custom maps restored.
-[2026-09-19T14:54:16.551Z] [INFO] Loaded 0 Telegram bots from LocalDB.
-[2026-09-19T14:54:16.800Z] [INFO] Server running on http://0.0.0.0:3000
+=== Server Log Started at 2026-09-21T07:34:52.892Z ===
+[2026-09-21T07:34:52.894Z] [INFO] Successfully loaded local database cache from disk.
+[2026-09-21T07:34:52.903Z] [INFO] Restoring custom maps from LocalDB...
+[2026-09-21T07:34:52.907Z] [INFO] Custom maps restored.
+[2026-09-21T07:34:52.907Z] [INFO] Loaded 0 Telegram bots from LocalDB.
+[2026-09-21T07:34:53.253Z] [INFO] Server running on http://0.0.0.0:3000
+[2026-09-21T07:35:01.429Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:35:03.087Z] [INFO] Received cache sync request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:35:03.087Z] [INFO] Sync settings for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:35:03.089Z] [INFO] Successfully synced cache for user channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:35:31.378Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:36:01.506Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:36:31.481Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:37:01.487Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:37:42.776Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:38:01.380Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:38:35.379Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:38:45.395Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:39:01.379Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:39:11.337Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:39:31.379Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:39:41.345Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:40:02.268Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:40:11.300Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:40:31.385Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:40:41.311Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:41:01.376Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:41:11.299Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:41:31.381Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com
+[2026-09-21T07:41:41.326Z] [INFO] Serving backup-data request for user: channel_bamep_cs2@matchsimulator.com

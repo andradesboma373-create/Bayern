@@ -70,7 +70,7 @@ export const DEFAULT_ROLES_S2 = [
     { id: 'lurker', name: 'Люркер', killMultiplier: 1.06, skillMultiplier: 1.03, impact: 1.10, deathMultiplier: 0.86, assistMultiplier: 0.90 },
     { id: 'opener', name: 'Опенер', killMultiplier: 1.07, skillMultiplier: 1.03, impact: 1.18, deathMultiplier: 1.05, assistMultiplier: 1.02 },
     { id: 'support', name: 'Саппорт', killMultiplier: 0.98, skillMultiplier: 0.99, impact: 0.98, deathMultiplier: 0.98, assistMultiplier: 1.25 },
-    { id: 'captain', name: 'Капитан', killMultiplier: 0.96, skillMultiplier: 0.98, impact: 0.96, deathMultiplier: 1.00, assistMultiplier: 1.20 }
+    { id: 'captain', name: 'Капитан', killMultiplier: 0.99, skillMultiplier: 0.99, impact: 0.99, deathMultiplier: 1.00, assistMultiplier: 1.20 }
 ];
 
 export const DEFAULT_ROLES_CS2 = [
@@ -79,7 +79,7 @@ export const DEFAULT_ROLES_CS2 = [
     { id: 'lurker', name: 'Люркер', killMultiplier: 1.06, skillMultiplier: 1.03, impact: 1.10, deathMultiplier: 0.86, assistMultiplier: 0.90 },
     { id: 'opener', name: 'Entry', killMultiplier: 1.07, skillMultiplier: 1.03, impact: 1.18, deathMultiplier: 1.05, assistMultiplier: 1.02 },
     { id: 'support', name: 'Саппорт', killMultiplier: 0.98, skillMultiplier: 0.99, impact: 0.98, deathMultiplier: 0.98, assistMultiplier: 1.25 },
-    { id: 'captain', name: 'IGL', killMultiplier: 0.96, skillMultiplier: 0.98, impact: 0.96, deathMultiplier: 1.00, assistMultiplier: 1.20 }
+    { id: 'captain', name: 'IGL', killMultiplier: 0.99, skillMultiplier: 0.99, impact: 0.99, deathMultiplier: 1.00, assistMultiplier: 1.20 }
 ];
 
 export const MAP_POOL_CS2 = [
@@ -844,14 +844,14 @@ function finalizeStats(stats: any[]) {
             
         s.kast = `${Math.round(kastPct)}%`;
         
-        // Official HLTV Rating 2.0 formula with realistic impact floor
+        // Official HLTV Rating 2.0 formula
         const rawImpact = 2.13 * kprNum + 0.42 * aprNum - 0.41;
-        const impact = Math.max(0.40, rawImpact);
+        const impact = Math.max(0.00, rawImpact);
         
         let rating2 = 0.007387 * kastPct + 0.3591 * kprNum - 0.5329 * dprNum + 0.2372 * impact + 0.0032 * adrNum + 0.1587;
         
-        // Realistic competitive HLTV bounds [0.55, 2.30]
-        rating2 = Math.max(0.55, Math.min(2.30, rating2));
+        // Ensure rating does not go below 0.00 or exceed realistic max (3.50)
+        rating2 = Math.max(0.00, Math.min(3.50, rating2));
         
         s.impact = impact.toFixed(2);
         s.hltvRating = rating2.toFixed(2);

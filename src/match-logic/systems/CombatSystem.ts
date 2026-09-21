@@ -133,8 +133,9 @@ export class CombatSystem {
         hitChance *= Math.max(0.40, 1 - (dist / (weapon.range * 1.3)));
     }
     
-    // Target defensive movement / IQ positioning
-    const targetEvasion = Math.max(0.75, Math.min(1.25, 1.0 - (targetIqRatio - 1.0) * 0.10));
+    // Target defensive movement / IQ positioning: high movement and IQ help evade incoming fire
+    const targetMoveRatio = Math.max(0.10, (target.movement || 100) / 100);
+    const targetEvasion = Math.max(0.75, Math.min(1.25, 1.0 - (targetIqRatio - 1.0) * 0.06 - (targetMoveRatio - 1.0) * 0.05));
     hitChance *= targetEvasion;
     
     // Stationary / angle holding advantage
@@ -183,11 +184,13 @@ export class CombatSystem {
     
     if (!target.damageTaken) target.damageTaken = new Map();
     
-    // Utility usage: HE grenade in contested node
+    // Utility usage: HE grenade in contested node (scaled by player's utility stat)
     if (shooter.grenades && shooter.grenades.includes('he') && !target.damageTaken.has(shooter.id)) {
         shooter.grenades = shooter.grenades.filter(g => g !== 'he');
-        if (this.random() < 0.35) {
-            const nadeDamage = Math.floor(12 + this.random() * 16);
+        const utilityMult = Math.max(0.6, (shooter.utility || 100) / 100);
+        const nadeHitChance = Math.min(0.60, 0.35 * utilityMult);
+        if (this.random() < nadeHitChance) {
+            const nadeDamage = Math.floor((12 + this.random() * 16) * utilityMult);
             const actualNade = Math.min(target.hp - 1, nadeDamage);
             if (actualNade > 0) {
                 target.hp -= actualNade;

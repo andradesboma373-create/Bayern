@@ -152,6 +152,11 @@ export class MatchEngine {
       let aim = skillVal;
       let reaction = skillVal;
       let iq = skillVal;
+      let movement = skillVal;
+      let utility = skillVal;
+      let focus = 1.0;
+      let aggression = 1.0;
+      let impact = 1.0;
       
       const roleLower = role.toLowerCase().trim();
       const isSniper = roleLower === 'sniper' || roleLower === 'awper' || roleLower === 'awp' || roleLower === 'снайпер' || roleLower === 'авапер';
@@ -161,35 +166,65 @@ export class MatchEngine {
       const isCaptain = roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader';
 
       if (isSniper) {
-          aim = skillVal * 1.10;
-          reaction = skillVal * 1.08;
-          iq = skillVal * 1.04;
+          aim = skillVal * 1.08;
+          iq = skillVal * 1.05;
+          movement = skillVal * 1.00;
+          utility = skillVal * 0.95;
+          focus = 1.15;
+          aggression = 0.90;
+          impact = 1.12;
+          reaction = skillVal * 1.06;
           speedBonus = 0.00;
       } else if (isEntry) {
-          aim = skillVal * 1.04;
-          reaction = skillVal * 1.04;
-          iq = skillVal * 0.98;
+          aim = skillVal * 1.07;
+          iq = skillVal * 1.00;
+          movement = skillVal * 1.08;
+          utility = skillVal * 0.90;
+          focus = 0.95;
+          aggression = 1.15;
+          impact = 1.18;
+          reaction = skillVal * 1.06;
           speedBonus = 0.03;
-      } else if (isSupport) {
-          aim = skillVal * 0.98;
-          reaction = skillVal * 0.98;
-          iq = skillVal * 1.04;
-          speedBonus = 0.00;
       } else if (isLurker) {
-          aim = skillVal * 1.04;
-          reaction = skillVal * 1.02;
-          iq = skillVal * 1.06;
-          speedBonus = 0.00;
-      } else if (isCaptain) {
-          // Standard captains average at 4-5 tab (sometimes 3 tab) as they drop rifles and prioritize tactical calling
-          aim = skillVal * 0.90;
-          reaction = skillVal * 0.91;
-          iq = skillVal * 1.12;
-          speedBonus = 0.00;
-      } else {
-          aim = skillVal * 1.04;
+          aim = skillVal * 1.06;
+          iq = skillVal * 1.10;
+          movement = skillVal * 1.05;
+          utility = skillVal * 0.90;
+          focus = 1.05;
+          aggression = 0.85;
+          impact = 1.10;
           reaction = skillVal * 1.03;
-          iq = skillVal * 1.02;
+          speedBonus = 0.01;
+      } else if (isSupport) {
+          aim = skillVal * 1.00;
+          iq = skillVal * 1.05;
+          movement = skillVal * 0.95;
+          utility = skillVal * 1.20;
+          focus = 0.95;
+          aggression = 0.85;
+          impact = 0.98;
+          reaction = skillVal * 0.98;
+          speedBonus = -0.01;
+      } else if (isCaptain) {
+          aim = skillVal * 0.99;
+          iq = skillVal * 1.20;
+          movement = skillVal * 0.96;
+          utility = skillVal * 1.15;
+          focus = 1.00;
+          aggression = 0.82;
+          impact = 0.99;
+          reaction = skillVal * 0.97;
+          speedBonus = -0.01;
+      } else {
+          // Rifler
+          aim = skillVal * 1.02;
+          iq = skillVal * 1.00;
+          movement = skillVal * 1.02;
+          utility = skillVal * 0.95;
+          focus = 1.00;
+          aggression = 1.00;
+          impact = 1.02;
+          reaction = skillVal * 1.02;
           speedBonus = 0.01;
       }
 
@@ -208,9 +243,13 @@ export class MatchEngine {
         rating,
         aim: Math.max(40, aim),
         iq: Math.max(40, iq),
-        movement: skillVal,
+        movement: Math.max(40, movement),
         reaction: Math.max(40, reaction),
         roleSkill: skillVal,
+        utility: Math.max(40, utility),
+        focus,
+        aggression,
+        impact,
         perk,
         hp: 100,
         armor: 0,

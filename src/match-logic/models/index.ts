@@ -57,6 +57,10 @@ export interface Player {
   movement: number;
   reaction: number;
   roleSkill: number;
+  utility?: number;
+  focus?: number;
+  aggression?: number;
+  impact?: number;
 
   // State
   hp: number;
