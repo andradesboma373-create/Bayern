@@ -1,6 +1,8 @@
 import { MatchState, Player, MatchEvent } from '../models';
 import { WEAPONS } from '../config/Weapons';
 import { MapSystem } from './MapSystem';
+import { RatingSystem } from './RatingSystem';
+import { RATING_CONFIG } from '../config/RatingConfig';
 
 export class CombatSystem {
   static update(state: MatchState) {
@@ -255,45 +257,97 @@ export class CombatSystem {
           }
         }
 
+        const pWinBeforeKiller = RatingSystem.calculateWinProbability(state, shooter.teamId);
+        const isOpeningKill = !(state as any).roundFirstKillId;
+
         target.alive = false;
         target.state = 'DEAD';
         target.hp = 0;
         shooter.statistics.kills++;
+        (shooter as any).roundKills = ((shooter as any).roundKills || 0) + 1;
         if (isHeadshot) shooter.statistics.headshots++;
         target.statistics.deaths++;
         
         // Opening kill tracking (first kill in round)
-        if (!(state as any).roundFirstKillId) {
+        if (isOpeningKill) {
             (state as any).roundFirstKillId = shooter.id;
-            shooter.statistics.openingKills++;
-            target.statistics.openingDeaths++;
+            (state as any).roundFirstKillTeamId = shooter.teamId;
+            (state as any).roundFirstDeathId = target.id;
+            (state as any).roundFirstKillTick = state.tick;
+            shooter.statistics.openingKills = (shooter.statistics.openingKills || 0) + 1;
+            target.statistics.openingDeaths = (target.statistics.openingDeaths || 0) + 1;
         }
-        
-        // Trade kill detection (target had dealt damage to a teammate who died recently)
-        const victimDamaged = target.damageTaken;
+
+        // Recent death tracking for precise Trade Window detection
+        const recentDeaths: Array<{ victimId: string; killerId: string; tick: number; victimTeamId: string }> =
+          (state as any).recentDeaths || [];
+        (state as any).recentDeaths = recentDeaths;
+
+        // Trade kill detection: did target kill a teammate of shooter within TRADE_WINDOW_TICKS?
         let isTrade = false;
-        if (victimDamaged) {
-            for (const [damagerId, dmg] of victimDamaged.entries()) {
-                const damager = state.players[damagerId];
-                if (damager && !damager.alive && damager.teamId === shooter.teamId) {
-                    shooter.statistics.trades++;
-                    target.statistics.tradeDeaths++;
-                    (shooter as any).tradedInRound = true;
-                    isTrade = true;
-                    break;
+        const tradeWindowTicks = RATING_CONFIG.TRADE_WINDOW_TICKS;
+        for (let i = recentDeaths.length - 1; i >= 0; i--) {
+            const rd = recentDeaths[i];
+            if (state.tick - rd.tick > tradeWindowTicks) break; // outside trade window
+            if (rd.killerId === target.id && rd.victimTeamId === shooter.teamId) {
+                // Legitimate trade kill!
+                shooter.statistics.trades = (shooter.statistics.trades || 0) + 1;
+                target.statistics.tradeDeaths = (target.statistics.tradeDeaths || 0) + 1;
+                isTrade = true;
+
+                // Credit the fallen teammate with being traded (for KAST T)
+                const tradedVictim = state.players[rd.victimId];
+                if (tradedVictim) {
+                    (tradedVictim as any).wasTradedInRound = true;
                 }
+
+                // If the opening killer was traded within window
+                if ((state as any).roundFirstKillId === target.id) {
+                    (state as any).roundFirstKillTraded = true;
+                    target.statistics.openingKillsTraded = (target.statistics.openingKillsTraded || 0) + 1;
+                }
+                break;
+            }
+        }
+
+        // Record this death into recentDeaths
+        recentDeaths.push({
+            victimId: target.id,
+            killerId: shooter.id,
+            tick: state.tick,
+            victimTeamId: target.teamId
+        });
+
+        // Round Swing calculation
+        const pWinAfterKiller = RatingSystem.calculateWinProbability(state, shooter.teamId);
+        const actionSwing = RatingSystem.calculateActionSwing(pWinBeforeKiller, pWinAfterKiller, shooter, target, isOpeningKill, isTrade);
+        shooter.statistics.roundSwing = (shooter.statistics.roundSwing || 0) + actionSwing;
+        const victimPenalty = RatingSystem.calculateVictimSwingPenalty(actionSwing, shooter, target);
+        target.statistics.roundSwing = (target.statistics.roundSwing || 0) - victimPenalty;
+
+        // Track potential clutch situation after this death
+        const targetTeamAlive = Object.values(state.players).filter(p => p && p.alive && p.teamId === target.teamId);
+        const shooterTeamAlive = Object.values(state.players).filter(p => p && p.alive && p.teamId === shooter.teamId);
+        if (targetTeamAlive.length === 1 && shooterTeamAlive.length >= 1) {
+            const lonePlayer = targetTeamAlive[0];
+            if (!(lonePlayer as any).clutchOpponentsAtStart) {
+                (lonePlayer as any).clutchOpponentsAtStart = shooterTeamAlive.length;
             }
         }
         
-        // Assist distribution (at least 35 damage dealt by a teammate, modified by individual assist perk)
+        // Assist distribution (at least ASSIST_MIN_DAMAGE dealt by a teammate, modified by individual assist perk)
         if (target.damageTaken) {
+            const minAssistDamage = RATING_CONFIG.ASSIST_MIN_DAMAGE;
             for (const [assisterId, dmg] of target.damageTaken.entries()) {
                 if (assisterId !== shooter.id) {
                     const assister = state.players[assisterId];
                     if (assister && assister.teamId === shooter.teamId) {
-                        const threshold = assister.perk?.assistMultiplier ? Math.max(20, Math.floor(35 / assister.perk.assistMultiplier)) : 35;
+                        const threshold = assister.perk?.assistMultiplier ? Math.max(20, Math.floor(minAssistDamage / assister.perk.assistMultiplier)) : minAssistDamage;
                         if (dmg >= threshold) {
                             assister.statistics.assists++;
+                            (assister as any).roundAssists = ((assister as any).roundAssists || 0) + 1;
+                            const assistSwing = actionSwing * (RATING_CONFIG.ASSIST_SWING_SHARE || 0.25) * Math.min(1.0, dmg / 100);
+                            assister.statistics.roundSwing = (assister.statistics.roundSwing || 0) + assistSwing;
                             break; 
                         }
                     }

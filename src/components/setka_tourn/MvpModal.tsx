@@ -4,6 +4,7 @@ import { downloadElementAsImage } from '../../lib/exportImage';
 import TeamLogo from '../TeamLogo';
 import PlayerAvatar from '../PlayerAvatar';
 import { loadTournaments, saveTournament } from './storage';
+import { RatingSystem } from '../../match-logic/systems/RatingSystem';
 
 interface Props {
   user: any;
@@ -56,6 +57,22 @@ export default function MvpModal({ user, tournamentId, onClose }: Props) {
               damage: 0,
               rounds: 0,
               mvps: 0,
+              k1: 0,
+              k2: 0,
+              k3: 0,
+              k4: 0,
+              k5: 0,
+              fk: 0,
+              fd: 0,
+              kastRounds: 0,
+              roundSwing: 0,
+              clutchesWon1v1: 0,
+              clutchesWon1v2: 0,
+              clutchesWon1v3: 0,
+              clutchesWon1v4: 0,
+              clutchesWon1v5: 0,
+              openingKillsTraded: 0,
+              openingKillsConverted: 0,
               matchIds: new Set<string>()
             });
           }
@@ -65,6 +82,30 @@ export default function MvpModal({ user, tournamentId, onClose }: Props) {
           curr.deaths += (ps.deaths || ps.d || 0);
           curr.damage += (ps.damage || 0);
           curr.rounds += (ps.totalRounds || 0);
+          curr.k1 += (ps.k1 || 0);
+          curr.k2 += (ps.k2 || 0);
+          curr.k3 += (ps.k3 || 0);
+          curr.k4 += (ps.k4 || 0);
+          curr.k5 += (ps.k5 || 0);
+          curr.fk += (ps.fk || ps.openingKills || 0);
+          curr.fd += (ps.fd || ps.openingDeaths || 0);
+          curr.kastRounds += (ps.kastRounds || 0);
+          const psRounds = ps.totalRounds || 1;
+          const psSwing = typeof ps.rawRoundSwing === 'number'
+            ? ps.rawRoundSwing
+            : (typeof ps.roundSwingNum === 'number'
+              ? (ps.roundSwingNum / 100) * psRounds
+              : (typeof ps.roundSwing === 'number'
+                ? ps.roundSwing
+                : (parseFloat(String(ps.roundSwing || '0').replace(/[%+]/g, '')) / 100) * psRounds || 0));
+          curr.roundSwing += psSwing;
+          curr.clutchesWon1v1 += (ps.clutchesWon1v1 || 0);
+          curr.clutchesWon1v2 += (ps.clutchesWon1v2 || 0);
+          curr.clutchesWon1v3 += (ps.clutchesWon1v3 || 0);
+          curr.clutchesWon1v4 += (ps.clutchesWon1v4 || 0);
+          curr.clutchesWon1v5 += (ps.clutchesWon1v5 || 0);
+          curr.openingKillsTraded += (ps.openingKillsTraded || 0);
+          curr.openingKillsConverted += (ps.openingKillsConverted || 0);
           curr.matchIds.add(matchId);
           if (matchMvpName && name.toLowerCase().trim() === matchMvpName.toLowerCase().trim()) {
             curr.mvps += 1;
@@ -77,20 +118,41 @@ export default function MvpModal({ user, tournamentId, onClose }: Props) {
     });
 
     const statsArr = Array.from(playerStatsMap.values()).map(p => {
-      const kd = p.deaths > 0 ? (p.kills / p.deaths) : p.kills;
-      const diff = p.kills - p.deaths;
-      const adr = p.rounds > 0 ? (p.damage / p.rounds) : 0;
-      const impact = 0.8 + (kd * 0.3) + (adr * 0.003) + (p.assists / (p.rounds || 1)) * 0.1;
-      const rating = 0.5 + (kd * 0.35) + (adr * 0.004) + (impact * 0.15);
+      const rounds = Math.max(1, p.rounds);
+      const breakdown = RatingSystem.calculatePlayerRating({
+        kills: p.kills,
+        deaths: p.deaths,
+        assists: p.assists,
+        damage: p.damage,
+        totalRounds: rounds,
+        k1: p.k1,
+        k2: p.k2,
+        k3: p.k3,
+        k4: p.k4,
+        k5: p.k5,
+        openingKills: p.fk,
+        openingDeaths: p.fd,
+        openingKillsTraded: p.openingKillsTraded,
+        openingKillsConverted: p.openingKillsConverted,
+        clutchesWon1v1: p.clutchesWon1v1,
+        clutchesWon1v2: p.clutchesWon1v2,
+        clutchesWon1v3: p.clutchesWon1v3,
+        clutchesWon1v4: p.clutchesWon1v4,
+        clutchesWon1v5: p.clutchesWon1v5,
+        kastRounds: p.kastRounds > 0 ? p.kastRounds : Math.round(rounds * 0.70),
+        roundSwing: p.roundSwing
+      }, rounds);
 
       return {
         ...p,
         matchesCount: p.matchIds.size,
-        kd,
-        diff,
-        adr,
-        impact,
-        rating
+        kd: breakdown.kd,
+        diff: p.kills - p.deaths,
+        adr: breakdown.adr,
+        impact: breakdown.impact,
+        roundSwing: breakdown.roundSwing,
+        kast: breakdown.kast,
+        rating: breakdown.rating
       };
     });
 

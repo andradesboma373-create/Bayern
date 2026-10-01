@@ -25,6 +25,7 @@ import {
 import { toPng } from "html-to-image";
 import { safeLocalStorageSet } from "../lib/utils";
 import { calculateConsistencyFromMatchHistory } from "../lib/simulation";
+import { RatingSystem } from "../match-logic/systems/RatingSystem";
 import PlayerAvatar from "./PlayerAvatar";
 import TeamLogo from "./TeamLogo";
 import { loadTournaments } from "./setka_tourn/storage";
@@ -125,6 +126,10 @@ export default function PlayerProfileModal({
     let totalRounds = 0;
     let totalMvps = 0;
     let matchesCount = 0;
+    let totalK1 = 0, totalK2 = 0, totalK3 = 0, totalK4 = 0, totalK5 = 0;
+    let totalFk = 0, totalFd = 0, totalKastRounds = 0, totalRoundSwing = 0;
+    let totalClutchesWon1v1 = 0, totalClutchesWon1v2 = 0, totalClutchesWon1v3 = 0, totalClutchesWon1v4 = 0, totalClutchesWon1v5 = 0;
+    let totalOpeningKillsTraded = 0, totalOpeningKillsConverted = 0;
 
     const matchesList: any[] = [];
     const trophyList: any[] = [];
@@ -185,6 +190,30 @@ export default function PlayerProfileModal({
         totalRounds += r;
         totalMvps += mvp;
         matchesCount++;
+
+        totalK1 += st.k1 || 0;
+        totalK2 += st.k2 || 0;
+        totalK3 += st.k3 || 0;
+        totalK4 += st.k4 || 0;
+        totalK5 += st.k5 || 0;
+        totalFk += st.fk || st.openingKills || 0;
+        totalFd += st.fd || st.openingDeaths || 0;
+        totalKastRounds += st.kastRounds || 0;
+        const stSwing = typeof st.rawRoundSwing === 'number'
+          ? st.rawRoundSwing
+          : (typeof st.roundSwingNum === 'number'
+            ? (st.roundSwingNum / 100) * r
+            : (typeof st.roundSwing === 'number'
+              ? st.roundSwing
+              : (parseFloat(String(st.roundSwing || '0').replace(/[%+]/g, '')) / 100) * r || 0));
+        totalRoundSwing += stSwing;
+        totalClutchesWon1v1 += st.clutchesWon1v1 || 0;
+        totalClutchesWon1v2 += st.clutchesWon1v2 || 0;
+        totalClutchesWon1v3 += st.clutchesWon1v3 || 0;
+        totalClutchesWon1v4 += st.clutchesWon1v4 || 0;
+        totalClutchesWon1v5 += st.clutchesWon1v5 || 0;
+        totalOpeningKillsTraded += st.openingKillsTraded || 0;
+        totalOpeningKillsConverted += st.openingKillsConverted || 0;
 
         seriesK += k;
         seriesD += d;
@@ -467,34 +496,45 @@ export default function PlayerProfileModal({
     }
 
     const rounds = Math.max(totalRounds, 1);
-    const kd =
-      totalDeaths > 0
-        ? totalKills / totalDeaths
-        : totalKills > 0
-          ? totalKills
-          : 1.0;
-    const adr = totalRounds > 0 ? totalDamage / totalRounds : 75;
-    const kpr = (totalRounds > 0 ? totalKills / totalRounds : 0.7).toFixed(2);
-    const dpr = (totalRounds > 0 ? totalDeaths / totalRounds : 0.65).toFixed(2);
-    const impact = 0.8 + kd * 0.3 + adr * 0.003 + (totalAssists / rounds) * 0.1;
+    const breakdown = RatingSystem.calculatePlayerRating({
+      kills: totalKills,
+      deaths: totalDeaths,
+      assists: totalAssists,
+      damage: totalDamage,
+      totalRounds: rounds,
+      k1: totalK1,
+      k2: totalK2,
+      k3: totalK3,
+      k4: totalK4,
+      k5: totalK5,
+      openingKills: totalFk,
+      openingDeaths: totalFd,
+      openingKillsTraded: totalOpeningKillsTraded,
+      openingKillsConverted: totalOpeningKillsConverted,
+      clutchesWon1v1: totalClutchesWon1v1,
+      clutchesWon1v2: totalClutchesWon1v2,
+      clutchesWon1v3: totalClutchesWon1v3,
+      clutchesWon1v4: totalClutchesWon1v4,
+      clutchesWon1v5: totalClutchesWon1v5,
+      kastRounds: totalKastRounds > 0 ? totalKastRounds : Math.round(rounds * 0.70),
+      roundSwing: totalRoundSwing
+    }, rounds);
 
-    // HLTV Rating 3.0 calculation
-    const baseRating = 0.5 + kd * 0.35 + adr * 0.004 + impact * 0.15;
-
-    const rating3 = Number(baseRating.toFixed(2));
+    const kd = Number(breakdown.kd) || 0;
+    const adr = Number(breakdown.adr) || 0;
+    const kpr = (Number(breakdown.kpr) || 0).toFixed(2);
+    const dpr = (Number(breakdown.dpr) || 0).toFixed(2);
+    const impact = (Number(breakdown.impact) || 0).toFixed(2);
+    const rating3 = Number(breakdown.rating) || 0;
     const tRating = Number((rating3 * 0.97).toFixed(2));
     const ctRating = Number((rating3 * 1.03).toFixed(2));
-
-    // KAST & Multi-kill %
-    const kast = Math.min(
-      92,
-      Math.max(55, Math.round(62 + (rating3 - 1) * 25)),
-    );
+    const kast = Math.round(Number(breakdown.kast) || 0);
     const multikill = Math.min(
       45,
       Math.max(12, Number((Number(kpr) * 28).toFixed(1))),
     );
-    const roundSwing = ((rating3 - 1) * 12).toFixed(2);
+    const swingNum = Number(breakdown.roundSwing) || 0;
+    const roundSwing = swingNum > 0 ? `+${swingNum.toFixed(2)}` : swingNum.toFixed(2);
 
     // Consistency Index calculation based on past matches
     const matchRatings = matchesList
@@ -518,7 +558,7 @@ export default function PlayerProfileModal({
       adr: Math.round(adr),
       kpr,
       dpr,
-      impact: impact.toFixed(2),
+      impact,
       rating3,
       tRating,
       ctRating,

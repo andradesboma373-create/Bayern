@@ -261,6 +261,56 @@ function parseQueryFilters(queryRef: any): { collectionPath: string; filters: Ar
   return { collectionPath, filters };
 }
 
+export function getRoomAliases(userId: string): { canonicalId: string; aliases: string[] } {
+  if (!userId) return { canonicalId: 'guest', aliases: ['guest'] };
+  
+  const cleanId = String(userId).trim();
+  const lower = cleanId.toLowerCase();
+  
+  let rooms: any[] = [];
+  try {
+    rooms = getAllRooms();
+  } catch (e) {
+    rooms = [];
+  }
+
+  // Find room matching by username, channelId, id, or email format
+  const matchingRoom = rooms.find(r => 
+    (r.username && r.username.toLowerCase() === lower) ||
+    (r.channelId && r.channelId.toLowerCase() === lower) ||
+    (r.id && r.id.toLowerCase() === lower) ||
+    (r.channelId && `${r.channelId.toLowerCase()}@matchsimulator.com` === lower) ||
+    (r.username && `${r.username.toLowerCase()}@matchsimulator.com` === lower)
+  );
+
+  if (matchingRoom) {
+    const canonicalId = matchingRoom.channelId;
+    const aliasesSet = new Set<string>();
+    
+    // Add all aliases for this room
+    if (matchingRoom.channelId) aliasesSet.add(matchingRoom.channelId);
+    if (matchingRoom.username) aliasesSet.add(matchingRoom.username);
+    if (matchingRoom.id) aliasesSet.add(matchingRoom.id);
+    if (matchingRoom.channelId) aliasesSet.add(`${matchingRoom.channelId}@matchsimulator.com`);
+    if (matchingRoom.username) aliasesSet.add(`${matchingRoom.username}@matchsimulator.com`);
+
+    // Add ALL OTHER rooms that share the exact same channelId (e.g. bamep and zeixst both share channel_bamep_cs2!)
+    rooms.forEach(r => {
+      if (r.channelId && r.channelId.toLowerCase() === matchingRoom.channelId.toLowerCase()) {
+        aliasesSet.add(r.channelId);
+        if (r.username) aliasesSet.add(r.username);
+        if (r.id) aliasesSet.add(r.id);
+        aliasesSet.add(`${r.channelId}@matchsimulator.com`);
+        if (r.username) aliasesSet.add(`${r.username}@matchsimulator.com`);
+      }
+    });
+
+    return { canonicalId, aliases: Array.from(aliasesSet) };
+  }
+
+  return { canonicalId: cleanId, aliases: [cleanId] };
+}
+
 function matchDocWithFilters(docData: any, filters: Array<{ field: string; op: string; value: any }>): boolean {
   for (const f of filters) {
     const val = docData[f.field];
@@ -271,7 +321,13 @@ function matchDocWithFilters(docData: any, filters: Array<{ field: string; op: s
     
     const expected = f.value;
     if (f.op === '==' || f.op === 'EQUAL') {
-      if (val !== expected) return false;
+      if (val === expected) continue;
+      // Cross-account room alias matching for channelId, userId, botUserId
+      if ((f.field === 'channelId' || f.field === 'userId' || f.field === 'botUserId') && typeof expected === 'string') {
+        const { aliases } = getRoomAliases(expected);
+        if (aliases.includes(val)) continue;
+      }
+      return false;
     } else if (f.op === '!=' || f.op === 'NOT_EQUAL') {
       if (val === expected) return false;
     } else if (f.op === '>' || f.op === 'GREATER_THAN') {
@@ -3787,9 +3843,11 @@ app.post("/api/sync-cache", async (req, res) => {
       return res.status(400).json({ error: "Missing userId" });
     }
 
+    const { canonicalId, aliases } = getRoomAliases(userId);
+
     // Rate-limiting & Quota abuse tracking check
     const tracking = trackRoomRequest(
-      userId, 
+      canonicalId, 
       'POST', 
       '/api/sync-cache', 
       req.ip || 'unknown', 
@@ -3797,11 +3855,11 @@ app.post("/api/sync-cache", async (req, res) => {
       `Синхронизация данных: ${teams?.length || 0} команд, ${players?.length || 0} игроков`
     );
     if (!tracking.isAllowed) {
-      console.warn(`Blocked sync request from room ${userId}: ${tracking.error}`);
+      console.warn(`Blocked sync request from room ${canonicalId}: ${tracking.error}`);
       return res.status(403).json({ error: tracking.error, isLocked: true });
     }
 
-    console.log(`Received cache sync request for user: ${userId}`);
+    console.log(`Received cache sync request for user: ${userId} -> canonical room: ${canonicalId}`);
 
     // Helper to merge items into fallbackDb and Firestore to keep all databases up to date
     const syncCollection = async (collectionName: string, incomingItems: any[], userField: string) => {
@@ -3812,10 +3870,10 @@ app.post("/api/sync-cache", async (req, res) => {
       // Add or update all incoming items in the server's fast local cache & Firestore
       for (const item of incomingItems) {
         if (!item) continue;
-        const itemId = item.id || (item.chatId ? `${userId}_${item.chatId}` : null);
+        const itemId = item.id || (item.chatId ? `${canonicalId}_${item.chatId}` : null);
         if (!itemId) continue;
         
-        const enhancedItem = { ...item, [userField]: item[userField] || userId };
+        const enhancedItem = { ...item, [userField]: canonicalId, channelId: canonicalId, userId: item.userId || canonicalId };
         fallbackDb.set(collectionName, itemId, enhancedItem);
 
         // Crucial: also save to Firestore so queries from client never revert to old rating!
@@ -3830,34 +3888,37 @@ app.post("/api/sync-cache", async (req, res) => {
     // 1. Sync settings
     if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
       loadedCollections.add('settings');
-      console.log(`Sync settings for user: ${userId}`);
-      fallbackDb.set('settings', userId, { userId, ...settings });
+      console.log(`Sync settings for user: ${canonicalId}`);
+      fallbackDb.set('settings', canonicalId, { userId: canonicalId, ...settings });
+      for (const a of aliases) {
+        fallbackDb.set('settings', a, { userId: canonicalId, ...settings });
+      }
       try {
-        setDoc(doc(db, 'settings', userId), { userId, ...settings }, { merge: true }).catch(() => {});
+        setDoc(doc(db, 'settings', canonicalId), { userId: canonicalId, ...settings }, { merge: true }).catch(() => {});
       } catch (e) {}
 
       // If the botToken has changed, restart the bot with the new token
       const token = settings.botToken?.trim();
       if (token && token !== '') {
-        const existingBot = botInstances.get(userId);
+        const existingBot = botInstances.get(canonicalId);
         if (existingBot) {
           // If the token is different, restart the bot
           if ((existingBot as any).token !== token) {
-            console.log(`Bot token changed for ${userId}. Restarting bot...`);
+            console.log(`Bot token changed for ${canonicalId}. Restarting bot...`);
             existingBot.stop();
-            const newBot = new TelegramBotInstance(token, userId);
+            const newBot = new TelegramBotInstance(token, canonicalId);
             newBot.start().catch((err: any) => {
-              console.error(`Failed to start updated bot for ${userId}:`, err.message);
+              console.error(`Failed to start updated bot for ${canonicalId}:`, err.message);
             });
-            botInstances.set(userId, newBot);
+            botInstances.set(canonicalId, newBot);
           }
         } else {
-          console.log(`Starting Telegram Bot for ${userId} with newly synchronized token...`);
-          const newBot = new TelegramBotInstance(token, userId);
+          console.log(`Starting Telegram Bot for ${canonicalId} with newly synchronized token...`);
+          const newBot = new TelegramBotInstance(token, canonicalId);
           newBot.start().catch((err: any) => {
-            console.error(`Failed to start new bot for ${userId}:`, err.message);
+            console.error(`Failed to start new bot for ${canonicalId}:`, err.message);
           });
-          botInstances.set(userId, newBot);
+          botInstances.set(canonicalId, newBot);
         }
       }
     }
@@ -3870,10 +3931,12 @@ app.post("/api/sync-cache", async (req, res) => {
     if (Array.isArray(matches)) {
       loadedCollections.add('matches');
       if (matches.length === 0) {
-        fallbackDb.deleteAllForUser('matches', userId);
+        for (const a of aliases) {
+          fallbackDb.deleteAllForUser('matches', a);
+        }
       } else {
         const incomingIds = new Set(matches.map(m => m.id || m._id).filter(Boolean));
-        const currentMatches = fallbackDb.getAll('matches').filter(item => item.channelId === userId || item.userId === userId);
+        const currentMatches = fallbackDb.getAll('matches').filter(item => aliases.includes(item.channelId) || aliases.includes(item.userId));
         for (const m of currentMatches) {
           if (m && (m.id || m._id) && !incomingIds.has(m.id || m._id)) {
             fallbackDb.delete('matches', m.id || m._id);
@@ -3887,21 +3950,21 @@ app.post("/api/sync-cache", async (req, res) => {
     if (mapStats) await syncCollection('mapStats', mapStats, 'userId');
 
     // 3. Fallback start Telegram Bot if settings are in database but it isn't running yet
-    const finalSettings = fallbackDb.get('settings', userId);
+    const finalSettings = fallbackDb.get('settings', canonicalId);
     if (finalSettings && finalSettings.botToken && finalSettings.botToken.trim() !== '') {
       const token = finalSettings.botToken.trim();
-      if (!botInstances.has(userId)) {
-        console.log(`Starting Telegram Bot for ${userId} from synchronized cache token (lazy load)...`);
-        const newBot = new TelegramBotInstance(token, userId);
+      if (!botInstances.has(canonicalId)) {
+        console.log(`Starting Telegram Bot for ${canonicalId} from synchronized cache token (lazy load)...`);
+        const newBot = new TelegramBotInstance(token, canonicalId);
         newBot.start().catch((err: any) => {
-          console.error(`Failed to start synced bot for ${userId}:`, err.message);
+          console.error(`Failed to start synced bot for ${canonicalId}:`, err.message);
         });
-        botInstances.set(userId, newBot);
+        botInstances.set(canonicalId, newBot);
       }
     }
 
-    console.log(`Successfully synced cache for user ${userId}`);
-    res.json({ success: true });
+    console.log(`Successfully synced cache for user ${userId} (canonical room: ${canonicalId})`);
+    res.json({ success: true, canonicalId });
   } catch (err: any) {
     console.error("Error in sync-cache API:", err.message);
     res.status(500).json({ error: err.message });
@@ -3915,7 +3978,14 @@ app.get("/api/settings/:userId", async (req, res) => {
     if (!userId) {
       return res.status(400).json({ error: "Missing userId" });
     }
-    const docSnap = await getDoc(doc(db, 'settings', userId));
+    const { canonicalId, aliases } = getRoomAliases(userId);
+    let docSnap = await getDoc(doc(db, 'settings', canonicalId));
+    if (!docSnap.exists()) {
+      for (const a of aliases) {
+        const s = await getDoc(doc(db, 'settings', a));
+        if (s.exists()) { docSnap = s; break; }
+      }
+    }
     if (docSnap.exists()) {
       res.json(docSnap.data());
     } else {
@@ -3935,20 +4005,37 @@ app.get("/api/backup-data/:userId", async (req, res) => {
       return res.status(400).json({ error: "Missing userId" });
     }
 
-    console.log(`Serving backup-data request for user: ${userId}`);
+    const { canonicalId, aliases } = getRoomAliases(userId);
+    console.log(`Serving backup-data request for user: ${userId} (canonical room: ${canonicalId}, aliases: ${aliases.join(', ')})`);
 
-    const settings = fallbackDb.get('settings', userId) || { userId, startingMoney: 500000 };
-    const players = fallbackDb.getAll('players').filter(item => item.channelId === userId);
-    const teams = fallbackDb.getAll('teams').filter(item => item.channelId === userId);
-    const swapOffers = fallbackDb.getAll('swapOffers').filter(item => item.channelId === userId);
-    const tournaments = fallbackDb.getAll('tournaments').filter(item => item.channelId === userId || item.userId === userId);
-    const matches = fallbackDb.getAll('matches').filter(item => item.channelId === userId || item.userId === userId);
-    const tgUsers = fallbackDb.getAll('tgUsers').filter(item => item.botUserId === userId);
-    const tgVetos = fallbackDb.getAll('tgVetos').filter(item => item.userId === userId);
-    const mapStats = fallbackDb.getAll('mapStats').filter(item => item.userId === userId);
+    const isRoomMatch = (item: any) => {
+      if (!item) return false;
+      return aliases.includes(item.channelId) || 
+             aliases.includes(item.userId) || 
+             aliases.includes(item.botUserId);
+    };
+
+    let settings = fallbackDb.get('settings', canonicalId);
+    if (!settings) {
+      for (const a of aliases) {
+        const found = fallbackDb.get('settings', a);
+        if (found) { settings = found; break; }
+      }
+    }
+    if (!settings) settings = { userId: canonicalId, startingMoney: 500000 };
+
+    const players = fallbackDb.getAll('players').filter(isRoomMatch);
+    const teams = fallbackDb.getAll('teams').filter(isRoomMatch);
+    const swapOffers = fallbackDb.getAll('swapOffers').filter(isRoomMatch);
+    const tournaments = fallbackDb.getAll('tournaments').filter(isRoomMatch);
+    const matches = fallbackDb.getAll('matches').filter(isRoomMatch);
+    const tgUsers = fallbackDb.getAll('tgUsers').filter(isRoomMatch);
+    const tgVetos = fallbackDb.getAll('tgVetos').filter(isRoomMatch);
+    const mapStats = fallbackDb.getAll('mapStats').filter(isRoomMatch);
 
     res.json({
       success: true,
+      canonicalId,
       settings,
       players,
       teams,

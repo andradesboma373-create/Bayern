@@ -33,6 +33,20 @@ export interface PlayerStats {
   clutches?: number;
   shots?: number;
   hits?: number;
+  k1?: number;
+  k2?: number;
+  k3?: number;
+  k4?: number;
+  k5?: number;
+  kastRounds?: number;
+  roundSwing?: number;
+  clutchesWon1v1?: number;
+  clutchesWon1v2?: number;
+  clutchesWon1v3?: number;
+  clutchesWon1v4?: number;
+  clutchesWon1v5?: number;
+  openingKillsConverted?: number;
+  openingKillsTraded?: number;
 }
 
 export interface PlayerMemory {
@@ -49,6 +63,8 @@ export interface Player {
   teamId: string;
   side: TeamSide;
   role: PlayerRole;
+  originalRole?: string;
+  isAdaptedRole?: boolean;
 
   // Base Characteristics
   rating: number;

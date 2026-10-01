@@ -123,10 +123,83 @@ export class MatchEngine {
       return seedCounter / 233280;
     };
 
+    const adaptTeamRosterRoles = (teamPlayers: any[]) => {
+      // Create shallow copy with parsed ratings and detected roles
+      const enriched = teamPlayers.slice(0, 5).map(p => {
+        const rawRole = (p?.role || 'Rifler').toString();
+        const roleLower = rawRole.toLowerCase().trim();
+        const isSniper = roleLower === 'sniper' || roleLower === 'awper' || roleLower === 'awp' || roleLower === 'снайпер' || roleLower === 'авапер';
+        const isCaptain = roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader';
+        let rawRating = parseFloat(p?.rating) || parseFloat(p?.valRating) || 100;
+        if (rawRating < 10) rawRating *= 100;
+        return {
+          ...p,
+          rawRole,
+          roleLower,
+          isSniper,
+          isCaptain,
+          rawRating,
+          assignedRole: null as any,
+          originalRole: rawRole,
+          isAdaptedRole: false
+        };
+      });
+
+      // 1. Sniper resolution: exactly 1 primary sniper per team
+      const snipers = enriched.filter(p => p.isSniper);
+      if (snipers.length > 1) {
+        // Best sniper by rating becomes Primary Sniper (AWP)
+        snipers.sort((a, b) => b.rawRating - a.rawRating);
+        snipers[0].assignedRole = 'Sniper';
+        snipers[0].isAdaptedRole = false;
+
+        // Other snipers adapt to play as Riflers (with realistic rifling proficiency)
+        for (let i = 1; i < snipers.length; i++) {
+          snipers[i].assignedRole = 'Rifler';
+          snipers[i].originalRole = 'Sniper';
+          snipers[i].isAdaptedRole = true;
+        }
+      } else if (snipers.length === 1) {
+        snipers[0].assignedRole = 'Sniper';
+        snipers[0].isAdaptedRole = false;
+      }
+
+      // 2. Captain resolution: exactly 1 primary IGL/Captain per team
+      const captains = enriched.filter(p => p.isCaptain);
+      if (captains.length > 1) {
+        // Best captain by rating/IQ remains Captain
+        captains.sort((a, b) => b.rawRating - a.rawRating);
+        captains[0].assignedRole = 'Captain';
+        captains[0].isAdaptedRole = false;
+
+        // Other captains adapt to play as Riflers (with realistic rifling proficiency)
+        for (let i = 1; i < captains.length; i++) {
+          captains[i].assignedRole = 'Rifler';
+          captains[i].originalRole = 'Captain';
+          captains[i].isAdaptedRole = true;
+        }
+      } else if (captains.length === 1) {
+        captains[0].assignedRole = 'Captain';
+        captains[0].isAdaptedRole = false;
+      }
+
+      // Default remaining players to their role or Rifler
+      enriched.forEach(p => {
+        if (!p.assignedRole) {
+          p.assignedRole = p.rawRole;
+          p.isAdaptedRole = false;
+        }
+      });
+
+      return enriched;
+    };
+
     const initPlayer = (pData: any, teamId: string) => {
       const pId = pData.id || pData.nickname;
       const nickname = pData.nickname || pData.name || pId;
-      const role = pData.role || 'Rifler';
+      const role = pData.assignedRole || pData.role || 'Rifler';
+      const originalRole = pData.originalRole || pData.role || role;
+      const isAdaptedRole = !!pData.isAdaptedRole;
       let rawRating = parseFloat(pData.rating) || parseFloat(pData.valRating) || 100;
       if (rawRating < 10) rawRating = rawRating * 100; // Map HLTV 1.15 to 115
 
@@ -216,16 +289,54 @@ export class MatchEngine {
           reaction = skillVal * 0.97;
           speedBonus = -0.01;
       } else {
-          // Rifler
-          aim = skillVal * 1.02;
-          iq = skillVal * 1.00;
-          movement = skillVal * 1.02;
-          utility = skillVal * 0.95;
-          focus = 1.00;
-          aggression = 1.00;
-          impact = 1.02;
-          reaction = skillVal * 1.02;
-          speedBonus = 0.01;
+          // Rifler (including adapted snipers and adapted captains)
+          if (isAdaptedRole) {
+            const origLower = (originalRole || '').toLowerCase();
+            if (origLower.includes('sniper') || origLower.includes('awp') || origLower.includes('снайпер')) {
+              // Adapted sniper playing as rifler: slightly weaker rifling than a dedicated rifler
+              aim = skillVal * 0.98;
+              iq = skillVal * 1.02;
+              movement = skillVal * 1.00;
+              utility = skillVal * 0.95;
+              focus = 1.05;
+              aggression = 0.96;
+              impact = 1.01;
+              reaction = skillVal * 1.02;
+              speedBonus = 0.01;
+            } else if (origLower.includes('captain') || origLower.includes('igl') || origLower.includes('капитан')) {
+              // Adapted captain playing as rifler: slightly weaker gunplay, high IQ
+              aim = skillVal * 0.98;
+              iq = skillVal * 1.15;
+              movement = skillVal * 0.98;
+              utility = skillVal * 1.10;
+              focus = 1.00;
+              aggression = 0.92;
+              impact = 0.99;
+              reaction = skillVal * 0.99;
+              speedBonus = 0.00;
+            } else {
+              aim = skillVal * 1.00;
+              iq = skillVal * 1.00;
+              movement = skillVal * 1.00;
+              utility = skillVal * 0.95;
+              focus = 1.00;
+              aggression = 1.00;
+              impact = 1.00;
+              reaction = skillVal * 1.00;
+              speedBonus = 0.00;
+            }
+          } else {
+            // Dedicated native Rifler
+            aim = skillVal * 1.02;
+            iq = skillVal * 1.00;
+            movement = skillVal * 1.02;
+            utility = skillVal * 0.95;
+            focus = 1.00;
+            aggression = 1.00;
+            impact = 1.02;
+            reaction = skillVal * 1.02;
+            speedBonus = 0.01;
+          }
       }
 
       // Apply individual player perks across all roles if configured in Settings
@@ -240,6 +351,8 @@ export class MatchEngine {
         teamId: teamId,
         side: state.teams[teamId].side,
         role,
+        originalRole,
+        isAdaptedRole,
         rating,
         aim: Math.max(40, aim),
         iq: Math.max(40, iq),
@@ -276,8 +389,11 @@ export class MatchEngine {
       state.teams[teamId].players.push(pId);
     };
     
-    team1Input.slice(0, 5).forEach(p => initPlayer(p, t1Id));
-    team2Input.slice(0, 5).forEach(p => initPlayer(p, t2Id));
+    const adaptedTeam1 = adaptTeamRosterRoles(team1Input);
+    const adaptedTeam2 = adaptTeamRosterRoles(team2Input);
+
+    adaptedTeam1.forEach(p => initPlayer(p, t1Id));
+    adaptedTeam2.forEach(p => initPlayer(p, t2Id));
     
     return state;
   }
@@ -356,7 +472,18 @@ export class MatchEngine {
         hs: st.headshots || 0, role: p.role || 'rifler', rating: p.rating || 100,
         fk: st.openingKills || 0, fd: st.openingDeaths || 0,
         k1: st.k1 || 0, k2: st.k2 || 0, k3: st.k3 || 0, k4: st.k4 || 0, k5: st.k5 || 0,
-        kastRounds: st.kastRounds || 0
+        kastRounds: st.kastRounds || 0,
+        roundSwing: st.roundSwing || 0,
+        trades: st.trades || 0,
+        tradeDeaths: st.tradeDeaths || 0,
+        clutches: st.clutches || 0,
+        clutchesWon1v1: st.clutchesWon1v1 || 0,
+        clutchesWon1v2: st.clutchesWon1v2 || 0,
+        clutchesWon1v3: st.clutchesWon1v3 || 0,
+        clutchesWon1v4: st.clutchesWon1v4 || 0,
+        clutchesWon1v5: st.clutchesWon1v5 || 0,
+        openingKillsConverted: st.openingKillsConverted || 0,
+        openingKillsTraded: st.openingKillsTraded || 0
       }
     }).filter(Boolean);
     
@@ -369,7 +496,18 @@ export class MatchEngine {
         hs: st.headshots || 0, role: p.role || 'rifler', rating: p.rating || 100,
         fk: st.openingKills || 0, fd: st.openingDeaths || 0,
         k1: st.k1 || 0, k2: st.k2 || 0, k3: st.k3 || 0, k4: st.k4 || 0, k5: st.k5 || 0,
-        kastRounds: st.kastRounds || 0
+        kastRounds: st.kastRounds || 0,
+        roundSwing: st.roundSwing || 0,
+        trades: st.trades || 0,
+        tradeDeaths: st.tradeDeaths || 0,
+        clutches: st.clutches || 0,
+        clutchesWon1v1: st.clutchesWon1v1 || 0,
+        clutchesWon1v2: st.clutchesWon1v2 || 0,
+        clutchesWon1v3: st.clutchesWon1v3 || 0,
+        clutchesWon1v4: st.clutchesWon1v4 || 0,
+        clutchesWon1v5: st.clutchesWon1v5 || 0,
+        openingKillsConverted: st.openingKillsConverted || 0,
+        openingKillsTraded: st.openingKillsTraded || 0
       }
     }).filter(Boolean);
     

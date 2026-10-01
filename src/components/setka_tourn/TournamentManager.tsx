@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award } from 'lucide-react';
+import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2 } from 'lucide-react';
 import { Tournament, TournamentSettings, Team, Match, Group } from './types';
-import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage } from './storage';
+import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage, syncTournamentsWithServer } from './storage';
 import SingleEliminationStage from './SingleEliminationStage';
 import GroupStage from './GroupStage';
 import SwissStage from './SwissStage';
@@ -112,15 +112,41 @@ export default function TournamentManager({ user }: { user: any }) {
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [isSeedingOpen, setIsSeedingOpen] = useState(false);
   const [seedingTeams, setSeedingTeams] = useState<Team[]>([]);
+  const [historyStack, setHistoryStack] = useState<Tournament[]>([]);
 
   useEffect(() => {
     setTournaments(loadTournaments(userId, true));
+    // Immediately initiate remote sync with server for multi-device sync
+    syncTournamentsWithServer(userId).then(synced => {
+      if (synced && synced.length > 0) {
+        setTournaments(synced);
+      }
+    });
+
     const handleSync = () => {
       setTournaments(loadTournaments(userId, true));
     };
     window.addEventListener('tournaments-updated', handleSync);
     return () => window.removeEventListener('tournaments-updated', handleSync);
   }, [userId]);
+
+  useEffect(() => {
+    if (!activeTournament?.id) {
+      setHistoryStack([]);
+      return;
+    }
+    try {
+      const stored = sessionStorage.getItem(`t_history_${activeTournament.id}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setHistoryStack(parsed);
+          return;
+        }
+      }
+    } catch (e) {}
+    setHistoryStack([]);
+  }, [activeTournament?.id]);
 
   // Full concentration on tournament assets: preloads background, tournament logo, and all team logos
   useEffect(() => {
@@ -392,7 +418,295 @@ export default function TournamentManager({ user }: { user: any }) {
     setTournaments(loadTournaments(userId));
   };
 
+  const canUndoTournament = (t?: Tournament | null): boolean => {
+    if (!t) return false;
+    if (t.activeStage === 2 && (t.swissRounds || t.groups)) return true;
+    if (t.swissRounds && (t.swissRounds.length > 1 || t.swissRounds[0]?.some(m => m.winnerId))) return true;
+    if (t.tieredBracketRounds?.some(r => r.some(m => m.winnerId))) return true;
+    if (t.bracketRounds?.some(r => r.some(m => m.winnerId))) return true;
+    if (t.losersBracketRounds?.some(r => r.some(m => m.winnerId))) return true;
+    if (t.grandFinal?.some(m => m.winnerId)) return true;
+    if (t.groups?.some(g => g.matches?.some(m => m.winnerId))) return true;
+    return false;
+  };
+
+  const handleUndoTournamentRounds = (steps: number = 1) => {
+    if (!activeTournament) return;
+
+    let updated: Tournament = JSON.parse(JSON.stringify(activeTournament));
+    let didChange = false;
+
+    const isStage2 = updated.activeStage === 2;
+    const hasSwissStage1 = Boolean(updated.swissRounds && updated.swissRounds.length > 0);
+    const hasGroupsStage1 = Boolean(updated.groups && updated.groups.length > 0);
+
+    const hasPlayedTieredMatch = Boolean(updated.tieredBracketRounds?.some(r => r.some(m => m.winnerId)));
+    const hasPlayedSingleMatch = Boolean(updated.bracketRounds?.some(r => r.some(m => m.winnerId)));
+    const hasPlayedDoubleMatch = Boolean(
+      updated.bracketRounds?.some(r => r.some(m => m.winnerId)) ||
+      updated.losersBracketRounds?.some(r => r.some(m => m.winnerId)) ||
+      updated.grandFinal?.some(m => m.winnerId)
+    );
+
+    const isDouble = updated.settings?.eliminationType === 'double';
+
+    // 1. Stage 2 -> Stage 1 transition rollback (if no playoff matches played yet)
+    if (isStage2 && (hasSwissStage1 || hasGroupsStage1) && !hasPlayedTieredMatch && !hasPlayedSingleMatch && !hasPlayedDoubleMatch) {
+      updated.activeStage = 1;
+      didChange = true;
+    }
+    // 2. Double Elimination Bracket rollback
+    else if (isDouble && (hasPlayedDoubleMatch || updated.grandFinal?.length)) {
+      let wBracket = updated.bracketRounds ? JSON.parse(JSON.stringify(updated.bracketRounds)) : [];
+      let lBracket = updated.losersBracketRounds ? JSON.parse(JSON.stringify(updated.losersBracketRounds)) : [];
+      let gFinal = updated.grandFinal ? JSON.parse(JSON.stringify(updated.grandFinal)) : [];
+
+      if (gFinal.some((m: any) => m.winnerId)) {
+        gFinal = gFinal.map((m: any) => ({
+          ...m,
+          winnerId: null,
+          score1: undefined,
+          score2: undefined,
+          maps: undefined,
+          team1Stats: undefined,
+          team2Stats: undefined,
+          completed: false
+        }));
+        didChange = true;
+      } else {
+        for (let i = lBracket.length - 1; i >= 0; i--) {
+          if (lBracket[i].some((m: any) => m.winnerId)) {
+            lBracket[i] = lBracket[i].map((m: any) => ({
+              ...m,
+              winnerId: null,
+              score1: undefined,
+              score2: undefined,
+              maps: undefined,
+              team1Stats: undefined,
+              team2Stats: undefined,
+              completed: false
+            }));
+            didChange = true;
+            break;
+          }
+        }
+        if (!didChange) {
+          for (let i = wBracket.length - 1; i >= 0; i--) {
+            if (wBracket[i].some((m: any) => m.winnerId)) {
+              wBracket[i] = wBracket[i].map((m: any) => ({
+                ...m,
+                winnerId: null,
+                score1: undefined,
+                score2: undefined,
+                maps: undefined,
+                team1Stats: undefined,
+                team2Stats: undefined,
+                completed: false
+              }));
+              didChange = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (didChange) {
+        const cascaded = cascadeAdvancements(wBracket, lBracket, gFinal);
+        updated.bracketRounds = cascaded.winnersBracket;
+        updated.losersBracketRounds = cascaded.losersBracket;
+        updated.grandFinal = cascaded.grandFinal;
+      }
+    }
+    // 3. Tiered Playoff Bracket rollback
+    else if (updated.tieredBracketRounds && updated.tieredBracketRounds.length > 0 && hasPlayedTieredMatch) {
+      const rounds = updated.tieredBracketRounds.map(r => r.map(m => ({ ...m })));
+      let targetRoundIdx = -1;
+      for (let i = rounds.length - 1; i >= 0; i--) {
+        if (rounds[i].some(m => m.winnerId)) {
+          targetRoundIdx = i;
+          break;
+        }
+      }
+
+      if (targetRoundIdx !== -1) {
+        rounds[targetRoundIdx] = rounds[targetRoundIdx].map(m => ({
+          ...m,
+          winnerId: null,
+          score1: undefined,
+          score2: undefined,
+          maps: undefined,
+          team1Stats: undefined,
+          team2Stats: undefined,
+          completed: false
+        }));
+
+        for (let nextR = targetRoundIdx + 1; nextR < rounds.length; nextR++) {
+          rounds[nextR] = rounds[nextR].map(m => ({
+            ...m,
+            team1: undefined,
+            team2: undefined,
+            winnerId: null,
+            score1: undefined,
+            score2: undefined,
+            maps: undefined,
+            team1Stats: undefined,
+            team2Stats: undefined,
+            completed: false
+          }));
+        }
+        updated.tieredBracketRounds = rounds;
+        didChange = true;
+      }
+    }
+    // 4. Single Elimination Bracket rollback
+    else if (updated.bracketRounds && updated.bracketRounds.length > 0 && hasPlayedSingleMatch) {
+      const rounds = updated.bracketRounds.map(r => r.map(m => ({ ...m })));
+      let targetRoundIdx = -1;
+      for (let i = rounds.length - 1; i >= 0; i--) {
+        if (rounds[i].some(m => m.winnerId)) {
+          targetRoundIdx = i;
+          break;
+        }
+      }
+
+      if (targetRoundIdx !== -1) {
+        rounds[targetRoundIdx] = rounds[targetRoundIdx].map(m => ({
+          ...m,
+          winnerId: null,
+          score1: undefined,
+          score2: undefined,
+          maps: undefined,
+          team1Stats: undefined,
+          team2Stats: undefined,
+          completed: false
+        }));
+
+        for (let nextR = targetRoundIdx + 1; nextR < rounds.length; nextR++) {
+          rounds[nextR] = rounds[nextR].map(m => ({
+            ...m,
+            team1: undefined,
+            team2: undefined,
+            winnerId: null,
+            score1: undefined,
+            score2: undefined,
+            maps: undefined,
+            team1Stats: undefined,
+            team2Stats: undefined,
+            completed: false
+          }));
+        }
+        updated.bracketRounds = rounds;
+        didChange = true;
+      }
+    }
+    // 5. Swiss Stage rollback
+    else if (updated.swissRounds && updated.swissRounds.length > 0) {
+      const currentRIdx = updated.swissRounds.length - 1;
+      const currentRound = updated.swissRounds[currentRIdx];
+      const hasAnyPlayedMatches = currentRound.some(m => m.winnerId && m.team1?.id !== 'BYE' && m.team2?.id !== 'BYE');
+
+      if (hasAnyPlayedMatches) {
+        // Reset played matches in current round
+        updated.swissRounds[currentRIdx] = currentRound.map(m => {
+          const isBye = m.team1?.id === 'BYE' || m.team2?.id === 'BYE';
+          return {
+            ...m,
+            winnerId: isBye ? (m.team1?.id === 'BYE' ? m.team2?.id : m.team1?.id) : null,
+            score1: undefined,
+            score2: undefined,
+            maps: undefined,
+            team1Stats: undefined,
+            team2Stats: undefined,
+            completed: false
+          };
+        });
+        didChange = true;
+      } else if (updated.swissRounds.length > 1) {
+        // Round is unplayed: remove this round and step back to previous round
+        const toRemove = Math.min(steps, updated.swissRounds.length - 1);
+        updated.swissRounds = updated.swissRounds.slice(0, updated.swissRounds.length - toRemove);
+        didChange = true;
+      } else {
+        // Round 1
+        updated.swissRounds = [updated.swissRounds[0].map(m => {
+          const isBye = m.team1?.id === 'BYE' || m.team2?.id === 'BYE';
+          return {
+            ...m,
+            winnerId: isBye ? (m.team1?.id === 'BYE' ? m.team2?.id : m.team1?.id) : null,
+            score1: undefined,
+            score2: undefined,
+            maps: undefined,
+            team1Stats: undefined,
+            team2Stats: undefined,
+            completed: false
+          };
+        })];
+        didChange = true;
+      }
+    }
+    // 6. Groups rollback
+    else if (updated.groups && updated.groups.length > 0) {
+      const groups = updated.groups.map(g => ({
+        ...g,
+        matches: g.matches?.map(m => ({ ...m }))
+      }));
+      for (const g of groups) {
+        if (g.matches) {
+          for (let i = g.matches.length - 1; i >= 0; i--) {
+            if (g.matches[i].winnerId) {
+              g.matches[i].winnerId = null;
+              g.matches[i].score1 = undefined;
+              g.matches[i].score2 = undefined;
+              g.matches[i].maps = undefined;
+              g.matches[i].team1Stats = undefined;
+              g.matches[i].team2Stats = undefined;
+              g.matches[i].completed = false;
+              didChange = true;
+              break;
+            }
+          }
+        }
+      }
+      if (didChange) {
+        updated.groups = groups;
+      }
+    }
+
+    if (didChange) {
+      updated.status = 'in_progress';
+      updated.completed = false;
+      updated.winnerName = undefined;
+      setHistoryStack([]);
+      try {
+        if (activeTournament?.id) {
+          sessionStorage.removeItem(`t_history_${activeTournament.id}`);
+        }
+      } catch (e) {}
+
+      saveTournament(userId, updated);
+      setActiveTournament(updated);
+      setTournaments(loadTournaments(userId));
+    }
+  };
+
   const handleUpdateActive = (updated: Tournament) => {
+      if (activeTournament) {
+        setHistoryStack(prev => {
+          try {
+            const serializedCurrent = JSON.stringify(activeTournament);
+            if (prev.length > 0 && JSON.stringify(prev[prev.length - 1]) === serializedCurrent) {
+              return prev;
+            }
+            const next = [...prev.slice(-15), JSON.parse(serializedCurrent)];
+            try {
+              sessionStorage.setItem(`t_history_${activeTournament.id}`, JSON.stringify(next));
+            } catch (e) {}
+            return next;
+          } catch (e) {
+            return prev;
+          }
+        });
+      }
       let toSave = { ...updated };
       let winnerName = toSave.winnerName || '';
       if (toSave.settings?.stage1Type === 'gsl_groups' && toSave.activeStage === 2 && toSave.tieredBracketRounds && toSave.tieredBracketRounds.length > 0) {
@@ -1708,6 +2022,27 @@ export default function TournamentManager({ user }: { user: any }) {
                                   >
                                       К плей-офф ➡
                                   </button>
+                              )}
+
+                              {!isExporting && canUndoTournament(activeTournament) && (
+                                  <div className="flex items-center gap-1.5 bg-red-500/10 p-1 rounded-xl border border-red-500/30 shadow-sm">
+                                      <button
+                                          onClick={() => handleUndoTournamentRounds(1)}
+                                          className="px-3 py-1.5 rounded-lg font-black text-xs uppercase tracking-wider transition-all hover:bg-red-500/20 text-red-400 flex items-center gap-1.5 cursor-pointer"
+                                          title="Вернуть состояние турнира назад на 1 раунд / шаг"
+                                      >
+                                          <Undo2 className="w-3.5 h-3.5" /> Назад на 1 раунд
+                                      </button>
+                                      {(historyStack.length >= 2 || (activeTournament.swissRounds && activeTournament.swissRounds.length > 2)) && (
+                                          <button
+                                              onClick={() => handleUndoTournamentRounds(2)}
+                                              className="px-3 py-1.5 rounded-lg font-black text-xs uppercase tracking-wider transition-all hover:bg-red-500/30 text-red-300 bg-red-500/20 border border-red-500/30 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                              title="Вернуть состояние турнира назад на 2 раунда / действия"
+                                          >
+                                              <Undo2 className="w-3.5 h-3.5" /> Назад на 2 раунда
+                                          </button>
+                                      )}
+                                  </div>
                               )}
 
                               {!isExporting && (

@@ -11,6 +11,7 @@ interface Props {
     mIdx: number;
     onUpdateScore: (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number, teamNum: 1 | 2, score: number) => void;
     onAdvanceWinner: (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number) => void;
+    onRevertWinner?: (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number) => void;
     onSwapTeam?: (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number, teamNum: 1 | 2, teamId: string) => void;
     allTeams?: {id: string, name: string}[];
   onVetoMatch?: (team1: Team, team2: Team, matchInfo?: any) => void;
@@ -34,6 +35,7 @@ export default function MatchCard({
     mIdx,
     onUpdateScore,
     onAdvanceWinner,
+    onRevertWinner,
     isFinal = false,
     onSwapTeam,
     allTeams,

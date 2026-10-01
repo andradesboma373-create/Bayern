@@ -1,5 +1,6 @@
 import mapsList from '../mapsList.json';
 import { getPlayerPerks } from "./playerPerks";
+import { RatingSystem } from '../match-logic/systems/RatingSystem';
 
 export interface RoleSubclass {
     id: string;
@@ -828,33 +829,18 @@ export function simulateMap(
 function finalizeStats(stats: any[]) {
     stats.forEach(s => {
         if (!s.totalRounds || s.totalRounds === 0) s.totalRounds = 1;
-        s.kd = (s.kills / (s.deaths || 1)).toFixed(2);
-        s.adr = (s.damage / s.totalRounds).toFixed(1);
-        s.kpr = (s.kills / s.totalRounds).toFixed(2);
-        s.dpr = (s.deaths / s.totalRounds).toFixed(2);
-        
-        const kprNum = s.kills / s.totalRounds;
-        const dprNum = s.deaths / s.totalRounds;
-        const aprNum = (s.assists || 0) / s.totalRounds;
-        const adrNum = s.damage / s.totalRounds;
-        
-        const kastPct = s.kastRounds !== undefined 
-            ? Math.min(98, Math.max(40, (s.kastRounds / s.totalRounds) * 100))
-            : Math.min(95, Math.max(45, 68 + (s.kills + (s.assists || 0) - s.deaths) * 1.5));
-            
-        s.kast = `${Math.round(kastPct)}%`;
-        
-        // Official HLTV Rating 2.0 formula
-        const rawImpact = 2.13 * kprNum + 0.42 * aprNum - 0.41;
-        const impact = Math.max(0.00, rawImpact);
-        
-        let rating2 = 0.007387 * kastPct + 0.3591 * kprNum - 0.5329 * dprNum + 0.2372 * impact + 0.0032 * adrNum + 0.1587;
-        
-        // Ensure rating does not go below 0.00 or exceed realistic max (3.50)
-        rating2 = Math.max(0.00, Math.min(3.50, rating2));
-        
-        s.impact = impact.toFixed(2);
-        s.hltvRating = rating2.toFixed(2);
+        const breakdown = RatingSystem.calculatePlayerRating(s, s.totalRounds);
+
+        s.kd = breakdown.kd.toFixed(2);
+        s.adr = breakdown.adr.toFixed(1);
+        s.kpr = breakdown.kpr.toFixed(2);
+        s.dpr = breakdown.dpr.toFixed(2);
+        s.kast = `${Math.round(breakdown.kast)}%`;
+        s.impact = breakdown.impact.toFixed(2);
+        s.rawRoundSwing = breakdown.totalSwing;
+        s.roundSwingNum = breakdown.roundSwing;
+        s.roundSwing = `${breakdown.roundSwing > 0 ? '+' : ''}${breakdown.roundSwing.toFixed(1)}%`;
+        s.hltvRating = breakdown.rating.toFixed(2);
     });
 }
 
@@ -958,6 +944,24 @@ export function simulateMatchSeries(
             (results.team1Stats[idx] as any).fk = ((results.team1Stats[idx] as any).fk || 0) + (stat.fk || 0);
             (results.team1Stats[idx] as any).fd = ((results.team1Stats[idx] as any).fd || 0) + (stat.fd || 0);
             (results.team1Stats[idx] as any).kastRounds = ((results.team1Stats[idx] as any).kastRounds || 0) + (stat.kastRounds || 0);
+            const mapSwing1 = typeof stat.rawRoundSwing === 'number'
+                ? stat.rawRoundSwing
+                : (typeof stat.roundSwingNum === 'number'
+                    ? (stat.roundSwingNum / 100) * mapRounds
+                    : (typeof stat.roundSwing === 'number'
+                        ? stat.roundSwing
+                        : (parseFloat(String(stat.roundSwing || '0').replace(/[%+]/g, '')) / 100) * mapRounds || 0));
+            (results.team1Stats[idx] as any).roundSwing = ((results.team1Stats[idx] as any).roundSwing || 0) + mapSwing1;
+            (results.team1Stats[idx] as any).trades = ((results.team1Stats[idx] as any).trades || 0) + (stat.trades || 0);
+            (results.team1Stats[idx] as any).tradeDeaths = ((results.team1Stats[idx] as any).tradeDeaths || 0) + (stat.tradeDeaths || 0);
+            (results.team1Stats[idx] as any).clutches = ((results.team1Stats[idx] as any).clutches || 0) + (stat.clutches || 0);
+            (results.team1Stats[idx] as any).clutchesWon1v1 = ((results.team1Stats[idx] as any).clutchesWon1v1 || 0) + (stat.clutchesWon1v1 || 0);
+            (results.team1Stats[idx] as any).clutchesWon1v2 = ((results.team1Stats[idx] as any).clutchesWon1v2 || 0) + (stat.clutchesWon1v2 || 0);
+            (results.team1Stats[idx] as any).clutchesWon1v3 = ((results.team1Stats[idx] as any).clutchesWon1v3 || 0) + (stat.clutchesWon1v3 || 0);
+            (results.team1Stats[idx] as any).clutchesWon1v4 = ((results.team1Stats[idx] as any).clutchesWon1v4 || 0) + (stat.clutchesWon1v4 || 0);
+            (results.team1Stats[idx] as any).clutchesWon1v5 = ((results.team1Stats[idx] as any).clutchesWon1v5 || 0) + (stat.clutchesWon1v5 || 0);
+            (results.team1Stats[idx] as any).openingKillsTraded = ((results.team1Stats[idx] as any).openingKillsTraded || 0) + (stat.openingKillsTraded || 0);
+            (results.team1Stats[idx] as any).openingKillsConverted = ((results.team1Stats[idx] as any).openingKillsConverted || 0) + (stat.openingKillsConverted || 0);
         });
         
         mapResult.team2Stats.forEach((stat, idx) => {
@@ -974,6 +978,24 @@ export function simulateMatchSeries(
             (results.team2Stats[idx] as any).fk = ((results.team2Stats[idx] as any).fk || 0) + (stat.fk || 0);
             (results.team2Stats[idx] as any).fd = ((results.team2Stats[idx] as any).fd || 0) + (stat.fd || 0);
             (results.team2Stats[idx] as any).kastRounds = ((results.team2Stats[idx] as any).kastRounds || 0) + (stat.kastRounds || 0);
+            const mapSwing2 = typeof stat.rawRoundSwing === 'number'
+                ? stat.rawRoundSwing
+                : (typeof stat.roundSwingNum === 'number'
+                    ? (stat.roundSwingNum / 100) * mapRounds
+                    : (typeof stat.roundSwing === 'number'
+                        ? stat.roundSwing
+                        : (parseFloat(String(stat.roundSwing || '0').replace(/[%+]/g, '')) / 100) * mapRounds || 0));
+            (results.team2Stats[idx] as any).roundSwing = ((results.team2Stats[idx] as any).roundSwing || 0) + mapSwing2;
+            (results.team2Stats[idx] as any).trades = ((results.team2Stats[idx] as any).trades || 0) + (stat.trades || 0);
+            (results.team2Stats[idx] as any).tradeDeaths = ((results.team2Stats[idx] as any).tradeDeaths || 0) + (stat.tradeDeaths || 0);
+            (results.team2Stats[idx] as any).clutches = ((results.team2Stats[idx] as any).clutches || 0) + (stat.clutches || 0);
+            (results.team2Stats[idx] as any).clutchesWon1v1 = ((results.team2Stats[idx] as any).clutchesWon1v1 || 0) + (stat.clutchesWon1v1 || 0);
+            (results.team2Stats[idx] as any).clutchesWon1v2 = ((results.team2Stats[idx] as any).clutchesWon1v2 || 0) + (stat.clutchesWon1v2 || 0);
+            (results.team2Stats[idx] as any).clutchesWon1v3 = ((results.team2Stats[idx] as any).clutchesWon1v3 || 0) + (stat.clutchesWon1v3 || 0);
+            (results.team2Stats[idx] as any).clutchesWon1v4 = ((results.team2Stats[idx] as any).clutchesWon1v4 || 0) + (stat.clutchesWon1v4 || 0);
+            (results.team2Stats[idx] as any).clutchesWon1v5 = ((results.team2Stats[idx] as any).clutchesWon1v5 || 0) + (stat.clutchesWon1v5 || 0);
+            (results.team2Stats[idx] as any).openingKillsTraded = ((results.team2Stats[idx] as any).openingKillsTraded || 0) + (stat.openingKillsTraded || 0);
+            (results.team2Stats[idx] as any).openingKillsConverted = ((results.team2Stats[idx] as any).openingKillsConverted || 0) + (stat.openingKillsConverted || 0);
         });
 
         if (results.team1Score >= winsNeeded || results.team2Score >= winsNeeded) break;

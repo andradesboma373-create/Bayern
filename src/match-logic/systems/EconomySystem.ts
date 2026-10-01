@@ -50,12 +50,19 @@ export class EconomySystem {
         let totalBonus = lossMoney + tBombBonus;
         if (scoreDiff >= 3) {
           // Anti-snowball tactical economy: ensures trailing team has budget for rifles and armor
-          totalBonus += Math.min(750, (scoreDiff - 2) * 250);
+          const deficitBonus = (loser?.score || 0) <= 1 && scoreDiff >= 6
+            ? Math.min(1500, (scoreDiff - 2) * 300)
+            : Math.min(750, (scoreDiff - 2) * 250);
+          totalBonus += deficitBonus;
         }
         if (p.alive && p.side === 'CT' && reason === 'TIME') {
           // 0 loss bonus if CT survives and time runs out
         } else {
           p.money = Math.min(16000, p.money + totalBonus);
+        }
+        if ((loser?.score || 0) <= 1 && (winner?.score || 0) >= 8) {
+          // Guarantee emergency rifle/armor budget ($4,100 minimum) to prevent prolonged glock-only rounds
+          p.money = Math.max(p.money, 4100);
         }
         if (isOT) {
           p.money = Math.max(4500, p.money);

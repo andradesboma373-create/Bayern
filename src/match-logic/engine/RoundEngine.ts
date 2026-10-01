@@ -9,11 +9,20 @@ import { BombSystem } from '../systems/BombSystem';
 export class RoundEngine {
   static startRound(state: MatchState) {
     state.round++;
+    (state as any).recentDeaths = [];
+    (state as any).roundFirstKillId = null;
+    (state as any).roundFirstKillTeamId = null;
+    (state as any).roundFirstDeathId = null;
+    (state as any).roundFirstKillTraded = false;
+
     Object.values(state.players).forEach(p => {
         if (p && p.statistics) {
             (p as any).lastRoundKills = p.statistics.kills;
             (p as any).lastRoundAssists = p.statistics.assists;
-            (p as any).tradedInRound = false;
+            (p as any).roundKills = 0;
+            (p as any).roundAssists = 0;
+            (p as any).wasTradedInRound = false;
+            (p as any).clutchOpponentsAtStart = null;
         }
     });
     state.phase = 'FREEZE';
@@ -135,6 +144,30 @@ export class RoundEngine {
     
     
     EconomySystem.processBuyPhase(state);
+
+    // Anti-Blowout & Competitive Realism: make 13:0 and 13:1 shutouts extremely rare
+    const t1Score = state.teams['t1']?.score || 0;
+    const t2Score = state.teams['t2']?.score || 0;
+    const leaderTeamId = t1Score > t2Score ? 't1' : (t2Score > t1Score ? 't2' : null);
+    const trailingTeamId = leaderTeamId ? (leaderTeamId === 't1' ? 't2' : 't1') : null;
+    const leaderScore = Math.max(t1Score, t2Score);
+    const trailingScore = Math.min(t1Score, t2Score);
+
+    if (trailingTeamId && leaderScore >= 7 && trailingScore <= 1) {
+      for (const p of Object.values(state.players)) {
+        if (!p) continue;
+        if (p.teamId === trailingTeamId) {
+          p.focus = 1.15;
+          (p as any).isAntiBlowoutBuffed = true;
+          if (!p.grenades || p.grenades.length === 0) {
+            p.grenades = ['flash', 'smoke'];
+          }
+        } else if (leaderScore >= 11 && p.teamId === leaderTeamId) {
+          // Leading team experiences psychological pressure / anti-stratting on shutout verge
+          p.focus = 0.95;
+        }
+      }
+    }
     
     // Reset strategies
     for (const team of Object.values(state.teams)) {
@@ -254,21 +287,57 @@ export class RoundEngine {
       EconomySystem.distributeRoundEndMoney(state, winnerId, reason);
     }
     
+    // Check if team with opening kill converted to round win
+    if ((state as any).roundFirstKillTeamId && (state as any).roundFirstKillTeamId === winnerId) {
+      const openerId = (state as any).roundFirstKillId;
+      const opener = openerId ? state.players[openerId] : null;
+      if (opener && opener.statistics) {
+        opener.statistics.openingKillsConverted = (opener.statistics.openingKillsConverted || 0) + 1;
+      }
+    }
+
+    // Check if any surviving winner player closed out a clutch
+    if (winnerId) {
+      const winnerAlivePlayers = Object.values(state.players).filter(p => p && p.alive && p.teamId === winnerId);
+      if (winnerAlivePlayers.length === 1) {
+        const clutchCloser = winnerAlivePlayers[0];
+        const opponentsFaced = (clutchCloser as any).clutchOpponentsAtStart;
+        if (opponentsFaced && opponentsFaced >= 1 && clutchCloser.statistics) {
+          if (opponentsFaced === 1) clutchCloser.statistics.clutchesWon1v1 = (clutchCloser.statistics.clutchesWon1v1 || 0) + 1;
+          else if (opponentsFaced === 2) clutchCloser.statistics.clutchesWon1v2 = (clutchCloser.statistics.clutchesWon1v2 || 0) + 1;
+          else if (opponentsFaced === 3) clutchCloser.statistics.clutchesWon1v3 = (clutchCloser.statistics.clutchesWon1v3 || 0) + 1;
+          else if (opponentsFaced === 4) clutchCloser.statistics.clutchesWon1v4 = (clutchCloser.statistics.clutchesWon1v4 || 0) + 1;
+          else if (opponentsFaced >= 5) clutchCloser.statistics.clutchesWon1v5 = (clutchCloser.statistics.clutchesWon1v5 || 0) + 1;
+          clutchCloser.statistics.clutches = (clutchCloser.statistics.clutches || 0) + 1;
+        }
+      }
+    }
+
     const teamsList = Object.values(state.teams);
     
     for (const p of Object.values(state.players)) {
       if (!p || !p.statistics) continue;
-      const rKills = p.statistics.kills - ((p as any).lastRoundKills || 0);
-      const rAssists = p.statistics.assists - ((p as any).lastRoundAssists || 0);
-      if (rKills === 1) (p.statistics as any).k1 = ((p.statistics as any).k1 || 0) + 1;
-      else if (rKills === 2) (p.statistics as any).k2 = ((p.statistics as any).k2 || 0) + 1;
-      else if (rKills === 3) (p.statistics as any).k3 = ((p.statistics as any).k3 || 0) + 1;
-      else if (rKills === 4) (p.statistics as any).k4 = ((p.statistics as any).k4 || 0) + 1;
-      else if (rKills >= 5) (p.statistics as any).k5 = ((p.statistics as any).k5 || 0) + 1;
+      const rKills = (p as any).roundKills !== undefined
+        ? (p as any).roundKills
+        : Math.max(0, p.statistics.kills - ((p as any).lastRoundKills || 0));
+      const rAssists = (p as any).roundAssists !== undefined
+        ? (p as any).roundAssists
+        : Math.max(0, p.statistics.assists - ((p as any).lastRoundAssists || 0));
 
-      const contributed = rKills > 0 || rAssists > 0 || p.alive || (p as any).tradedInRound;
-      if (contributed) {
-        (p.statistics as any).kastRounds = ((p.statistics as any).kastRounds || 0) + 1;
+      if (rKills === 1) p.statistics.k1 = (p.statistics.k1 || 0) + 1;
+      else if (rKills === 2) p.statistics.k2 = (p.statistics.k2 || 0) + 1;
+      else if (rKills === 3) p.statistics.k3 = (p.statistics.k3 || 0) + 1;
+      else if (rKills === 4) p.statistics.k4 = (p.statistics.k4 || 0) + 1;
+      else if (rKills >= 5) p.statistics.k5 = (p.statistics.k5 || 0) + 1;
+
+      // Strict KAST: exactly +1 per round if ANY condition (K or A or S or T) is met
+      const hasKill = rKills > 0;
+      const hasAssist = rAssists > 0;
+      const hasSurvived = p.alive;
+      const hasBeenTraded = !!(p as any).wasTradedInRound;
+
+      if (hasKill || hasAssist || hasSurvived || hasBeenTraded) {
+        p.statistics.kastRounds = (p.statistics.kastRounds || 0) + 1;
       }
     }
     

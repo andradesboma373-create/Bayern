@@ -373,12 +373,57 @@ export default function SwissStage({
     onUpdate({ ...tournament, swissRounds: newRounds });
   };
 
-  const handleUndoLastRound = () => {
-    if (swissRounds.length <= 1) return;
-    if (!window.confirm('Вы уверены, что хотите отменить последний раунд?')) return;
-    const newRounds = swissRounds.slice(0, swissRounds.length - 1);
+  const handleUndoRounds = (count: number = 1) => {
+    if (swissRounds.length === 0) return;
+
+    const currentRIdx = swissRounds.length - 1;
+    const currentRound = swissRounds[currentRIdx];
+    const hasAnyPlayedMatches = currentRound.some(m => m.winnerId && m.team1?.id !== 'BYE' && m.team2?.id !== 'BYE');
+
+    if (hasAnyPlayedMatches) {
+      // If current round has played matches, reset current round so it can be replayed
+      const newRounds = [...swissRounds];
+      newRounds[currentRIdx] = currentRound.map(m => {
+        const isBye = m.team1?.id === 'BYE' || m.team2?.id === 'BYE';
+        return {
+          ...m,
+          winnerId: isBye ? (m.team1?.id === 'BYE' ? m.team2?.id : m.team1?.id) : null,
+          score1: undefined,
+          score2: undefined,
+          maps: undefined,
+          team1Stats: undefined,
+          team2Stats: undefined,
+          completed: false
+        };
+      });
+      onUpdate({ ...tournament, swissRounds: newRounds });
+      return;
+    }
+
+    if (swissRounds.length === 1) {
+      const resetRound1 = swissRounds[0].map(m => {
+        const isBye = m.team1?.id === 'BYE' || m.team2?.id === 'BYE';
+        return {
+          ...m,
+          winnerId: isBye ? (m.team1?.id === 'BYE' ? m.team2?.id : m.team1?.id) : null,
+          score1: undefined,
+          score2: undefined,
+          maps: undefined,
+          team1Stats: undefined,
+          team2Stats: undefined,
+          completed: false
+        };
+      });
+      onUpdate({ ...tournament, swissRounds: [resetRound1] });
+      return;
+    }
+
+    const roundsToRemove = Math.min(count, swissRounds.length - 1);
+    const newRounds = swissRounds.slice(0, swissRounds.length - roundsToRemove);
     onUpdate({ ...tournament, swissRounds: newRounds });
   };
+
+  const handleUndoLastRound = () => handleUndoRounds(1);
 
   const handleGenerateNextRound = () => {
     const nextRound = generateNextSwissRound(tournament.teams, swissRounds, winsToAdvance, lossesToEliminate);
@@ -761,14 +806,25 @@ export default function SwissStage({
             </button>
           )}
 
-          {swissRounds.length > 1 && !isExporting && (
-            <button
-              onClick={handleUndoLastRound}
-              className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-              title="Отменить последний сгенерированный раунд"
-            >
-              <Undo2 className="w-3.5 h-3.5" /> Отмена раунда
-            </button>
+          {(swissRounds.length > 1 || (swissRounds.length === 1 && swissRounds[0]?.some(m => m.winnerId))) && !isExporting && (
+            <div className="flex items-center gap-1.5 bg-red-500/10 p-1 rounded-xl border border-red-500/30 shadow-sm">
+              <button
+                onClick={() => handleUndoRounds(1)}
+                className="hover:bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+                title={swissRounds.length === 1 ? "Сбросить результаты 1-го раунда" : "Вернуть назад на 1 раунд швейцарки"}
+              >
+                <Undo2 className="w-3.5 h-3.5" /> {swissRounds.length === 1 ? "Сбросить 1-й раунд" : "Назад на 1 раунд"}
+              </button>
+              {swissRounds.length > 2 && (
+                <button
+                  onClick={() => handleUndoRounds(2)}
+                  className="hover:bg-red-500/30 text-red-300 bg-red-500/20 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border border-red-500/30 shadow-sm"
+                  title="Вернуть назад на 2 раунда швейцарки"
+                >
+                  <Undo2 className="w-3.5 h-3.5" /> Назад на 2 раунда
+                </button>
+              )}
+            </div>
           )}
 
           {!isExporting && swissRounds.length < totalRounds && (

@@ -1573,6 +1573,8 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
               <th className="py-2 text-center font-medium">K-A-D</th>
               <th className="py-2 text-center font-medium">+/-</th>
               <th className="py-2 text-center font-medium" title="Average Damage per Round">ADR</th>
+              <th className="py-2 text-center font-medium" title="Percentage of rounds with Kill, Assist, Survived or Traded">KAST</th>
+              <th className="py-2 text-center font-medium" title="Round Swing (Win Probability Impact)">Swing</th>
               <th className="py-2 text-center font-medium" title="Impact Rating">Impact</th>
               <th className="py-2 text-center font-medium">K/D</th>
               <th className="py-2 text-right font-medium">Rating</th>
@@ -1590,6 +1592,8 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
                     {diff > 0 ? `+${diff}` : diff}
                   </td>
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{p.adr || '-'}</td>
+                  <td className="py-2 text-center text-white/50 font-mono text-xs">{p.kast || '-'}</td>
+                  <td className={`py-2 text-center font-mono text-xs ${p?.roundSwingNum > 0 || (typeof p?.roundSwing === 'string' && p.roundSwing.startsWith('+')) ? 'text-emerald-400' : (typeof p?.roundSwing === 'string' && p.roundSwing.startsWith('-')) ? 'text-red-400' : 'text-white/50'}`}>{p?.roundSwing || '-'}</td>
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{p.impact || '-'}</td>
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{p.kd || '-'}</td>
                   <td className="py-2 text-right font-bold text-yellow-500/80 font-mono text-sm">{p.hltvRating || '-'}</td>

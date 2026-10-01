@@ -1,4 +1,4 @@
-import { loadTournaments } from './components/setka_tourn/storage';
+import { loadTournaments, compactTournamentForStorage, cleanupTournamentStorageQuota, getCanonicalRoomId } from './components/setka_tourn/storage';
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity } from 'lucide-react';
@@ -262,14 +262,15 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
+          const canonicalRoomId = parsed.channelId || parsed.uid || parsed.name;
           setUser({
-            uid: firebaseUser ? firebaseUser.uid : (parsed.uid || parsed.channelId || parsed.name),
+            uid: canonicalRoomId,
             name: parsed.name,
             username: parsed.username || parsed.name,
             displayName: parsed.displayName || parsed.name,
             isCustom: true,
             channelName: parsed.channelName,
-            channelId: parsed.channelId,
+            channelId: canonicalRoomId,
             role: parsed.role,
             isLocalDemo: parsed.isLocalDemo !== undefined ? parsed.isLocalDemo : false
           });
@@ -303,24 +304,26 @@ export default function App() {
     }
     
     let isCancelled = false;
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    cleanupTournamentStorageQuota(roomId);
 
     const restoreBackupFromServer = async () => {
       try {
-        const res = await fetch(`/api/backup-data/${user.uid}`);
+        const res = await fetch(`/api/backup-data/${roomId}`);
         const data = await res.json();
         if (isCancelled) return;
 
         if (data && data.success) {
           const collections = [
-            { prop: 'settings', cacheKey: `settings_${user.uid}`, isObject: true },
-            { prop: 'players', cacheKey: `players_${user.uid}` },
-            { prop: 'teams', cacheKey: `teams_${user.uid}` },
-            { prop: 'swapOffers', cacheKey: `swapOffers_${user.uid}` },
-            { prop: 'tournaments', cacheKey: `tournaments_${user.uid}` },
-            { prop: 'matches', cacheKey: `matches_${user.uid}` },
-            { prop: 'tgUsers', cacheKey: `tgUsers_${user.uid}` },
-            { prop: 'tgVetos', cacheKey: `tgVetos_${user.uid}` },
-            { prop: 'mapStats', cacheKey: `mapStats_${user.uid}` }
+            { prop: 'settings', cacheKey: `settings_${roomId}`, isObject: true },
+            { prop: 'players', cacheKey: `players_${roomId}` },
+            { prop: 'teams', cacheKey: `teams_${roomId}` },
+            { prop: 'swapOffers', cacheKey: `swapOffers_${roomId}` },
+            { prop: 'tournaments', cacheKey: `tournaments_${roomId}` },
+            { prop: 'matches', cacheKey: `matches_${roomId}` },
+            { prop: 'tgUsers', cacheKey: `tgUsers_${roomId}` },
+            { prop: 'tgVetos', cacheKey: `tgVetos_${roomId}` },
+            { prop: 'mapStats', cacheKey: `mapStats_${roomId}` }
           ];
 
           let hasUpdatedAny = false;
@@ -330,32 +333,33 @@ export default function App() {
             if (!serverItems) continue;
 
             if (col.isObject) {
-              const localRaw = localStorage.getItem(col.cacheKey);
+              const localRaw = localStorage.getItem(col.cacheKey) || localStorage.getItem(`settings_${user.uid}`);
               const localObj = localRaw ? JSON.parse(localRaw) : {};
               const merged = { ...serverItems, ...localObj };
               const mergedStr = JSON.stringify(merged);
               if (mergedStr !== localRaw) {
                 try {
                   localStorage.setItem(col.cacheKey, mergedStr);
+                  if (roomId !== user.uid) localStorage.setItem(`settings_${user.uid}`, mergedStr);
                   hasUpdatedAny = true;
                 } catch (e) {}
               }
             } else if (Array.isArray(serverItems)) {
-              const localRaw = localStorage.getItem(col.cacheKey);
+              const localRaw = localStorage.getItem(col.cacheKey) || localStorage.getItem(`${col.prop}_${user.uid}`);
               const localArray = localRaw ? JSON.parse(localRaw) : [];
               
               const mergedMap = new Map();
               // Server first (backup data is authoritative if local is missing or has defaults)
               for (const sItem of serverItems) {
                 if (sItem) {
-                  const key = sItem.id || `${user.uid}_${sItem.chatId}`;
+                  const key = sItem.id || `${roomId}_${sItem.chatId}`;
                   if (key) mergedMap.set(key, sItem);
                 }
               }
               // Local second (could be newer)
               for (const lItem of localArray) {
                 if (lItem) {
-                  const key = lItem.id || `${user.uid}_${lItem.chatId}`;
+                  const key = lItem.id || `${roomId}_${lItem.chatId}`;
                   if (key) {
                     const sItem = mergedMap.get(key);
                     mergedMap.set(key, sItem ? { ...sItem, ...lItem } : lItem);
@@ -364,9 +368,9 @@ export default function App() {
               }
 
               const finalArray = Array.from(mergedMap.values());
-              if (col.cacheKey === `matches_${user.uid}`) {
+              if (col.cacheKey === `matches_${roomId}`) {
                 const prevRaw = localStorage.getItem(col.cacheKey);
-                const deletedIdsRaw = localStorage.getItem(`deleted_matches_${user.uid}`);
+                const deletedIdsRaw = localStorage.getItem(`deleted_matches_${roomId}`) || localStorage.getItem(`deleted_matches_${user.uid}`);
                 const deletedSet = new Set<string>(deletedIdsRaw ? JSON.parse(deletedIdsRaw) : []);
                 
                 // Filter out any matches deleted by the user
@@ -376,20 +380,20 @@ export default function App() {
                   return mId && !deletedSet.has(mId);
                 });
 
-                saveMatchesToLocalStorage(user.uid, validArray);
+                saveMatchesToLocalStorage(roomId, validArray);
+                if (roomId !== user.uid) saveMatchesToLocalStorage(user.uid, validArray);
                 const nextRaw = localStorage.getItem(col.cacheKey);
                 if (prevRaw !== nextRaw) {
                   hasUpdatedAny = true;
                 }
-              } else if (col.cacheKey === `tournaments_${user.uid}`) {
-                const prevRaw = localStorage.getItem(col.cacheKey);
-                const deletedIdsRaw = localStorage.getItem(`deleted_tournaments_${user.uid}`);
+              } else if (col.cacheKey === `tournaments_${roomId}`) {
+                const deletedIdsRaw = localStorage.getItem(`deleted_tournaments_${roomId}`);
                 const deletedSet = new Set<string>(deletedIdsRaw ? JSON.parse(deletedIdsRaw) : []);
 
                 // Filter out deleted items from finalArray
                 const validArray = finalArray.filter((t: any) => t && t.id && !deletedSet.has(t.id));
 
-                // Preserve isolated tournament files and background images
+                // Preserve isolated tournament files and background images cleanly
                 for (const tourney of validArray) {
                   if (tourney && tourney.id) {
                     const isolatedBg = localStorage.getItem(`tournament_bg_${tourney.id}`);
@@ -403,23 +407,29 @@ export default function App() {
                       tourney.settings.bgImage = bgImg;
                     }
                     try {
-                      localStorage.setItem(`tournament_item_${user.uid}_${tourney.id}`, JSON.stringify(tourney));
-                    } catch (e) {}
+                      const compacted = compactTournamentForStorage(tourney);
+                      localStorage.setItem(`tournament_item_${roomId}_${tourney.id}`, JSON.stringify(compacted));
+                    } catch (e) {
+                      try {
+                        const stripped = JSON.stringify(tourney).replace(/"data:image\/[^;]+;base64,[^"]+"/g, 'null');
+                        localStorage.setItem(`tournament_item_${roomId}_${tourney.id}`, stripped);
+                      } catch (e2) {}
+                    }
                   }
                 }
                 
-                let jsonStr = JSON.stringify(validArray);
-                if (jsonStr !== prevRaw) {
+                // Save lightweight index in tournaments_${roomId} to prevent quota overflow
+                try {
+                  const lightweightTourneys = validArray.map((t: any) => {
+                    const { bracketRounds, losersBracketRounds, swissRounds, groups, tieredBracketRounds, ...lightweight } = t;
+                    return lightweight;
+                  });
+                  localStorage.setItem(col.cacheKey, JSON.stringify(lightweightTourneys));
+                  hasUpdatedAny = true;
+                } catch (err) {
                   try {
-                    localStorage.setItem(col.cacheKey, jsonStr);
-                    hasUpdatedAny = true;
-                  } catch (err) {
-                    try {
-                      const compact = jsonStr.replace(/"data:image\/[^;]+;base64,[^"]{1000,}"/g, 'null');
-                      localStorage.setItem(col.cacheKey, compact);
-                      hasUpdatedAny = true;
-                    } catch (err2) {}
-                  }
+                    localStorage.removeItem(col.cacheKey);
+                  } catch (e) {}
                 }
                 window.dispatchEvent(new Event('tournaments-updated'));
               } else {
@@ -433,7 +443,7 @@ export default function App() {
                     hasUpdatedAny = true;
                   } catch (err) {
                     try {
-                      const compact = jsonStr.replace(/"data:image\/[^;]+;base64,[^"]{1000,}"/g, 'null');
+                      const compact = jsonStr.replace(/"data:image\/[^;]+;base64,[^"]{20000,}"/g, 'null');
                       localStorage.setItem(col.cacheKey, compact);
                       hasUpdatedAny = true;
                     } catch (err2) {}
@@ -455,26 +465,26 @@ export default function App() {
 
     const syncCacheWithServer = async () => {
       try {
-        const payload: any = { userId: user.uid };
+        const payload: any = { userId: roomId };
         
         const keys = [
-          { prop: 'settings', cacheKey: `settings_${user.uid}` },
-          { prop: 'players', cacheKey: `players_${user.uid}` },
-          { prop: 'teams', cacheKey: `teams_${user.uid}` },
-          { prop: 'swapOffers', cacheKey: `swapOffers_${user.uid}` },
-          { prop: 'tournaments', cacheKey: `tournaments_${user.uid}` },
-          { prop: 'matches', cacheKey: `matches_${user.uid}` },
-          { prop: 'tgUsers', cacheKey: `tgUsers_${user.uid}` },
-          { prop: 'tgVetos', cacheKey: `tgVetos_${user.uid}` },
-          { prop: 'mapStats', cacheKey: `mapStats_${user.uid}` }
+          { prop: 'settings', cacheKey: `settings_${roomId}` },
+          { prop: 'players', cacheKey: `players_${roomId}` },
+          { prop: 'teams', cacheKey: `teams_${roomId}` },
+          { prop: 'swapOffers', cacheKey: `swapOffers_${roomId}` },
+          { prop: 'tournaments', cacheKey: `tournaments_${roomId}` },
+          { prop: 'matches', cacheKey: `matches_${roomId}` },
+          { prop: 'tgUsers', cacheKey: `tgUsers_${roomId}` },
+          { prop: 'tgVetos', cacheKey: `tgVetos_${roomId}` },
+          { prop: 'mapStats', cacheKey: `mapStats_${roomId}` }
         ];
         
         let hasAnyData = false;
         
         for (const item of keys) {
-          let raw = localStorage.getItem(item.cacheKey);
+          let raw = localStorage.getItem(item.cacheKey) || (roomId !== user.uid ? localStorage.getItem(`${item.prop}_${user.uid}`) : null);
           if (item.prop === 'tournaments') {
-            const mem = loadTournaments(user.uid);
+            const mem = loadTournaments(roomId);
             if (mem && mem.length > 0) raw = JSON.stringify(mem);
           }
           if (raw) {
@@ -486,7 +496,7 @@ export default function App() {
         }
         
         if (hasAnyData && !isCancelled) {
-          console.log("Synchronizing offline cache with backend server...");
+          console.log("Synchronizing offline cache with backend server for room:", roomId);
           await fetch('/api/sync-cache', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -575,12 +585,16 @@ export default function App() {
           }
         }
 
+        const canonicalRoomId = found.channelId || found.username;
         const u = {
-          uid: firebaseAuthUser ? firebaseAuthUser.uid : found.channelId,
+          uid: canonicalRoomId,
           name: found.username,
+          username: found.username,
           displayName: found.username,
           isCustom: true,
           channelName: found.channelName,
+          channelId: canonicalRoomId,
+          role: found.role || (cleanUser === 'bamep' ? 'superadmin' : 'user'),
           isLocalDemo: isLocalDemo
         };
         localStorage.setItem('customUser', JSON.stringify(u));

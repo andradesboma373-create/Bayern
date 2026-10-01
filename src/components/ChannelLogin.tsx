@@ -111,14 +111,16 @@ export default function ChannelLogin({ onLoginSuccess }: ChannelLoginProps) {
         }
       }
 
+      const canonicalRoomId = targetChannel.channelId || targetChannel.username;
+
       const sessionUser = {
-        uid: fbUser ? fbUser.uid : (targetChannel.channelId || targetChannel.username),
+        uid: canonicalRoomId,
         name: targetChannel.username,
         username: targetChannel.username,
         displayName: targetChannel.username,
         isCustom: true,
         channelName: targetChannel.channelName || targetChannel.username,
-        channelId: targetChannel.channelId,
+        channelId: canonicalRoomId,
         role: targetChannel.role || (cleanUsername === 'bamep' ? 'superadmin' : 'user'),
         isLocalDemo: false
       };
