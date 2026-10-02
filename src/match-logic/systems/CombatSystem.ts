@@ -197,6 +197,7 @@ export class CombatSystem {
             if (actualNade > 0) {
                 target.hp -= actualNade;
                 shooter.statistics.damage += actualNade;
+                (shooter as any).roundDamageDealt = ((shooter as any).roundDamageDealt || 0) + actualNade;
                 shooter.statistics.utilityDamage = (shooter.statistics.utilityDamage || 0) + actualNade;
                 target.damageTaken.set(shooter.id, (target.damageTaken.get(shooter.id) || 0) + actualNade);
             }
@@ -229,6 +230,7 @@ export class CombatSystem {
       
       target.hp -= actualDamage;
       shooter.statistics.damage += actualDamage;
+      (shooter as any).roundDamageDealt = ((shooter as any).roundDamageDealt || 0) + actualDamage;
       
       if (!target.damageTaken) target.damageTaken = new Map();
       target.damageTaken.set(shooter.id, (target.damageTaken.get(shooter.id) || 0) + actualDamage);
@@ -250,6 +252,7 @@ export class CombatSystem {
               if (returnDmg > 0) {
                 shooter.hp -= returnDmg;
                 target.statistics.damage += returnDmg;
+                (target as any).roundDamageDealt = ((target as any).roundDamageDealt || 0) + returnDmg;
                 if (!shooter.damageTaken) shooter.damageTaken = new Map();
                 shooter.damageTaken.set(target.id, (shooter.damageTaken.get(target.id) || 0) + returnDmg);
               }
@@ -321,9 +324,6 @@ export class CombatSystem {
         // Round Swing calculation
         const pWinAfterKiller = RatingSystem.calculateWinProbability(state, shooter.teamId);
         const actionSwing = RatingSystem.calculateActionSwing(pWinBeforeKiller, pWinAfterKiller, shooter, target, isOpeningKill, isTrade);
-        shooter.statistics.roundSwing = (shooter.statistics.roundSwing || 0) + actionSwing;
-        const victimPenalty = RatingSystem.calculateVictimSwingPenalty(actionSwing, shooter, target);
-        target.statistics.roundSwing = (target.statistics.roundSwing || 0) - victimPenalty;
 
         // Track potential clutch situation after this death
         const targetTeamAlive = Object.values(state.players).filter(p => p && p.alive && p.teamId === target.teamId);
@@ -336,6 +336,7 @@ export class CombatSystem {
         }
         
         // Assist distribution (at least ASSIST_MIN_DAMAGE dealt by a teammate, modified by individual assist perk)
+        let assistSwing = 0;
         if (target.damageTaken) {
             const minAssistDamage = RATING_CONFIG.ASSIST_MIN_DAMAGE;
             for (const [assisterId, dmg] of target.damageTaken.entries()) {
@@ -346,7 +347,8 @@ export class CombatSystem {
                         if (dmg >= threshold) {
                             assister.statistics.assists++;
                             (assister as any).roundAssists = ((assister as any).roundAssists || 0) + 1;
-                            const assistSwing = actionSwing * (RATING_CONFIG.ASSIST_SWING_SHARE || 0.25) * Math.min(1.0, dmg / 100);
+                            const share = Math.min(0.35, (dmg / 100) * (RATING_CONFIG.ASSIST_SWING_SHARE || 0.35));
+                            assistSwing = actionSwing * share;
                             assister.statistics.roundSwing = (assister.statistics.roundSwing || 0) + assistSwing;
                             break; 
                         }
@@ -354,6 +356,13 @@ export class CombatSystem {
                 }
             }
         }
+
+        // Killer gets action swing minus assist share, ensuring total kill swing is conserved (HLTV 3.0 standard)
+        const killerSwing = Math.max(0.02, actionSwing - assistSwing);
+        shooter.statistics.roundSwing = (shooter.statistics.roundSwing || 0) + killerSwing;
+
+        const victimPenalty = RatingSystem.calculateVictimSwingPenalty(actionSwing, shooter, target);
+        target.statistics.roundSwing = (target.statistics.roundSwing || 0) - victimPenalty;
 
         // Killer recoil recovery and re-aiming delay
         if (weapon.type === 'SNIPER') {

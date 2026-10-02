@@ -1,17 +1,8 @@
-=== Server Log Started at 2026-10-01T15:42:41.271Z ===
-[2026-10-01T15:42:41.273Z] [INFO] Successfully loaded local database cache from disk.
-[2026-10-01T15:42:41.280Z] [INFO] Restoring custom maps from LocalDB...
-[2026-10-01T15:42:41.284Z] [INFO] Custom maps restored.
-[2026-10-01T15:42:41.284Z] [INFO] Loaded 0 Telegram bots from LocalDB.
-[2026-10-01T15:42:41.561Z] [INFO] Server running on http://0.0.0.0:3000
-[2026-10-01T15:42:48.090Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-01T15:42:49.725Z] [INFO] Received cache sync request for user: channel_bamep_cs2 -> canonical room: channel_bamep_cs2
-[2026-10-01T15:42:49.725Z] [INFO] Sync settings for user: channel_bamep_cs2
-[2026-10-01T15:42:49.727Z] [INFO] Successfully synced cache for user channel_bamep_cs2 (canonical room: channel_bamep_cs2)
-[2026-10-01T15:43:18.057Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-01T15:43:48.116Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-01T15:44:18.067Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-01T15:44:48.115Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-01T15:45:18.211Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-01T15:45:48.112Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-01T15:46:18.130Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+=== Server Log Started at 2026-10-02T19:07:48.818Z ===
+[2026-10-02T19:07:48.823Z] [INFO] Successfully loaded local database cache from disk.
+[2026-10-02T19:07:48.830Z] [INFO] Restoring custom maps from LocalDB...
+[2026-10-02T19:07:48.833Z] [INFO] Custom maps restored.
+[2026-10-02T19:07:48.833Z] [INFO] Loaded 0 Telegram bots from LocalDB.
+[2026-10-02T19:07:49.094Z] [INFO] 7:07:49 PM [vite] (client) Re-optimizing dependencies because lockfile has changed
+[2026-10-02T19:07:49.112Z] [INFO] Server running on http://0.0.0.0:3000
+[2026-10-02T19:07:50.456Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)

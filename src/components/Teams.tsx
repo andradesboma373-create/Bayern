@@ -7,6 +7,7 @@ import TeamLogo from './TeamLogo';
 import TeamProfileModal from './TeamProfileModal';
 import { safeLocalStorageSet } from '../lib/utils';
 import { getAutoMatchedVectorLogo } from '../lib/logoMatcher';
+import { getCanonicalRoomId } from './setka_tourn/storage';
 
 export default function Teams({ user }: { user: any }) {
   const [teams, setTeams] = useState<any[]>([]);
@@ -139,15 +140,18 @@ export default function Teams({ user }: { user: any }) {
       setTeams(updatedTeams);
       setPlayers(updatedGlobalPlayers);
       
+      const roomId = getCanonicalRoomId(user.channelId || user.uid);
       safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+      if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
       safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
+      if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, updatedGlobalPlayers);
       window.dispatchEvent(new Event("db-user-updated"));
 
       if (user && !user.isLocalDemo) {
         fetch('/api/sync-cache', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.uid, teams: updatedTeams, players: updatedGlobalPlayers })
+          body: JSON.stringify({ userId: roomId, teams: updatedTeams, players: updatedGlobalPlayers })
         }).catch(() => {});
       }
 
@@ -161,15 +165,59 @@ export default function Teams({ user }: { user: any }) {
 
   useEffect(() => {
     if (!user) return;
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
     const loadData = () => {
       try {
-        const p = localStorage.getItem(`players_${user.uid}`);
+        const p = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
         if (p) setPlayers(JSON.parse(p));
-        const t = localStorage.getItem(`teams_${user.uid}`);
-        if (t) setTeams(JSON.parse(t));
-        const trn = localStorage.getItem(`tournaments_${user.uid}`);
-        if (trn) setTournaments(JSON.parse(trn));
-        const s = localStorage.getItem(`settings_${user.uid}`);
+        const t = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
+        let currentTeams: any[] = [];
+        if (t) {
+          currentTeams = JSON.parse(t);
+          setTeams(currentTeams);
+        }
+
+        // Also check if any tournaments exist for this room and recover any teams from them
+        const trnRaw = localStorage.getItem(`tournaments_${user.uid}`) || localStorage.getItem(`tournaments_${roomId}`);
+        if (trnRaw) {
+          try {
+            const trnList = JSON.parse(trnRaw);
+            if (Array.isArray(trnList)) {
+              setTournaments(trnList);
+              const existingNames = new Set(currentTeams.map((tm: any) => (tm.name || '').trim().toLowerCase()));
+              let addedAny = false;
+              for (const tourney of trnList) {
+                if (tourney && Array.isArray(tourney.teams)) {
+                  for (const tt of tourney.teams) {
+                    if (tt && tt.name && !existingNames.has(tt.name.trim().toLowerCase())) {
+                      const newTId = tt.id ? ('t_' + tt.id) : ('t_custom_' + Math.random().toString(36).slice(2, 8));
+                      currentTeams.push({
+                        id: newTId,
+                        name: tt.name.trim(),
+                        channelId: roomId,
+                        userId: roomId,
+                        isAcademy: false,
+                        players: [],
+                        balance: 0,
+                        leader: '',
+                        createdAt: new Date().toISOString()
+                      });
+                      existingNames.add(tt.name.trim().toLowerCase());
+                      addedAny = true;
+                    }
+                  }
+                }
+              }
+              if (addedAny) {
+                setTeams([...currentTeams]);
+                safeLocalStorageSet(`teams_${user.uid}`, currentTeams);
+                if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, currentTeams);
+              }
+            }
+          } catch (e) {}
+        }
+
+        const s = localStorage.getItem(`settings_${user.uid}`) || localStorage.getItem(`settings_${roomId}`);
         if (s) {
           const parsed = JSON.parse(s);
           setTourActive(!!parsed.tourActive);
@@ -181,6 +229,68 @@ export default function Teams({ user }: { user: any }) {
       setLoading(false);
     };
     loadData();
+
+    // Fetch from resilient server endpoint and safely MERGE without overwriting local user-added teams
+    fetch(`/api/backup-data/${roomId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success) {
+          if (Array.isArray(data.teams) && data.teams.length > 0) {
+            setTeams(prevTeams => {
+              const localRaw = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
+              let localTeams: any[] = [];
+              try { localTeams = localRaw ? JSON.parse(localRaw) : prevTeams; } catch (e) { localTeams = prevTeams; }
+
+              const mergedMap = new Map<string, any>();
+              // 1. Server teams first
+              data.teams.forEach((t: any) => {
+                if (t && (t.id || t.name)) {
+                  mergedMap.set(t.id || t.name.toLowerCase(), t);
+                }
+              });
+              // 2. Local / user-added teams second (authoritative: keeps custom created teams!)
+              (Array.isArray(localTeams) ? localTeams : []).forEach((t: any) => {
+                if (t && (t.id || t.name)) {
+                  const key = t.id || t.name.toLowerCase();
+                  const existing = mergedMap.get(key);
+                  mergedMap.set(key, existing ? { ...existing, ...t } : t);
+                }
+              });
+              const merged = Array.from(mergedMap.values());
+              safeLocalStorageSet(`teams_${user.uid}`, merged);
+              if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, merged);
+              return merged;
+            });
+          }
+          if (Array.isArray(data.players) && data.players.length > 0) {
+            setPlayers(prevPlayers => {
+              const localRaw = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
+              let localPlayers: any[] = [];
+              try { localPlayers = localRaw ? JSON.parse(localRaw) : prevPlayers; } catch (e) { localPlayers = prevPlayers; }
+
+              const mergedMap = new Map<string, any>();
+              data.players.forEach((p: any) => {
+                if (p && (p.id || p.nickname)) {
+                  mergedMap.set(p.id || p.nickname.toLowerCase(), p);
+                }
+              });
+              (Array.isArray(localPlayers) ? localPlayers : []).forEach((p: any) => {
+                if (p && (p.id || p.nickname)) {
+                  const key = p.id || p.nickname.toLowerCase();
+                  const existing = mergedMap.get(key);
+                  mergedMap.set(key, existing ? { ...existing, ...p } : p);
+                }
+              });
+              const merged = Array.from(mergedMap.values());
+              safeLocalStorageSet(`players_${user.uid}`, merged);
+              if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, merged);
+              return merged;
+            });
+          }
+        }
+      })
+      .catch(() => {});
+
     window.addEventListener("db-user-updated", loadData);
     return () => window.removeEventListener("db-user-updated", loadData);
   }, [user]);
@@ -246,6 +356,7 @@ export default function Teams({ user }: { user: any }) {
     e.preventDefault();
     if (!newTeamName.trim()) return;
 
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
     const roster = selectedPlayers.map(pid => players.find(p => p.id === pid) || { id: '' });
     const autoLogo = newTeamLogo !== null ? newTeamLogo : getAutoMatchedVectorLogo(newTeamName.trim());
     
@@ -268,10 +379,11 @@ export default function Teams({ user }: { user: any }) {
     } else {
       const newTeam = {
         id: "t_" + Math.random().toString(36).substring(2, 9),
-        channelId: user.uid,
+        channelId: roomId,
+        userId: roomId,
         name: newTeamName.trim(),
         isAcademy: !!newTeamIsAcademy,
-        players: roster,
+        players: roster.filter((p: any) => p && p.id),
         balance: newTeamBalance === '' ? 0 : Number(newTeamBalance),
         leader: newTeamLeader.trim(),
         ...(autoLogo ? { logoUrl: autoLogo } : {})
@@ -281,6 +393,24 @@ export default function Teams({ user }: { user: any }) {
     
     setTeams(updatedTeams);
     safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+    if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
+
+    // If any players were assigned to this team, update them in players pool
+    const savedTeam = editingTeamId ? updatedTeams.find(t => t.id === editingTeamId) : updatedTeams[updatedTeams.length - 1];
+    let updatedPlayers = [...players];
+    if (savedTeam && selectedPlayers.some(Boolean)) {
+      const validSelected = selectedPlayers.filter(Boolean);
+      updatedPlayers = players.map(p => {
+        if (validSelected.includes(p.id)) {
+          return { ...p, team: savedTeam.name, teamId: savedTeam.id };
+        }
+        return p;
+      });
+      setPlayers(updatedPlayers);
+      safeLocalStorageSet(`players_${user.uid}`, updatedPlayers);
+      if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, updatedPlayers);
+    }
+
     window.dispatchEvent(new Event("db-user-updated"));
     
     if (user && !user.isLocalDemo) {
@@ -300,7 +430,7 @@ export default function Teams({ user }: { user: any }) {
     fetch('/api/sync-cache', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.uid, teams: updatedTeams })
+      body: JSON.stringify({ userId: roomId, teams: updatedTeams, players: updatedPlayers })
     }).catch(() => {});
     
     setShowAddForm(false);
@@ -314,9 +444,11 @@ export default function Teams({ user }: { user: any }) {
   };
 
   const handleDeleteTeam = async (id: string) => {
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
     const updated = teams.filter(t => t.id !== id);
     setTeams(updated);
     safeLocalStorageSet(`teams_${user.uid}`, updated);
+    if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updated);
     window.dispatchEvent(new Event("db-user-updated"));
     
     if (user && !user.isLocalDemo) {
@@ -324,7 +456,7 @@ export default function Teams({ user }: { user: any }) {
       fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, teams: updated })
+        body: JSON.stringify({ userId: roomId, teams: updated })
       }).catch(() => {});
     }
     
@@ -369,11 +501,14 @@ export default function Teams({ user }: { user: any }) {
         }
         return p;
       });
+      const roomId = getCanonicalRoomId(user.channelId || user.uid);
       setPlayers(updatedGlobalPlayers);
       safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
+      if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, updatedGlobalPlayers);
     }
 
     // 3. Update all teams in state and localStorage
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
     const updatedTeams = teams.map(t => {
       if (t.id === teamId) {
         return { ...t, players: updatedTeamPlayers, totalValRating };
@@ -401,6 +536,7 @@ export default function Teams({ user }: { user: any }) {
 
     setTeams(updatedTeams);
     safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+    if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
 
     // Clear editing states & notify UI INSTANTLY
     const changedValCopy = { ...editingValRatings };
@@ -415,7 +551,7 @@ export default function Teams({ user }: { user: any }) {
       fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, players: updatedGlobalPlayers, teams: updatedTeams })
+        body: JSON.stringify({ userId: roomId, players: updatedGlobalPlayers, teams: updatedTeams })
       }).catch(() => {});
     }
 
@@ -451,6 +587,7 @@ export default function Teams({ user }: { user: any }) {
     const targetTeam = teams.find(t => t.id === teamId);
     if (!targetTeam) return;
 
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
     const newPlayers = [...(targetTeam.players || [])];
     newPlayers[index] = { ...player };
     const totalValRating = newPlayers.slice(0, 5).reduce((acc: number, p: any) => acc + (p?.valRating || 0), 0);
@@ -464,6 +601,21 @@ export default function Teams({ user }: { user: any }) {
 
     setTeams(updatedTeams);
     safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+    if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
+
+    // Update global players so player reflects new team assignment
+    const updatedGlobalPlayers = players.map((p: any) => {
+      if (p.id === player.id || (p.nickname && p.nickname.toLowerCase() === player.nickname.toLowerCase())) {
+        return { ...p, team: targetTeam.name, teamId: targetTeam.id };
+      }
+      return p;
+    });
+    if (!updatedGlobalPlayers.some((p: any) => p.id === player.id)) {
+      updatedGlobalPlayers.push({ ...player, team: targetTeam.name, teamId: targetTeam.id });
+    }
+    setPlayers(updatedGlobalPlayers);
+    safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
+    if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, updatedGlobalPlayers);
 
     if (user && !user.isLocalDemo) {
       try {
@@ -471,13 +623,17 @@ export default function Teams({ user }: { user: any }) {
           players: newPlayers,
           totalValRating
         });
+        await updateDoc(doc(db, 'players', player.id), {
+          team: targetTeam.name,
+          teamId: targetTeam.id
+        }).catch(() => {});
       } catch (e) {
         console.warn("Firestore team slot update error:", e);
       }
       fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, teams: updatedTeams })
+        body: JSON.stringify({ userId: roomId, teams: updatedTeams, players: updatedGlobalPlayers })
       }).catch(() => {});
     }
 
@@ -489,6 +645,8 @@ export default function Teams({ user }: { user: any }) {
     const targetTeam = teams.find(t => t.id === teamId);
     if (!targetTeam) return;
 
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const removedPlayer = targetTeam.players?.[index];
     const newPlayers = [...(targetTeam.players || [])];
     newPlayers[index] = { id: '' };
     const totalValRating = newPlayers.slice(0, 5).reduce((acc: number, p: any) => acc + (p?.valRating || 0), 0);
@@ -502,6 +660,33 @@ export default function Teams({ user }: { user: any }) {
 
     setTeams(updatedTeams);
     safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+    if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
+
+    // Keep removed player in the system as a Free Agent (FFT) so he never vanishes!
+    let updatedGlobalPlayers = players;
+    if (removedPlayer && (removedPlayer.id || removedPlayer.nickname)) {
+      let found = false;
+      updatedGlobalPlayers = players.map((p: any) => {
+        if ((removedPlayer.id && p.id === removedPlayer.id) || (removedPlayer.nickname && p.nickname && p.nickname.toLowerCase() === removedPlayer.nickname.toLowerCase())) {
+          found = true;
+          return { ...p, team: '', teamId: '' };
+        }
+        return p;
+      });
+      if (!found) {
+        updatedGlobalPlayers.push({
+          ...removedPlayer,
+          id: removedPlayer.id || 'p_' + Math.random().toString(36).substring(2, 9),
+          team: '',
+          teamId: '',
+          channelId: roomId,
+          userId: roomId
+        });
+      }
+      setPlayers(updatedGlobalPlayers);
+      safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
+      if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, updatedGlobalPlayers);
+    }
 
     if (user && !user.isLocalDemo) {
       try {
@@ -509,13 +694,19 @@ export default function Teams({ user }: { user: any }) {
           players: newPlayers,
           totalValRating
         });
+        if (removedPlayer && removedPlayer.id) {
+          await updateDoc(doc(db, 'players', removedPlayer.id), {
+            team: '',
+            teamId: ''
+          }).catch(() => {});
+        }
       } catch (e) {
         console.warn("Firestore team remove slot error:", e);
       }
       fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, teams: updatedTeams })
+        body: JSON.stringify({ userId: roomId, teams: updatedTeams, players: updatedGlobalPlayers })
       }).catch(() => {});
     }
 

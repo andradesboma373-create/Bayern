@@ -5,6 +5,7 @@ import {
 } from "./doubleEliminationLogic";
 import { BYE_TEAM } from "./doubleEliminationLogic";
 import { db, deleteDoc, doc, setDoc } from "../../firebase";
+import { safeLocalStorageSet } from "../../lib/utils";
 
 let memoryCache: Record<string, Tournament[]> = {};
 
@@ -429,6 +430,46 @@ export const saveTournament = (userId: string, tournament: Tournament) => {
 
   // 2. Save updated tournaments index for roomId
   saveTournamentsIndex(roomId, all);
+
+  // 3. Ensure all teams from this tournament are preserved in the room's global teams pool
+  if (Array.isArray(tournament.teams) && tournament.teams.length > 0 && roomId !== 'guest') {
+    try {
+      const storedRaw = localStorage.getItem(`teams_${roomId}`) || localStorage.getItem(`teams_${userId}`);
+      let currentRoomTeams: any[] = [];
+      try { currentRoomTeams = storedRaw ? JSON.parse(storedRaw) : []; } catch (e) {}
+
+      let addedAny = false;
+      const existingNames = new Set(currentRoomTeams.map((ct: any) => (ct && ct.name ? ct.name.trim().toLowerCase() : '')));
+      for (const tItem of tournament.teams) {
+        if (tItem && tItem.name && !existingNames.has(tItem.name.trim().toLowerCase())) {
+          currentRoomTeams.push({
+            id: 't_' + (tItem.id || Math.random().toString(36).slice(2, 8)),
+            name: tItem.name.trim(),
+            channelId: roomId,
+            userId: roomId,
+            logoUrl: tItem.logoUrl || '',
+            isAcademy: false,
+            players: [],
+            balance: 0,
+            leader: '',
+            createdAt: new Date().toISOString()
+          });
+          existingNames.add(tItem.name.trim().toLowerCase());
+          addedAny = true;
+        }
+      }
+      if (addedAny) {
+        safeLocalStorageSet(`teams_${roomId}`, currentRoomTeams);
+        if (roomId !== userId) safeLocalStorageSet(`teams_${userId}`, currentRoomTeams);
+        window.dispatchEvent(new Event("db-user-updated"));
+        fetch('/api/sync-cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: roomId, teams: currentRoomTeams })
+        }).catch(() => {});
+      }
+    } catch (e) {}
+  }
 
   window.dispatchEvent(new Event("tournaments-updated"));
 

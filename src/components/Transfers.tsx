@@ -35,6 +35,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { safeLocalStorageSet } from '../lib/utils';
+import { getCanonicalRoomId } from './setka_tourn/storage';
 
 export default function Transfers({ user }: { user: any }) {
   const [activeTab, setActiveTab] = useState<'fft' | 'academy' | 'swaps'>('fft');
@@ -81,21 +82,50 @@ export default function Transfers({ user }: { user: any }) {
   useEffect(() => {
     if (!user) return;
 
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+
     // Pre-populate with cached data for instant loading / fallback if offline/quota exceeded
     try {
-      const cachedPlayers = localStorage.getItem(`players_${user.uid}`);
-      if (cachedPlayers) setPlayers(JSON.parse(cachedPlayers));
-      const cachedTeams = localStorage.getItem(`teams_${user.uid}`);
-      if (cachedTeams) setTeams(JSON.parse(cachedTeams));
-      const cachedTgUsers = localStorage.getItem(`tgUsers_${user.uid}`);
+      let cachedPlayers = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
+      let cachedTeams = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
+      let pList = cachedPlayers ? JSON.parse(cachedPlayers) : [];
+      let tList = cachedTeams ? JSON.parse(cachedTeams) : [];
+
+      // Auto-rehydrate players from team rosters if players array is missing
+      if (!pList.length && tList.length) {
+        const pMap = new Map();
+        tList.forEach((t: any) => {
+          if (t && Array.isArray(t.players)) {
+            t.players.forEach((p: any) => {
+              if (p && (p.id || p.nickname)) {
+                pMap.set(p.id || p.nickname, {
+                  ...p,
+                  team: t.name || p.team,
+                  teamId: t.id || p.teamId
+                });
+              }
+            });
+          }
+        });
+        pList = Array.from(pMap.values());
+        if (pList.length) {
+          safeLocalStorageSet(`players_${user.uid}`, pList);
+          if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, pList);
+        }
+      }
+
+      if (pList.length) setPlayers(pList);
+      if (tList.length) setTeams(tList);
+
+      const cachedTgUsers = localStorage.getItem(`tgUsers_${user.uid}`) || localStorage.getItem(`tgUsers_${roomId}`);
       if (cachedTgUsers) setTgUsers(JSON.parse(cachedTgUsers));
-      const cachedSwaps = localStorage.getItem(`swapOffers_${user.uid}`);
+      const cachedSwaps = localStorage.getItem(`swapOffers_${user.uid}`) || localStorage.getItem(`swapOffers_${roomId}`);
       if (cachedSwaps) setSwapOffers(JSON.parse(cachedSwaps));
-      const cachedTourneys = localStorage.getItem(`tournaments_${user.uid}`);
+      const cachedTourneys = localStorage.getItem(`tournaments_${user.uid}`) || localStorage.getItem(`tournaments_${roomId}`);
       if (cachedTourneys) setTournaments(JSON.parse(cachedTourneys));
-      const cachedMatches = localStorage.getItem(`matches_${user.uid}`);
+      const cachedMatches = localStorage.getItem(`matches_${user.uid}`) || localStorage.getItem(`matches_${roomId}`);
       if (cachedMatches) setMatches(JSON.parse(cachedMatches));
-      const cachedSettings = localStorage.getItem(`settings_${user.uid}`);
+      const cachedSettings = localStorage.getItem(`settings_${user.uid}`) || localStorage.getItem(`settings_${roomId}`);
       if (cachedSettings) {
         const data = JSON.parse(cachedSettings);
         setTourActive(!!data.tourActive);
@@ -107,28 +137,50 @@ export default function Transfers({ user }: { user: any }) {
 
     let unsubPlayers = () => {};
     let unsubTeams = () => {};
-    let unsubTgUsers = () => {};
     let unsubSwaps = () => {};
-    let unsubTourneys = () => {};
-    let unsubMatches = () => {};
-    let unsubSettings = () => {};
 
     // Load static data from localStorage (populated by backup-data sync)
     const handleDbUpdated = () => {
       try {
-        const cachedPlayers = localStorage.getItem(`players_${user.uid}`);
-        if (cachedPlayers) setPlayers(JSON.parse(cachedPlayers));
-        const cachedTeams = localStorage.getItem(`teams_${user.uid}`);
-        if (cachedTeams) setTeams(JSON.parse(cachedTeams));
-        const cachedTgUsers = localStorage.getItem(`tgUsers_${user.uid}`);
+        let cachedPlayers = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
+        let cachedTeams = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
+        let pList = cachedPlayers ? JSON.parse(cachedPlayers) : [];
+        let tList = cachedTeams ? JSON.parse(cachedTeams) : [];
+
+        if (!pList.length && tList.length) {
+          const pMap = new Map();
+          tList.forEach((t: any) => {
+            if (t && Array.isArray(t.players)) {
+              t.players.forEach((p: any) => {
+                if (p && (p.id || p.nickname)) {
+                  pMap.set(p.id || p.nickname, {
+                    ...p,
+                    team: t.name || p.team,
+                    teamId: t.id || p.teamId
+                  });
+                }
+              });
+            }
+          });
+          pList = Array.from(pMap.values());
+          if (pList.length) {
+            safeLocalStorageSet(`players_${user.uid}`, pList);
+            if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, pList);
+          }
+        }
+
+        if (pList.length) setPlayers(pList);
+        if (tList.length) setTeams(tList);
+
+        const cachedTgUsers = localStorage.getItem(`tgUsers_${user.uid}`) || localStorage.getItem(`tgUsers_${roomId}`);
         if (cachedTgUsers) setTgUsers(JSON.parse(cachedTgUsers));
-        const cachedSwaps = localStorage.getItem(`swapOffers_${user.uid}`);
+        const cachedSwaps = localStorage.getItem(`swapOffers_${user.uid}`) || localStorage.getItem(`swapOffers_${roomId}`);
         if (cachedSwaps) setSwapOffers(JSON.parse(cachedSwaps));
-        const cachedTourneys = localStorage.getItem(`tournaments_${user.uid}`);
+        const cachedTourneys = localStorage.getItem(`tournaments_${user.uid}`) || localStorage.getItem(`tournaments_${roomId}`);
         if (cachedTourneys) setTournaments(JSON.parse(cachedTourneys));
-        const cachedMatches = localStorage.getItem(`matches_${user.uid}`);
+        const cachedMatches = localStorage.getItem(`matches_${user.uid}`) || localStorage.getItem(`matches_${roomId}`);
         if (cachedMatches) setMatches(JSON.parse(cachedMatches));
-        const cachedSettings = localStorage.getItem(`settings_${user.uid}`);
+        const cachedSettings = localStorage.getItem(`settings_${user.uid}`) || localStorage.getItem(`settings_${roomId}`);
         if (cachedSettings) {
           const data = JSON.parse(cachedSettings);
           setTourActive(!!data.tourActive);
@@ -142,22 +194,53 @@ export default function Transfers({ user }: { user: any }) {
 
     handleDbUpdated();
 
+    // If local storage is empty, fetch from resilient server backup endpoint
+    fetch(`/api/backup-data/${roomId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success) {
+          if (Array.isArray(data.teams) && data.teams.length > 0) {
+            setTeams(data.teams);
+            safeLocalStorageSet(`teams_${user.uid}`, data.teams);
+            if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, data.teams);
+          }
+          if (Array.isArray(data.players) && data.players.length > 0) {
+            setPlayers(data.players);
+            safeLocalStorageSet(`players_${user.uid}`, data.players);
+            if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, data.players);
+          }
+          if (Array.isArray(data.swapOffers)) {
+            setSwapOffers(data.swapOffers);
+          }
+          setLoading(false);
+        }
+      })
+      .catch(() => {});
+
     if (user && user.uid && user.uid !== 'guest') {
       try {
-        const qSwaps = query(collection(db, 'swapOffers'), where('channelId', '==', user.uid));
+        const qSwaps = query(collection(db, 'swapOffers'), where('channelId', 'in', Array.from(new Set([user.uid, roomId])).slice(0, 10)));
         unsubSwaps = onSnapshot(qSwaps, (snap) => {
+          if (snap.empty) return;
           const list: any[] = [];
           snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-          setSwapOffers(list);
-          try { localStorage.setItem(`swapOffers_${user.uid}`, JSON.stringify(list)); } catch(e){}
+          if (list.length > 0) {
+            setSwapOffers(list);
+            safeLocalStorageSet(`swapOffers_${user.uid}`, list);
+            if (roomId !== user.uid) safeLocalStorageSet(`swapOffers_${roomId}`, list);
+          }
         });
 
-        const qTeams = query(collection(db, 'teams'), where('channelId', '==', user.uid));
+        const qTeams = query(collection(db, 'teams'), where('channelId', 'in', Array.from(new Set([user.uid, roomId])).slice(0, 10)));
         unsubTeams = onSnapshot(qTeams, (snap) => {
+          if (snap.empty) return; // CRITICAL: NEVER wipe out teams if snapshot is empty!
           const list: any[] = [];
           snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-          setTeams(list);
-          try { localStorage.setItem(`teams_${user.uid}`, JSON.stringify(list)); } catch(e){}
+          if (list.length > 0) {
+            setTeams(list);
+            safeLocalStorageSet(`teams_${user.uid}`, list);
+            if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, list);
+          }
         });
       } catch (err) {
         console.warn("Realtime listener init error:", err);
@@ -330,6 +413,42 @@ export default function Transfers({ user }: { user: any }) {
             valRating: selectedFftPlayer.valRating || 0,
             avatarUrl: selectedFftPlayer.avatarUrl || ""
           };
+
+          const roomId = getCanonicalRoomId(user.channelId || user.uid);
+          const updatedTeams = teams.map((t: any) => {
+            if (t.id === team.id) {
+              return {
+                ...t,
+                players: updatedPlayers,
+                totalValRating: updatedPlayers.slice(0, 5).reduce((acc: number, p: any) => acc + (p && p.id ? (Number(p.valRating) || 0) : 0), 0)
+              };
+            }
+            return t;
+          });
+          setTeams(updatedTeams);
+          safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+          if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
+
+          // Update players array: mark team
+          const updatedGlobalPlayers = players.map((p: any) => {
+            if (p.id === selectedFftPlayer.id || (p.nickname && p.nickname.toLowerCase() === selectedFftPlayer.nickname.toLowerCase())) {
+              return { ...p, team: team.name, teamId: team.id };
+            }
+            return p;
+          });
+          if (!updatedGlobalPlayers.some((p: any) => p.id === selectedFftPlayer.id)) {
+            updatedGlobalPlayers.push({ ...selectedFftPlayer, team: team.name, teamId: team.id });
+          }
+          setPlayers(updatedGlobalPlayers);
+          safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
+          if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, updatedGlobalPlayers);
+
+          // Sync with server cache immediately
+          fetch('/api/sync-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: roomId, teams: updatedTeams, players: updatedGlobalPlayers })
+          }).catch(() => {});
 
           if (!user.isLocalDemo) {
             const batch = writeBatch(db);
@@ -585,7 +704,50 @@ export default function Transfers({ user }: { user: any }) {
         updatedReceiverPlayers.splice(receiverPlayerIdx, 1);
       }
 
-      // 1. Update Team documents, financial balances and swap status in one atomic batch
+      // 1. Update local state and localStorage atomically
+      const roomId = getCanonicalRoomId(user.channelId || user.uid);
+      const updatedTeams = teams.map((t: any) => {
+        if (t.id === senderTeam.id) {
+          return {
+            ...t,
+            players: updatedSenderPlayers,
+            totalValRating: updatedSenderPlayers.slice(0, 5).reduce((acc: number, p: any) => acc + (p && p.id ? (Number(p.valRating) || 0) : 0), 0)
+          };
+        }
+        if (t.id === receiverTeam.id) {
+          return {
+            ...t,
+            players: updatedReceiverPlayers,
+            totalValRating: updatedReceiverPlayers.slice(0, 5).reduce((acc: number, p: any) => acc + (p && p.id ? (Number(p.valRating) || 0) : 0), 0)
+          };
+        }
+        return t;
+      });
+      setTeams(updatedTeams);
+      safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+      if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
+
+      const updatedGlobalPlayers = players.map((p: any) => {
+        if (p.id === playerBData?.id || (p.nickname && p.nickname.toLowerCase() === playerBData?.nickname?.toLowerCase())) {
+          return { ...p, team: senderTeam.name, teamId: senderTeam.id };
+        }
+        if (offer.senderPlayerId !== 'skip' && (p.id === offer.senderPlayerId || (p.nickname && p.nickname.toLowerCase() === senderTeam.players[senderPlayerIdx]?.nickname?.toLowerCase()))) {
+          return { ...p, team: receiverTeam.name, teamId: receiverTeam.id };
+        }
+        return p;
+      });
+      setPlayers(updatedGlobalPlayers);
+      safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
+      if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, updatedGlobalPlayers);
+
+      // Fast non-blocking sync with server
+      fetch('/api/sync-cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: roomId, teams: updatedTeams, players: updatedGlobalPlayers })
+      }).catch(() => {});
+
+      // 2. Update Team documents, financial balances and swap status in one atomic batch
       if (!user.isLocalDemo) {
         const batch = writeBatch(db);
         batch.update(doc(db, 'teams', senderTeam.id), { 
@@ -597,13 +759,13 @@ export default function Transfers({ user }: { user: any }) {
           totalValRating: updatedReceiverPlayers.slice(0, 5).reduce((acc: number, p: any) => acc + (p && p.id ? (p.valRating != null && String(p.valRating) !== '' ? Number(p.valRating) : 0) : 0), 0)
         });
 
-        // 2. Perform financial surcharge transfers
+        // 3. Perform financial surcharge transfers
         if (offer.surcharge > 0) {
           if (senderManager) batch.update(doc(db, 'tgUsers', senderManager.id), { money: senderBudget - offer.surcharge });
           if (receiverManager) batch.update(doc(db, 'tgUsers', receiverManager.id), { money: receiverBudget + offer.surcharge });
         }
 
-        // 3. Update swap offer status
+        // 4. Update swap offer status
         batch.update(doc(db, 'swapOffers', offer.id), { status: 'accepted' });
         await batch.commit();
         window.dispatchEvent(new Event('db-user-updated'));
@@ -748,8 +910,9 @@ export default function Transfers({ user }: { user: any }) {
   };
 
   // Filter FFT players (players that are not assigned to any team)
-  const assignedPlayerIds = teams.flatMap(t => t.players?.map((p: any) => p.id)).filter(Boolean);
-  const fftPlayers = players.filter(p => !assignedPlayerIds.includes(p.id));
+  const assignedPlayerIds = teams.flatMap(t => t.players?.map((p: any) => p && p.id)).filter(Boolean);
+  const assignedPlayerNicks = teams.flatMap(t => t.players?.map((p: any) => p && p.nickname && p.nickname.toLowerCase())).filter(Boolean);
+  const fftPlayers = players.filter(p => p && p.id && !assignedPlayerIds.includes(p.id) && !assignedPlayerNicks.includes((p.nickname || '').toLowerCase()));
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in text-white">
@@ -883,8 +1046,9 @@ export default function Transfers({ user }: { user: any }) {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                  {fftPlayers.filter(p => p.nickname.toLowerCase().includes(searchQuery.toLowerCase())).map((p) => {
+                  {fftPlayers.filter(p => (p.nickname || '').toLowerCase().includes(searchQuery.toLowerCase())).map((p) => {
                     const isSelected = selectedFftPlayer?.id === p.id;
+                    const ratingFormatted = Number(p.rating) > 10 ? (Number(p.rating) / 100).toFixed(2) : Number(p.rating).toFixed(2);
                     return (
                       <div 
                         key={p.id} 
@@ -909,7 +1073,7 @@ export default function Transfers({ user }: { user: any }) {
                         <div className="flex gap-4">
                           <div className="text-right">
                             <span className="text-[9px] text-white/30 uppercase block font-black">CS2 Rating</span>
-                            <span className="font-mono font-bold text-blue-400">{Number(p.rating).toFixed(2)}</span>
+                            <span className="font-mono font-bold text-blue-400">{ratingFormatted}</span>
                           </div>
                           <div className="text-right">
                             <span className="text-[9px] text-white/30 uppercase block font-black">VAC Pts</span>
@@ -1054,6 +1218,96 @@ export default function Transfers({ user }: { user: any }) {
                      </div>
                   </div>
                 )}
+              </div>
+
+              {/* Academy Prospects List (2 columns) */}
+              <div className="xl:col-span-2 flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-3 gap-4">
+                  <div>
+                    <h2 className="text-xl font-black uppercase tracking-wider text-white flex items-center gap-2">
+                      <TrendingUp className="text-blue-500 w-5 h-5" />
+                      Перспективные Игроки Академии
+                    </h2>
+                    <p className="text-xs text-white/40 mt-1">
+                      Молодые таланты и игроки академического пула, готовые к подписанию и развитию
+                    </p>
+                  </div>
+                  <div className="relative w-full md:w-64">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                    <input 
+                      type="text" 
+                      placeholder="Поиск по академии..." 
+                      value={searchQuery} 
+                      onChange={e => setSearchQuery(e.target.value)} 
+                      className="w-full bg-[#12121a] border border-white/5 rounded-xl pl-10 pr-4 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors" 
+                    />
+                  </div>
+                </div>
+
+                {(() => {
+                  const academyPool = players
+                    .filter(p => p && p.isAcademy)
+                    .filter(p => (p.nickname || '').toLowerCase().includes(searchQuery.toLowerCase()));
+
+                  if (academyPool.length === 0) {
+                    return (
+                      <div className="p-12 text-center text-white/30 font-bold bg-black/20 rounded-xl border border-white/5">
+                        В пуле академии пока нет свободных юниоров.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                      {academyPool.map((p) => {
+                        const assignedTeam = teams.find(t => t.players && t.players.some((tp: any) => tp && tp.id === p.id));
+                        const isSelected = selectedFftPlayer?.id === p.id;
+                        const ratingFormatted = Number(p.rating) > 10 ? (Number(p.rating) / 100).toFixed(2) : Number(p.rating).toFixed(2);
+                        return (
+                          <div 
+                            key={p.id} 
+                            onClick={() => {
+                              setSelectedFftPlayer(p);
+                              setActiveTab('fft');
+                              setFftNegotiationState('idle');
+                            }}
+                            className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                              isSelected 
+                                ? 'bg-blue-600/10 border-blue-500/50 shadow-[0_0_20px_rgba(37,99,235,0.05)]' 
+                                : 'bg-black/30 border-white/5 hover:border-white/20'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <PlayerAvatar playerName={p.nickname} avatarUrl={p.avatarUrl} sizeClassName="w-10 h-10" />
+                              <div>
+                                <div className="font-black text-white flex items-center gap-2">
+                                  {p.nickname}
+                                  <span className="text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">
+                                    Академия
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">
+                                  {p.role} {assignedTeam ? `• ${assignedTeam.name}` : '• Свободен (FFT)'}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <span className="text-[9px] text-white/30 uppercase block font-black">CS2 Рейтинг</span>
+                                <span className="font-mono font-bold text-blue-400">{ratingFormatted}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[9px] text-white/30 uppercase block font-black">VAC Pts</span>
+                                <span className="font-mono font-bold text-[#ff8f00]">{(p.valRating || 0).toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

@@ -4,6 +4,9 @@ import { TournamentSettings, Team } from './types';
 import { Trash2, ChevronUp, ChevronDown, Upload, Folder, X, HelpCircle, Check, Shuffle, ArrowRightLeft, ArrowRight, Plus, Layers, Grid } from 'lucide-react';
 import TeamLogo from '../TeamLogo';
 import MatchCard from './MatchCard';
+import { getAutoMatchedVectorLogo } from '../../lib/logoMatcher';
+import { safeLocalStorageSet } from '../../lib/utils';
+import { getCanonicalRoomId } from './storage';
 
 interface Props {
   user?: any;
@@ -98,21 +101,65 @@ export default function TournamentSettingsForm({
   const [globalTeams, setGlobalTeams] = useState<any[]>([]);
   useEffect(() => {
     if (user?.uid) {
-      const stored = localStorage.getItem(`teams_${user.uid}`);
-      if (stored) {
-        setGlobalTeams(JSON.parse(stored));
-      }
+      const roomId = getCanonicalRoomId(user.channelId || user.uid);
+      const loadGlobalTeams = () => {
+        const stored = localStorage.getItem(`teams_${roomId}`) || localStorage.getItem(`teams_${user.uid}`);
+        if (stored) {
+          try {
+            setGlobalTeams(JSON.parse(stored));
+          } catch (e) {}
+        }
+      };
+      loadGlobalTeams();
+      window.addEventListener("db-user-updated", loadGlobalTeams);
+      return () => window.removeEventListener("db-user-updated", loadGlobalTeams);
     }
   }, [user]);
 
   const handleAddTeam = (optionalName?: string, specificGroupId?: string) => {
     const nameToAdd = typeof optionalName === 'string' && optionalName.trim() ? optionalName : newTeamName;
     if (nameToAdd.trim()) {
+      const cleanName = nameToAdd.trim();
       const newId = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 4);
-      const newTeam: Team = { id: newId, name: nameToAdd.trim() };
+      const autoLogo = getAutoMatchedVectorLogo(cleanName);
+      const newTeam: Team = { id: newId, name: cleanName, logoUrl: autoLogo || undefined };
       const updatedTeams = [...teams, newTeam];
       setTeams(updatedTeams);
       setNewTeamName("");
+
+      // CRITICAL: Also persist newly created team to room's global teams so it never disappears!
+      if (user?.uid) {
+        const roomId = getCanonicalRoomId(user.channelId || user.uid);
+        const storedRaw = localStorage.getItem(`teams_${roomId}`) || localStorage.getItem(`teams_${user.uid}`);
+        let currentRoomTeams: any[] = [];
+        try { currentRoomTeams = storedRaw ? JSON.parse(storedRaw) : []; } catch (e) {}
+        
+        if (!currentRoomTeams.some((t: any) => t && t.name && t.name.toLowerCase() === cleanName.toLowerCase())) {
+          const roomTeam = {
+            id: 't_' + newId,
+            name: cleanName,
+            channelId: roomId,
+            userId: roomId,
+            logoUrl: autoLogo || '',
+            isAcademy: false,
+            players: [],
+            balance: 0,
+            leader: '',
+            createdAt: new Date().toISOString()
+          };
+          const nextRoomTeams = [...currentRoomTeams, roomTeam];
+          safeLocalStorageSet(`teams_${roomId}`, nextRoomTeams);
+          if (roomId !== user.uid) safeLocalStorageSet(`teams_${user.uid}`, nextRoomTeams);
+          setGlobalTeams(nextRoomTeams);
+          window.dispatchEvent(new Event("db-user-updated"));
+
+          fetch('/api/sync-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: roomId, teams: nextRoomTeams })
+          }).catch(() => {});
+        }
+      }
 
       if (isGroupFormat) {
         setGroupAssignments(prev => {

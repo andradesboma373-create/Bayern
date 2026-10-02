@@ -7,16 +7,35 @@
 export const RATING_CONFIG = {
   // Trade window definition
   // Maximum time in seconds between victim death and killer elimination to qualify as a trade
-  TRADE_WINDOW_SECONDS: 4.0,
+  TRADE_WINDOW_SECONDS: 5.5,
   SIMULATION_TICKS_PER_SECOND: 10,
   get TRADE_WINDOW_TICKS(): number {
     return Math.round(this.TRADE_WINDOW_SECONDS * this.SIMULATION_TICKS_PER_SECOND);
   },
 
   // Assist damage threshold: minimum damage dealt to an enemy to be credited as assist
-  ASSIST_MIN_DAMAGE: 35,
-  ASSIST_SWING_SHARE: 0.25,
-  TRADE_SWING_BONUS: 1.15,
+  ASSIST_MIN_DAMAGE: 26,
+  ASSIST_SWING_SHARE: 0.50,
+  TRADE_SWING_BONUS: 1.45,
+
+  // Objective and tactical event swing bonuses (real probability modifiers)
+  EVENT_SWING: {
+    BOMB_PLANT: 0.25,
+    BOMB_DEFUSE: 0.35,
+    CLUTCH: {
+      '1v1': 0.40,
+      '1v2': 0.65,
+      '1v3': 0.90,
+      '1v4': 1.20,
+      '1v5': 1.60
+    },
+    MULTI_KILL: {
+      k2: 0.15,
+      k3: 0.35,
+      k4: 0.65,
+      k5: 1.10
+    }
+  },
 
   // Multi-kill non-linear impact weights
   MULTI_KILL_WEIGHTS: {
@@ -78,7 +97,7 @@ export const RATING_CONFIG = {
     DPR_PENALTY: 0.52,
     ADR_COEFFICIENT: 0.0035,
     KAST_COEFFICIENT: 0.0075,
-    SWING_COEFFICIENT: 0.35,       // Weight for average round swing contribution
+    SWING_COEFFICIENT: 2.2,        // Weight for average round swing contribution (HLTV 3.0 scale)
     MULTI_KILL_COEFFICIENT: 0.08,  // Bonus for non-linear multi-kills
     CLUTCH_COEFFICIENT: 0.12,      // Bonus for clutches won
     OPENING_COEFFICIENT: 0.09,     // Net opening impact

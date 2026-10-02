@@ -174,7 +174,7 @@ export class RatingSystem {
     isOpening: boolean,
     isTrade: boolean = false
   ): number {
-    let rawDelta = pWinAfter - pWinBefore;
+    let rawDelta = Math.max(0.04, pWinAfter - pWinBefore);
 
     // Apply weapon context: eliminating high-threat AWP yields additional swing
     const victimWeaponWeight = this.getWeaponWeight(victim.weaponId || victim.primaryWeaponId || undefined);
@@ -183,14 +183,14 @@ export class RatingSystem {
     let contextMultiplier = 1.0;
     if (victimWeaponWeight > 1.2) {
       // Killed an AWP/Sniper
-      contextMultiplier *= 1.20;
+      contextMultiplier *= 1.15;
     } else if (victimWeaponWeight < 0.6) {
       // Killed an eco/pistol player
-      contextMultiplier *= 0.75;
+      contextMultiplier *= 0.85;
     }
 
     if (killerWeaponWeight < 0.6 && victimWeaponWeight >= 1.0) {
-      // Pistol/Eco player fragged a rifle/AWP (massive upset swing)
+      // Pistol/Eco player fragged a rifle/AWP (upset swing)
       contextMultiplier *= 1.30;
     }
 
@@ -208,7 +208,7 @@ export class RatingSystem {
   /**
    * Calculates the negative Round Swing penalty for the victim.
    * If victim died with an expensive high-powered weapon (AWP / Sniper / Rifle)
-   * to a low-tier weapon (pistol / eco), that is a severe blunder / threw away gun,
+   * to a low-tier weapon (pistol / eco), that is a blunder / threw away gun,
    * so penalty is magnified.
    * If victim was on pure eco/pistol and died to full rifle/AWP, that is standard,
    * so penalty is reduced.
@@ -221,25 +221,25 @@ export class RatingSystem {
     const victimWeaponWeight = this.getWeaponWeight(victim.weaponId || victim.primaryWeaponId || undefined);
     const killerWeaponWeight = this.getWeaponWeight(killer.weaponId || killer.primaryWeaponId || undefined);
 
-    let penaltyMultiplier = 0.75;
+    let penaltyMultiplier = 0.85;
 
-    // Victim had AWP/Sniper (weight > 1.2) and got killed by pistol/eco (weight < 0.6):
-    // Catastrophic blunder: threw away $4750 AWP to a pistol!
+    // Victim had AWP/Sniper and got killed by pistol/eco:
+    // Blunder: threw away $4750 AWP to a pistol
     if (victimWeaponWeight > 1.2 && killerWeaponWeight < 0.6) {
-      penaltyMultiplier = 1.35;
+      penaltyMultiplier = 1.20;
     }
-    // Victim had Rifle (weight >= 1.0) and got killed by pistol/eco (weight < 0.6):
+    // Victim had Rifle and got killed by pistol/eco:
     else if (victimWeaponWeight >= 1.0 && killerWeaponWeight < 0.6) {
-      penaltyMultiplier = 1.10;
+      penaltyMultiplier = 1.05;
     }
     // Victim had AWP/Sniper and got killed by Rifle:
     else if (victimWeaponWeight > 1.2) {
-      penaltyMultiplier = 0.90;
+      penaltyMultiplier = 0.95;
     }
-    // Victim was on pure eco/pistol (weight < 0.6) and died to Rifle/AWP (weight >= 1.0):
-    // Standard expected death on eco: smaller penalty so saving/ecoing doesn't unfairly ruin stats
+    // Victim was on pure eco/pistol and died to Rifle/AWP:
+    // Standard expected death on eco: smaller penalty
     else if (victimWeaponWeight < 0.6 && killerWeaponWeight >= 1.0) {
-      penaltyMultiplier = 0.45;
+      penaltyMultiplier = 0.50;
     }
 
     return Math.abs(actionSwing) * penaltyMultiplier;

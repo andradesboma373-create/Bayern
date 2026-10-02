@@ -19,6 +19,9 @@ import { downloadElementAsImage } from '../../lib/exportImage';
 import Top20Modal from './Top20Modal';
 import FinalistsModal from './FinalistsModal';
 import MvpModal from './MvpModal';
+import { getAutoMatchedVectorLogo } from '../../lib/logoMatcher';
+import { safeLocalStorageSet } from '../../lib/utils';
+import { getCanonicalRoomId } from './storage';
 
 export const BG_THEMES = {
   cyber_grid: {
@@ -399,6 +402,44 @@ export default function TournamentManager({ user }: { user: any }) {
       setTournaments(loadTournaments(userId));
       setIsCreating(false);
       setActiveTournament(t);
+
+      // CRITICAL: Ensure all teams from the tournament exist in the room's global teams so they never disappear
+      try {
+        const roomId = getCanonicalRoomId(userId);
+        const storedRaw = localStorage.getItem(`teams_${roomId}`) || localStorage.getItem(`teams_${userId}`);
+        let currentRoomTeams: any[] = [];
+        try { currentRoomTeams = storedRaw ? JSON.parse(storedRaw) : []; } catch (e) {}
+
+        let addedAny = false;
+        for (const tItem of teams) {
+          if (tItem && tItem.name && !currentRoomTeams.some((ct: any) => ct && ct.name && ct.name.toLowerCase() === tItem.name.trim().toLowerCase())) {
+            const autoLogo = tItem.logoUrl || getAutoMatchedVectorLogo(tItem.name.trim());
+            currentRoomTeams.push({
+              id: 't_' + tItem.id,
+              name: tItem.name.trim(),
+              channelId: roomId,
+              userId: roomId,
+              logoUrl: autoLogo || '',
+              isAcademy: false,
+              players: [],
+              balance: 0,
+              leader: '',
+              createdAt: new Date().toISOString()
+            });
+            addedAny = true;
+          }
+        }
+        if (addedAny) {
+          safeLocalStorageSet(`teams_${roomId}`, currentRoomTeams);
+          if (roomId !== userId) safeLocalStorageSet(`teams_${userId}`, currentRoomTeams);
+          window.dispatchEvent(new Event("db-user-updated"));
+          fetch('/api/sync-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: roomId, teams: currentRoomTeams })
+          }).catch(() => {});
+        }
+      } catch (e) {}
     } catch (e: any) {
       setCreationError("Ошибка сохранения! Превышен лимит памяти (слишком много данных/картинок). Уменьшите размер логотипов команд в меню 'Команды'.");
       setTimeout(() => setCreationError(''), 10000);
@@ -653,14 +694,15 @@ export default function TournamentManager({ user }: { user: any }) {
       for (const g of groups) {
         if (g.matches) {
           for (let i = g.matches.length - 1; i >= 0; i--) {
-            if (g.matches[i].winnerId) {
-              g.matches[i].winnerId = null;
-              g.matches[i].score1 = undefined;
-              g.matches[i].score2 = undefined;
-              g.matches[i].maps = undefined;
-              g.matches[i].team1Stats = undefined;
-              g.matches[i].team2Stats = undefined;
-              g.matches[i].completed = false;
+            const gm = g.matches[i] as any;
+            if (gm.winnerId) {
+              gm.winnerId = null;
+              gm.score1 = undefined;
+              gm.score2 = undefined;
+              gm.maps = undefined;
+              gm.team1Stats = undefined;
+              gm.team2Stats = undefined;
+              gm.completed = false;
               didChange = true;
               break;
             }

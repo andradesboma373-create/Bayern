@@ -1,4 +1,5 @@
 import { MatchState } from '../models';
+import { RATING_CONFIG } from '../config/RatingConfig';
 
 export class BombSystem {
   static update(state: MatchState) {
@@ -12,6 +13,8 @@ export class BombSystem {
                state.bomb.nodeId = planter.currentNodeId;
                planter.state = 'IDLE';
                planter.statistics.plants++;
+               (planter as any).contributedObjectiveInRound = true;
+               planter.statistics.roundSwing = (planter.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.BOMB_PLANT || 0.08);
            }
            state.events.push({ type: 'BOMB_PLANTED', tick: state.tick, data: { nodeId: state.bomb.nodeId } });
        } else {
@@ -33,6 +36,8 @@ export class BombSystem {
                if (defuser) {
                    defuser.state = 'IDLE';
                    defuser.statistics.defuses++;
+                   (defuser as any).contributedObjectiveInRound = true;
+                   defuser.statistics.roundSwing = (defuser.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.BOMB_DEFUSE || 0.16);
                }
            }
        } else {

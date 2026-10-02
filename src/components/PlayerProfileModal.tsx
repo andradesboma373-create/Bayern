@@ -1070,8 +1070,14 @@ export default function PlayerProfileModal({
                           ? `+${playerStats.roundSwing}%`
                           : `${playerStats.roundSwing}%`}
                       </span>
-                      <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                        GOOD
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        Number(playerStats.roundSwing) >= 2.0
+                          ? 'text-emerald-400 bg-emerald-500/10'
+                          : Number(playerStats.roundSwing) >= 0
+                          ? 'text-blue-400 bg-blue-500/10'
+                          : 'text-red-400 bg-red-500/10'
+                      }`}>
+                        {Number(playerStats.roundSwing) >= 2.0 ? 'EXCELLENT' : Number(playerStats.roundSwing) >= 0 ? 'GOOD' : 'LOW'}
                       </span>
                     </div>
                     <span className="text-[10px] font-bold text-white/40 uppercase">
@@ -1079,9 +1085,9 @@ export default function PlayerProfileModal({
                     </span>
                     <div className="w-full bg-white/5 h-1.5 rounded-full mt-2 overflow-hidden">
                       <div
-                        className="bg-emerald-500 h-full rounded-full"
+                        className={`h-full rounded-full ${Number(playerStats.roundSwing) >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
                         style={{
-                          width: `${Math.min(100, Math.max(20, 50 + Number(playerStats.roundSwing) * 3))}%`,
+                          width: `${Math.min(100, Math.max(10, 50 + Number(playerStats.roundSwing) * 7))}%`,
                         }}
                       ></div>
                     </div>

@@ -20,6 +20,49 @@ import {
   syncRooms,
   deleteRoom
 } from "./server/roomsManager";
+import { initializeApp as initFirebaseApp } from 'firebase/app';
+import { getFirestore, doc as fsDoc, setDoc as fsSetDoc, deleteDoc as fsDeleteDoc } from 'firebase/firestore';
+
+let firestoreCloudDb: any = null;
+try {
+  const fbConfigRaw = fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf8');
+  const fbConfig = JSON.parse(fbConfigRaw);
+  const fbApp = initFirebaseApp(fbConfig);
+  firestoreCloudDb = getFirestore(fbApp, fbConfig.firestoreDatabaseId);
+  console.log(`[Firebase] Connected to Cloud Firestore database: ${fbConfig.firestoreDatabaseId}`);
+} catch (e: any) {
+  console.warn("[Firebase] Could not initialize cloud Firestore in server:", e.message);
+}
+
+function sanitizeForFirestore(val: any): any {
+  if (val === null || val === undefined) return val;
+  if (Array.isArray(val)) {
+    if (val.some(item => Array.isArray(item))) {
+      const obj: Record<string, any> = { _isNestedArray: true };
+      val.forEach((sub, idx) => {
+        obj[`item_${idx}`] = Array.isArray(sub) ? sub.map(sanitizeForFirestore) : sanitizeForFirestore(sub);
+      });
+      return obj;
+    }
+    return val.map(sanitizeForFirestore);
+  }
+  if (typeof val === 'object') {
+    const res: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val)) {
+      if (Array.isArray(v) && v.some(sub => Array.isArray(sub))) {
+        const obj: Record<string, any> = { _isNestedArray: true };
+        v.forEach((sub, idx) => {
+          obj[`round_${idx}`] = Array.isArray(sub) ? sub.map(sanitizeForFirestore) : sanitizeForFirestore(sub);
+        });
+        res[k] = obj;
+      } else {
+        res[k] = sanitizeForFirestore(v);
+      }
+    }
+    return res;
+  }
+  return val;
+}
 
 // =========================================================================
 // КРИТИЧЕСКИЕ НАСТРОЙКИ: ПРЯМАЯ НАСТРОЙКА TELEGRAM БОТА (ВСТАВЬТЕ СВОЙ ТОКЕН СЮДА)
@@ -128,6 +171,19 @@ class FallbackDB {
         console.error("Error saving local database cache to disk:", err.message);
       }
     }, 2000);
+  }
+
+  public flush() {
+    if (this.saveTimeout) clearTimeout(this.saveTimeout);
+    try {
+      fs.writeFileSync(this.cachePath, JSON.stringify(this.data, null, 2), 'utf8');
+    } catch (err: any) {
+      console.error("Error flushing local database cache to disk:", err.message);
+    }
+  }
+
+  public reload() {
+    this.load();
   }
 
   public get(collectionName: string, id: string): any {
@@ -403,6 +459,15 @@ async function setDoc(docRef: any, data: any, options?: any): Promise<any> {
   } else {
     fallbackDb.set(collectionName, id, newData);
   }
+
+  // Cloud Firestore asynchronous sync
+  if (firestoreCloudDb) {
+    try {
+      const finalDocData = options && options.merge ? { ...existing, ...newData } : newData;
+      fsSetDoc(fsDoc(firestoreCloudDb, collectionName, id), sanitizeForFirestore(finalDocData), { merge: !!(options && options.merge) }).catch(() => {});
+    } catch (e) {}
+  }
+
   return { success: true };
 }
 
@@ -420,7 +485,16 @@ async function updateDoc(docRef: any, data: any): Promise<any> {
     }
   }
   
-  fallbackDb.set(collectionName, id, { ...existing, ...newData });
+  const finalDocData = { ...existing, ...newData };
+  fallbackDb.set(collectionName, id, finalDocData);
+
+  // Cloud Firestore asynchronous sync
+  if (firestoreCloudDb) {
+    try {
+      fsSetDoc(fsDoc(firestoreCloudDb, collectionName, id), sanitizeForFirestore(finalDocData), { merge: true }).catch(() => {});
+    } catch (e) {}
+  }
+
   return { success: true };
 }
 
@@ -429,6 +503,14 @@ async function deleteDoc(docRef: any): Promise<any> {
   const collectionName = pathParts[0];
   const id = pathParts[pathParts.length - 1];
   fallbackDb.delete(collectionName, id);
+
+  // Cloud Firestore asynchronous sync
+  if (firestoreCloudDb) {
+    try {
+      fsDeleteDoc(fsDoc(firestoreCloudDb, collectionName, id)).catch(() => {});
+    } catch (e) {}
+  }
+
   return { success: true };
 }
 
@@ -3873,7 +3955,23 @@ app.post("/api/sync-cache", async (req, res) => {
         const itemId = item.id || (item.chatId ? `${canonicalId}_${item.chatId}` : null);
         if (!itemId) continue;
         
-        const enhancedItem = { ...item, [userField]: canonicalId, channelId: canonicalId, userId: item.userId || canonicalId };
+        let itemChannel = canonicalId;
+        if (typeof itemId === 'string' && itemId.startsWith('t_channel_airy_')) {
+          itemChannel = 'channel_airy';
+        } else if (typeof itemId === 'string' && itemId.startsWith('t_channel_simu_')) {
+          itemChannel = 'channel_simu';
+        } else if (typeof itemId === 'string' && itemId.startsWith('t_channel_bamep_cs2_')) {
+          itemChannel = 'channel_bamep_cs2';
+        } else if (item.channelId && item.channelId !== canonicalId && (item.channelId.startsWith('channel_') || item.channelId.startsWith('room_'))) {
+          itemChannel = item.channelId;
+        }
+
+        const enhancedItem = { 
+          ...item, 
+          [userField]: itemChannel, 
+          channelId: itemChannel, 
+          userId: item.userId || itemChannel 
+        };
         fallbackDb.set(collectionName, itemId, enhancedItem);
 
         // Crucial: also save to Firestore so queries from client never revert to old rating!
@@ -3963,6 +4061,7 @@ app.post("/api/sync-cache", async (req, res) => {
       }
     }
 
+    fallbackDb.flush();
     console.log(`Successfully synced cache for user ${userId} (canonical room: ${canonicalId})`);
     res.json({ success: true, canonicalId });
   } catch (err: any) {
@@ -3997,6 +4096,95 @@ app.get("/api/settings/:userId", async (req, res) => {
   }
 });
 
+// Helper: generate initial full CS2 rosters and free agents for any room so players never disappear
+function getInitialRosterForRoom(canonicalId: string) {
+  const seedTeams = [
+    {
+      id: `t_${canonicalId}_navi`,
+      name: 'Natus Vincere',
+      channelId: canonicalId,
+      userId: canonicalId,
+      logoUrl: '',
+      players: [
+        { id: `p_${canonicalId}_aleksib`, nickname: 'Aleksib', role: 'captain', rating: 98, valRating: 980, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId },
+        { id: `p_${canonicalId}_jl`, nickname: 'jL', role: 'rifler', rating: 110, valRating: 1100, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId },
+        { id: `p_${canonicalId}_b1t`, nickname: 'b1t', role: 'opener', rating: 108, valRating: 1080, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId },
+        { id: `p_${canonicalId}_w0nderful`, nickname: 'w0nderful', role: 'sniper', rating: 112, valRating: 1120, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId },
+        { id: `p_${canonicalId}_im`, nickname: 'iM', role: 'rifler', rating: 105, valRating: 1050, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId }
+      ]
+    },
+    {
+      id: `t_${canonicalId}_spirit`,
+      name: 'Team Spirit',
+      channelId: canonicalId,
+      userId: canonicalId,
+      logoUrl: '',
+      players: [
+        { id: `p_${canonicalId}_chopper`, nickname: 'chopper', role: 'captain', rating: 95, valRating: 950, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId },
+        { id: `p_${canonicalId}_donk`, nickname: 'donk', role: 'opener', rating: 125, valRating: 1250, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId },
+        { id: `p_${canonicalId}_sh1ro`, nickname: 'sh1ro', role: 'sniper', rating: 118, valRating: 1180, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId },
+        { id: `p_${canonicalId}_magixx`, nickname: 'magixx', role: 'support', rating: 100, valRating: 1000, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId },
+        { id: `p_${canonicalId}_zont1x`, nickname: 'zont1x', role: 'rifler', rating: 106, valRating: 1060, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId }
+      ]
+    },
+    {
+      id: `t_${canonicalId}_vitality`,
+      name: 'Team Vitality',
+      channelId: canonicalId,
+      userId: canonicalId,
+      logoUrl: '',
+      players: [
+        { id: `p_${canonicalId}_apex`, nickname: 'apEX', role: 'captain', rating: 96, valRating: 960, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId },
+        { id: `p_${canonicalId}_zywoo`, nickname: 'ZywOo', role: 'sniper', rating: 122, valRating: 1220, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId },
+        { id: `p_${canonicalId}_spinx`, nickname: 'Spinx', role: 'rifler', rating: 112, valRating: 1120, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId },
+        { id: `p_${canonicalId}_flamez`, nickname: 'flameZ', role: 'opener', rating: 109, valRating: 1090, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId },
+        { id: `p_${canonicalId}_mezii`, nickname: 'mezii', role: 'support', rating: 102, valRating: 1020, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId }
+      ]
+    },
+    {
+      id: `t_${canonicalId}_faze`,
+      name: 'FaZe Clan',
+      channelId: canonicalId,
+      userId: canonicalId,
+      logoUrl: '',
+      players: [
+        { id: `p_${canonicalId}_karrigan`, nickname: 'karrigan', role: 'captain', rating: 93, valRating: 930, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId },
+        { id: `p_${canonicalId}_broky`, nickname: 'broky', role: 'sniper', rating: 113, valRating: 1130, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId },
+        { id: `p_${canonicalId}_ropz`, nickname: 'ropz', role: 'lurker', rating: 111, valRating: 1110, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId },
+        { id: `p_${canonicalId}_frozen`, nickname: 'frozen', role: 'rifler', rating: 110, valRating: 1100, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId },
+        { id: `p_${canonicalId}_rain`, nickname: 'rain', role: 'opener', rating: 104, valRating: 1040, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId }
+      ]
+    },
+    {
+      id: `t_${canonicalId}_g2`,
+      name: 'G2 Esports',
+      channelId: canonicalId,
+      userId: canonicalId,
+      logoUrl: '',
+      players: [
+        { id: `p_${canonicalId}_snax`, nickname: 'Snax', role: 'captain', rating: 94, valRating: 940, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId },
+        { id: `p_${canonicalId}_m0nesy`, nickname: 'm0NESY', role: 'sniper', rating: 121, valRating: 1210, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId },
+        { id: `p_${canonicalId}_niko`, nickname: 'NiKo', role: 'rifler', rating: 116, valRating: 1160, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId },
+        { id: `p_${canonicalId}_hunter`, nickname: 'huNter-', role: 'rifler', rating: 106, valRating: 1060, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId },
+        { id: `p_${canonicalId}_malbsmd`, nickname: 'malbsMd', role: 'opener', rating: 114, valRating: 1140, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId }
+      ]
+    }
+  ];
+
+  const seedFreeAgents = [
+    { id: `p_${canonicalId}_s1mple`, nickname: 's1mple', role: 'sniper', rating: 125, valRating: 1250, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
+    { id: `p_${canonicalId}_perfecto`, nickname: 'Perfecto', role: 'support', rating: 105, valRating: 1050, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
+    { id: `p_${canonicalId}_electronic`, nickname: 'electroNic', role: 'rifler', rating: 112, valRating: 1120, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
+    { id: `p_${canonicalId}_boombl4`, nickname: 'Boombl4', role: 'captain', rating: 102, valRating: 1020, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
+    { id: `p_${canonicalId}_cadian`, nickname: 'cadiaN', role: 'captain', rating: 104, valRating: 1040, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
+    { id: `p_${canonicalId}_degster`, nickname: 'degster', role: 'sniper', rating: 111, valRating: 1110, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
+    { id: `p_${canonicalId}_donk_jr`, nickname: 'donk Jr', role: 'opener', rating: 115, valRating: 1150, channelId: canonicalId, userId: canonicalId, isAcademy: true, createdAt: new Date().toISOString() },
+    { id: `p_${canonicalId}_m0nesy_jr`, nickname: 'm0NESY Jr', role: 'sniper', rating: 118, valRating: 1180, channelId: canonicalId, userId: canonicalId, isAcademy: true, createdAt: new Date().toISOString() }
+  ];
+
+  return { teams: seedTeams, freeAgents: seedFreeAgents };
+}
+
 // Resilient fallback backup data fetch API Endpoint
 app.get("/api/backup-data/:userId", async (req, res) => {
   try {
@@ -4024,10 +4212,94 @@ app.get("/api/backup-data/:userId", async (req, res) => {
     }
     if (!settings) settings = { userId: canonicalId, startingMoney: 500000 };
 
-    const players = fallbackDb.getAll('players').filter(isRoomMatch);
-    const teams = fallbackDb.getAll('teams').filter(isRoomMatch);
+    let players = fallbackDb.getAll('players').filter(isRoomMatch);
+    let teams = fallbackDb.getAll('teams').filter(isRoomMatch);
+
+    // Resilient Auto-recovery: If room teams or players are empty, seed or rehydrate so no room is ever empty!
+    if (teams.length === 0) {
+      console.log(`Initializing default teams and players for room: ${canonicalId}`);
+      const initial = getInitialRosterForRoom(canonicalId);
+      teams = initial.teams;
+      initial.teams.forEach(t => fallbackDb.set('teams', t.id, t));
+
+      const allRosterPlayers = initial.teams.flatMap(t => t.players);
+      players = [...allRosterPlayers, ...initial.freeAgents];
+      players.forEach(p => fallbackDb.set('players', p.id, p));
+    } else if (players.length === 0) {
+      console.log(`Rehydrating players from team rosters for room: ${canonicalId}`);
+      const pMap = new Map();
+      teams.forEach((t: any) => {
+        if (t && Array.isArray(t.players)) {
+          t.players.forEach((p: any) => {
+            if (p && (p.id || p.nickname)) {
+              const pId = p.id || 'p_' + Math.random().toString(36).substring(2, 9);
+              pMap.set(pId, {
+                id: pId,
+                channelId: canonicalId,
+                userId: canonicalId,
+                nickname: p.nickname,
+                role: p.role || 'rifler',
+                rating: Number(p.rating) || 100,
+                valRating: Number(p.valRating) || 0,
+                isAcademy: !!p.isAcademy,
+                avatarUrl: p.avatarUrl || '',
+                team: t.name || p.team,
+                teamId: t.id || p.teamId,
+                createdAt: new Date().toISOString()
+              });
+            }
+          });
+        }
+      });
+      const initial = getInitialRosterForRoom(canonicalId);
+      initial.freeAgents.forEach(fa => {
+        if (!pMap.has(fa.id)) {
+          pMap.set(fa.id, fa);
+        }
+      });
+      players = Array.from(pMap.values());
+      players.forEach(p => fallbackDb.set('players', p.id, p));
+    }
+
+    // Ensure all room Free Agents and Academy prospects are preserved and never disappear
+    const initialRoster = getInitialRosterForRoom(canonicalId);
+    for (const fa of initialRoster.freeAgents) {
+      const existsInPlayers = players.some(p => p && (p.id === fa.id || (p.nickname && p.nickname.toLowerCase() === fa.nickname.toLowerCase())));
+      const existsInTeams = teams.some(t => t && t.players && t.players.some((p: any) => p && (p.id === fa.id || (p.nickname && p.nickname.toLowerCase() === fa.nickname.toLowerCase()))));
+      if (!existsInPlayers && !existsInTeams) {
+        players.push(fa);
+        fallbackDb.set('players', fa.id, fa);
+      }
+    }
+
     const swapOffers = fallbackDb.getAll('swapOffers').filter(isRoomMatch);
     const tournaments = fallbackDb.getAll('tournaments').filter(isRoomMatch);
+
+    // Resilient Auto-recovery: ensure all teams created in tournaments for this room exist in teams pool
+    const existingTeamNames = new Set(teams.map(t => (t.name || '').trim().toLowerCase()));
+    for (const tourney of tournaments) {
+      if (tourney && Array.isArray(tourney.teams)) {
+        for (const tt of tourney.teams) {
+          if (tt && tt.name && !existingTeamNames.has(tt.name.trim().toLowerCase())) {
+            const newTId = tt.id ? ('t_' + tt.id) : ('t_custom_' + Math.random().toString(36).slice(2, 8));
+            const restoredTeam = {
+              id: newTId,
+              name: tt.name.trim(),
+              channelId: canonicalId,
+              userId: canonicalId,
+              isAcademy: false,
+              players: [],
+              balance: 0,
+              leader: '',
+              createdAt: new Date().toISOString()
+            };
+            teams.push(restoredTeam);
+            fallbackDb.set('teams', newTId, restoredTeam);
+            existingTeamNames.add(tt.name.trim().toLowerCase());
+          }
+        }
+      }
+    }
     const matches = fallbackDb.getAll('matches').filter(isRoomMatch);
     const tgUsers = fallbackDb.getAll('tgUsers').filter(isRoomMatch);
     const tgVetos = fallbackDb.getAll('tgVetos').filter(isRoomMatch);

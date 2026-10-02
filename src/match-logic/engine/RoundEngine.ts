@@ -5,6 +5,7 @@ import { PlayerAI } from '../ai/PlayerAI';
 import { TeamAI } from '../ai/TeamAI';
 import { CombatSystem } from '../systems/CombatSystem';
 import { BombSystem } from '../systems/BombSystem';
+import { RATING_CONFIG } from '../config/RatingConfig';
 
 export class RoundEngine {
   static startRound(state: MatchState) {
@@ -19,9 +20,13 @@ export class RoundEngine {
         if (p && p.statistics) {
             (p as any).lastRoundKills = p.statistics.kills;
             (p as any).lastRoundAssists = p.statistics.assists;
+            (p as any).lastRoundDamage = p.statistics.damage;
             (p as any).roundKills = 0;
             (p as any).roundAssists = 0;
+            (p as any).roundDamageDealt = 0;
             (p as any).wasTradedInRound = false;
+            (p as any).contributedObjectiveInRound = false;
+            (p as any).roundClutchWon = false;
             (p as any).clutchOpponentsAtStart = null;
         }
     });
@@ -303,12 +308,27 @@ export class RoundEngine {
         const clutchCloser = winnerAlivePlayers[0];
         const opponentsFaced = (clutchCloser as any).clutchOpponentsAtStart;
         if (opponentsFaced && opponentsFaced >= 1 && clutchCloser.statistics) {
-          if (opponentsFaced === 1) clutchCloser.statistics.clutchesWon1v1 = (clutchCloser.statistics.clutchesWon1v1 || 0) + 1;
-          else if (opponentsFaced === 2) clutchCloser.statistics.clutchesWon1v2 = (clutchCloser.statistics.clutchesWon1v2 || 0) + 1;
-          else if (opponentsFaced === 3) clutchCloser.statistics.clutchesWon1v3 = (clutchCloser.statistics.clutchesWon1v3 || 0) + 1;
-          else if (opponentsFaced === 4) clutchCloser.statistics.clutchesWon1v4 = (clutchCloser.statistics.clutchesWon1v4 || 0) + 1;
-          else if (opponentsFaced >= 5) clutchCloser.statistics.clutchesWon1v5 = (clutchCloser.statistics.clutchesWon1v5 || 0) + 1;
+          let clutchBonus = 0;
+          if (opponentsFaced === 1) {
+            clutchCloser.statistics.clutchesWon1v1 = (clutchCloser.statistics.clutchesWon1v1 || 0) + 1;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v1'] || 0.04;
+          } else if (opponentsFaced === 2) {
+            clutchCloser.statistics.clutchesWon1v2 = (clutchCloser.statistics.clutchesWon1v2 || 0) + 1;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v2'] || 0.08;
+          } else if (opponentsFaced === 3) {
+            clutchCloser.statistics.clutchesWon1v3 = (clutchCloser.statistics.clutchesWon1v3 || 0) + 1;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v3'] || 0.12;
+          } else if (opponentsFaced === 4) {
+            clutchCloser.statistics.clutchesWon1v4 = (clutchCloser.statistics.clutchesWon1v4 || 0) + 1;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v4'] || 0.16;
+          } else if (opponentsFaced >= 5) {
+            clutchCloser.statistics.clutchesWon1v5 = (clutchCloser.statistics.clutchesWon1v5 || 0) + 1;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v5'] || 0.20;
+          }
           clutchCloser.statistics.clutches = (clutchCloser.statistics.clutches || 0) + 1;
+          clutchCloser.statistics.roundSwing = (clutchCloser.statistics.roundSwing || 0) + clutchBonus;
+          (clutchCloser as any).roundClutchWon = true;
+          (clutchCloser as any).contributedObjectiveInRound = true;
         }
       }
     }
@@ -324,17 +344,27 @@ export class RoundEngine {
         ? (p as any).roundAssists
         : Math.max(0, p.statistics.assists - ((p as any).lastRoundAssists || 0));
 
-      if (rKills === 1) p.statistics.k1 = (p.statistics.k1 || 0) + 1;
-      else if (rKills === 2) p.statistics.k2 = (p.statistics.k2 || 0) + 1;
-      else if (rKills === 3) p.statistics.k3 = (p.statistics.k3 || 0) + 1;
-      else if (rKills === 4) p.statistics.k4 = (p.statistics.k4 || 0) + 1;
-      else if (rKills >= 5) p.statistics.k5 = (p.statistics.k5 || 0) + 1;
+      if (rKills === 1) {
+        p.statistics.k1 = (p.statistics.k1 || 0) + 1;
+      } else if (rKills === 2) {
+        p.statistics.k2 = (p.statistics.k2 || 0) + 1;
+        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k2 || 0.02);
+      } else if (rKills === 3) {
+        p.statistics.k3 = (p.statistics.k3 || 0) + 1;
+        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k3 || 0.04);
+      } else if (rKills === 4) {
+        p.statistics.k4 = (p.statistics.k4 || 0) + 1;
+        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k4 || 0.06);
+      } else if (rKills >= 5) {
+        p.statistics.k5 = (p.statistics.k5 || 0) + 1;
+        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k5 || 0.08);
+      }
 
-      // Strict KAST: exactly +1 per round if ANY condition (K or A or S or T) is met
+      // KAST: Strict HLTV CS2 standards (Kill, Assist on killed enemy, Survived a won round, or Traded within window)
       const hasKill = rKills > 0;
       const hasAssist = rAssists > 0;
-      const hasSurvived = p.alive;
-      const hasBeenTraded = !!(p as any).wasTradedInRound;
+      const hasSurvived = p.alive && p.teamId === winnerId;
+      const hasBeenTraded = !p.alive && !!(p as any).wasTradedInRound;
 
       if (hasKill || hasAssist || hasSurvived || hasBeenTraded) {
         p.statistics.kastRounds = (p.statistics.kastRounds || 0) + 1;

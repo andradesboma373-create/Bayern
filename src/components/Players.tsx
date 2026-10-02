@@ -6,6 +6,7 @@ import { User, Plus, Trash2, Edit2, ShieldAlert, RefreshCw, Search, ExternalLink
 import PlayerAvatar from './PlayerAvatar';
 import PlayerProfileModal from './PlayerProfileModal';
 import { safeLocalStorageSet } from '../lib/utils';
+import { getCanonicalRoomId } from './setka_tourn/storage';
 
 export default function Players({ user }: { user: any }) {
   const [players, setPlayers] = useState<any[]>([]);
@@ -46,6 +47,8 @@ export default function Players({ user }: { user: any }) {
     const newRatingVal = Number(editRating) || 100;
     const newVacVal = Number(editValRating) || 0;
 
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+
     // 1. Instant update in local React state & localStorage
     const updatedGlobalPlayers = players.map((p: any) => {
       if (p.id === id) {
@@ -55,6 +58,9 @@ export default function Players({ user }: { user: any }) {
     });
     setPlayers(updatedGlobalPlayers);
     safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
+    if (roomId !== user.uid) {
+      safeLocalStorageSet(`players_${roomId}`, updatedGlobalPlayers);
+    }
 
     // Update teams containing this player locally
     const teamsToUpdateDocs: { id: string; players: any[]; totalValRating: number }[] = [];
@@ -77,6 +83,9 @@ export default function Players({ user }: { user: any }) {
     });
     setTeams(updatedTeams);
     safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+    if (roomId !== user.uid) {
+      safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
+    }
 
     setEditingPlayerId(null);
     window.dispatchEvent(new Event("db-user-updated"));
@@ -86,7 +95,7 @@ export default function Players({ user }: { user: any }) {
       fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, players: updatedGlobalPlayers, teams: updatedTeams })
+        body: JSON.stringify({ userId: roomId, players: updatedGlobalPlayers, teams: updatedTeams })
       }).catch(() => {});
     }
 
@@ -119,10 +128,70 @@ export default function Players({ user }: { user: any }) {
       setLoading(false);
       return;
     }
-    const localPlayers = JSON.parse(localStorage.getItem(`players_${user.uid}`) || '[]');
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    let localPlayers = JSON.parse(localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`) || '[]');
+    let localTeams = JSON.parse(localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`) || '[]');
+
+    // Auto-rehydrate players from teams if players collection was accidentally wiped
+    if (!localPlayers.length && localTeams.length) {
+      const playerMap = new Map();
+      localTeams.forEach((t: any) => {
+        if (t && Array.isArray(t.players)) {
+          t.players.forEach((p: any) => {
+            if (p && (p.id || p.nickname)) {
+              playerMap.set(p.id || p.nickname, {
+                ...p,
+                team: t.name || p.team,
+                teamId: t.id || p.teamId
+              });
+            }
+          });
+        }
+      });
+      const rehydrated = Array.from(playerMap.values());
+      if (rehydrated.length) {
+        localPlayers = rehydrated;
+        safeLocalStorageSet(`players_${user.uid}`, rehydrated);
+        if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, rehydrated);
+      }
+    }
+
     if (localPlayers.length) setPlayers(localPlayers);
-    const localTeams = JSON.parse(localStorage.getItem(`teams_${user.uid}`) || '[]');
     if (localTeams.length) setTeams(localTeams);
+
+    // If local players is incomplete or empty, fetch resilient server backup and merge
+    try {
+      const res = await fetch(`/api/backup-data/${roomId}`);
+      const data = await res.json();
+      if (data && data.success) {
+        if (Array.isArray(data.teams) && data.teams.length > 0 && (!localTeams.length || localTeams.length < data.teams.length)) {
+          setTeams(data.teams);
+          safeLocalStorageSet(`teams_${user.uid}`, data.teams);
+          if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, data.teams);
+        }
+        if (Array.isArray(data.players) && data.players.length > 0) {
+          const pMap = new Map();
+          // Server items first
+          data.players.forEach((p: any) => {
+            if (p && (p.id || p.nickname)) pMap.set(p.id || p.nickname, p);
+          });
+          // Local items overlay
+          localPlayers.forEach((p: any) => {
+            if (p && (p.id || p.nickname)) {
+              const existing = pMap.get(p.id || p.nickname);
+              pMap.set(p.id || p.nickname, existing ? { ...existing, ...p } : p);
+            }
+          });
+          const mergedPlayers = Array.from(pMap.values());
+          if (mergedPlayers.length > localPlayers.length || !localPlayers.length) {
+            setPlayers(mergedPlayers);
+            safeLocalStorageSet(`players_${user.uid}`, mergedPlayers);
+            if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, mergedPlayers);
+            localPlayers = mergedPlayers;
+          }
+        }
+      }
+    } catch (err) {}
 
     if (user.isLocalDemo) {
       setLoading(false);
@@ -130,27 +199,26 @@ export default function Players({ user }: { user: any }) {
     }
 
     try {
-      const qPlayers = query(collection(db, 'players'), where('channelId', '==', user.uid));
+      // Query players for both user.uid and canonical roomId
+      const qPlayers = query(collection(db, 'players'), where('channelId', 'in', Array.from(new Set([user.uid, roomId])).slice(0, 10)));
       const qsPlayers = await getDocs(qPlayers);
       const dbPlayers = qsPlayers.docs.map(d => ({ id: d.id, ...d.data() }));
-      setPlayers(dbPlayers);
-      safeLocalStorageSet(`players_${user.uid}`, dbPlayers);
-      fetch('/api/sync-cache', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, players: dbPlayers })
-      }).catch(() => {});
+      
+      // CRITICAL: Only overwrite local data if Firestore returned ACTUAL non-empty records!
+      if (dbPlayers.length > 0) {
+        setPlayers(dbPlayers);
+        safeLocalStorageSet(`players_${user.uid}`, dbPlayers);
+        if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, dbPlayers);
+      }
 
-      const qTeams = query(collection(db, 'teams'), where('channelId', '==', user.uid));
+      const qTeams = query(collection(db, 'teams'), where('channelId', 'in', Array.from(new Set([user.uid, roomId])).slice(0, 10)));
       const qsTeams = await getDocs(qTeams);
       const dbTeams = qsTeams.docs.map(d => ({ id: d.id, ...d.data() }));
-      setTeams(dbTeams);
-      safeLocalStorageSet(`teams_${user.uid}`, dbTeams);
-      fetch('/api/sync-cache', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, teams: dbTeams })
-      }).catch(() => {});
+      if (dbTeams.length > 0) {
+        setTeams(dbTeams);
+        safeLocalStorageSet(`teams_${user.uid}`, dbTeams);
+        if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, dbTeams);
+      }
     } catch (e) {
       console.warn("Failed to fetch from Firestore, relying on local cache", e);
     }
@@ -163,34 +231,47 @@ export default function Players({ user }: { user: any }) {
       return;
     }
 
-    if (user.isLocalDemo) {
-      fetchPlayers();
-      return;
-    }
-
     setLoading(true);
-
-    // Pre-populate with cached data for instant loading / fallback if offline/quota exceeded
-    try {
-      const cachedPlayers = localStorage.getItem(`players_${user.uid}`);
-      if (cachedPlayers) setPlayers(JSON.parse(cachedPlayers));
-      const cachedTeams = localStorage.getItem(`teams_${user.uid}`);
-      if (cachedTeams) setTeams(JSON.parse(cachedTeams));
-    } catch (e) {}
+    fetchPlayers();
 
     const handleDbUpdated = () => {
       try {
-        const cachedPlayers = localStorage.getItem(`players_${user.uid}`);
-        if (cachedPlayers) setPlayers(JSON.parse(cachedPlayers));
-        const cachedTeams = localStorage.getItem(`teams_${user.uid}`);
-        if (cachedTeams) setTeams(JSON.parse(cachedTeams));
+        const roomId = getCanonicalRoomId(user.channelId || user.uid);
+        let cachedPlayers = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
+        let cachedTeams = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
+
+        let pList = cachedPlayers ? JSON.parse(cachedPlayers) : [];
+        let tList = cachedTeams ? JSON.parse(cachedTeams) : [];
+
+        if (!pList.length && tList.length) {
+          const playerMap = new Map();
+          tList.forEach((t: any) => {
+            if (t && Array.isArray(t.players)) {
+              t.players.forEach((p: any) => {
+                if (p && (p.id || p.nickname)) {
+                  playerMap.set(p.id || p.nickname, {
+                    ...p,
+                    team: t.name || p.team,
+                    teamId: t.id || p.teamId
+                  });
+                }
+              });
+            }
+          });
+          pList = Array.from(playerMap.values());
+          if (pList.length) {
+            safeLocalStorageSet(`players_${user.uid}`, pList);
+            if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, pList);
+          }
+        }
+
+        if (pList.length) setPlayers(pList);
+        if (tList.length) setTeams(tList);
         setLoading(false);
       } catch (e) {
         console.warn("Failed to load from local storage", e);
       }
     };
-
-    handleDbUpdated();
 
     window.addEventListener('db-user-updated', handleDbUpdated);
 
@@ -236,56 +317,66 @@ export default function Players({ user }: { user: any }) {
   const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newPlayer.nickname.trim()) return;
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const playerObj = {
+      id: 'p_' + Math.random().toString(36).substr(2, 9),
+      channelId: roomId,
+      userId: roomId,
+      nickname: newPlayer.nickname.trim(),
+      role: newPlayer.role,
+      rating: newPlayer.rating,
+      valRating: newPlayer.valRating || 0,
+      isAcademy: !!newPlayer.isAcademy,
+      avatarUrl: newPlayer.avatarUrl,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedGlobal = [...players, playerObj];
+    setPlayers(updatedGlobal);
+    safeLocalStorageSet(`players_${user.uid}`, updatedGlobal);
+    if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, updatedGlobal);
+
+    fetch('/api/sync-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: roomId, players: updatedGlobal })
+    }).catch(() => {});
+
     try {
-      if (user.isLocalDemo) {
-        throw new Error("Local demo mode");
+      if (!user.isLocalDemo) {
+        await addDoc(collection(db, 'players'), { ...playerObj, channelId: roomId });
       }
-      await addDoc(collection(db, 'players'), {
-        channelId: user.uid,
-        nickname: newPlayer.nickname.trim(),
-        role: newPlayer.role,
-        rating: newPlayer.rating,
-        valRating: newPlayer.valRating || 0,
-        isAcademy: !!newPlayer.isAcademy,
-        avatarUrl: newPlayer.avatarUrl,
-        createdAt: new Date().toISOString()
-      });
     } catch (e) {
-      console.warn("Fallback: saving player locally", e);
-      const localPlayers = JSON.parse(localStorage.getItem(`players_${user.uid}`) || '[]');
-      localPlayers.push({
-        id: 'p_' + Math.random().toString(36).substr(2, 9),
-        channelId: user.uid,
-        nickname: newPlayer.nickname.trim(),
-        role: newPlayer.role,
-        rating: newPlayer.rating,
-        valRating: newPlayer.valRating || 0,
-        isAcademy: !!newPlayer.isAcademy,
-        avatarUrl: newPlayer.avatarUrl,
-        createdAt: new Date().toISOString()
-      });
-      safeLocalStorageSet(`players_${user.uid}`, localPlayers);
+      console.warn("Firestore save failed, saved locally and in server cache", e);
     } finally {
       setNewPlayer({ nickname: '', role: 'rifler', rating: 100, valRating: 0, isAcademy: false, avatarUrl: '' });
       setShowAddForm(false);
-      fetchPlayers();
+      window.dispatchEvent(new Event("db-user-updated"));
     }
   };
 
   const handleDeletePlayer = async (id: string) => {
+    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const filtered = players.filter((p: any) => p.id !== id);
+    setPlayers(filtered);
+    safeLocalStorageSet(`players_${user.uid}`, filtered);
+    if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, filtered);
+
+    fetch('/api/sync-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: roomId, players: filtered })
+    }).catch(() => {});
+
     try {
-      if (user.isLocalDemo) {
-        throw new Error("Local demo mode");
+      if (!user.isLocalDemo) {
+        await deleteDoc(doc(db, 'players', id));
       }
-      await deleteDoc(doc(db, 'players', id));
     } catch (e) {
-      console.warn("Fallback: deleting player locally", e);
-      const localPlayers = JSON.parse(localStorage.getItem(`players_${user.uid}`) || '[]');
-      const filtered = localPlayers.filter((p: any) => p.id !== id);
-      safeLocalStorageSet(`players_${user.uid}`, filtered);
+      console.warn("Firestore delete failed", e);
     } finally {
       setConfirmDeleteId(null);
-      fetchPlayers();
+      window.dispatchEvent(new Event("db-user-updated"));
     }
   };
 
@@ -474,8 +565,9 @@ export default function Players({ user }: { user: any }) {
         <div className="text-center p-8 text-white/50">Загрузка...</div>
       ) : (() => {
         const filteredPlayers = players
+          .filter(p => p && p.nickname)
           .filter(p => activeTab === 'academy' ? p.isAcademy === true : !p.isAcademy)
-          .filter(p => p.nickname.toLowerCase().includes(searchQuery.toLowerCase()));
+          .filter(p => (p.nickname || '').toLowerCase().includes(searchQuery.toLowerCase()));
 
         if (filteredPlayers.length === 0) {
           return (
