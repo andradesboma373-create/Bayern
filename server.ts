@@ -20,6 +20,13 @@ import {
   syncRooms,
   deleteRoom
 } from "./server/roomsManager";
+import { 
+  recordFirestoreRead, 
+  recordFirestoreWrite, 
+  fetchLiveQuotaFromFirestore, 
+  getTelemetrySnapshot,
+  syncToFirestore
+} from "./server/firebaseQuotaTracker";
 import { initializeApp as initFirebaseApp } from 'firebase/app';
 import { getFirestore, doc as fsDoc, setDoc as fsSetDoc, deleteDoc as fsDeleteDoc } from 'firebase/firestore';
 
@@ -367,6 +374,63 @@ export function getRoomAliases(userId: string): { canonicalId: string; aliases: 
   return { canonicalId: cleanId, aliases: [cleanId] };
 }
 
+export function verifyRoomMatchServer(item: any, canonicalId: string, aliases: string[]): boolean {
+  if (!item) return false;
+
+  const itemId = String(item.id || '').toLowerCase();
+  const itemTeamId = String(item.teamId || '').toLowerCase();
+  const itemChannelId = String(item.channelId || '').toLowerCase();
+  const itemUserId = String(item.userId || '').toLowerCase();
+
+  // CHECK 1: Explicit Room ID Prefix Guards
+  if (itemId.startsWith('t_channel_airy_') || itemId.startsWith('p_channel_airy_') || itemId.includes('_airy_')) {
+    if (canonicalId !== 'channel_airy') return false;
+  }
+  if (itemId.startsWith('t_channel_simu_') || itemId.startsWith('p_channel_simu_') || itemId.includes('_simu_')) {
+    if (canonicalId !== 'channel_simu') return false;
+  }
+  if (itemId.startsWith('t_channel_bamep_cs2_') || itemId.startsWith('p_channel_bamep_cs2_') || itemId.includes('_bamep_cs2_')) {
+    if (canonicalId !== 'channel_bamep_cs2') return false;
+  }
+
+  // CHECK 2: Team Roster Guard for Players
+  if (itemTeamId.startsWith('t_channel_airy_')) {
+    if (canonicalId !== 'channel_airy') return false;
+  }
+  if (itemTeamId.startsWith('t_channel_simu_')) {
+    if (canonicalId !== 'channel_simu') return false;
+  }
+  if (itemTeamId.startsWith('t_channel_bamep_cs2_')) {
+    if (canonicalId !== 'channel_bamep_cs2') return false;
+  }
+
+  // CHECK 3: Defense against known other rooms
+  const isTargetBamep = canonicalId === 'channel_bamep_cs2';
+  const isTargetAiry = canonicalId === 'channel_airy';
+  const isTargetSimu = canonicalId === 'channel_simu';
+
+  if (isTargetBamep) {
+    if (itemChannelId === 'channel_airy' || itemUserId === 'channel_airy') return false;
+    if (itemChannelId === 'channel_simu' || itemUserId === 'channel_simu') return false;
+  } else if (isTargetAiry) {
+    if (itemChannelId === 'channel_bamep_cs2' || itemUserId === 'channel_bamep_cs2') return false;
+    if (itemChannelId === 'channel_simu' || itemUserId === 'channel_simu') return false;
+  } else if (isTargetSimu) {
+    if (itemChannelId === 'channel_bamep_cs2' || itemUserId === 'channel_bamep_cs2') return false;
+    if (itemChannelId === 'channel_airy' || itemUserId === 'channel_airy') return false;
+  }
+
+  // CHECK 4: Direct channel / user match
+  const lowerAliases = (aliases || []).map(a => a.toLowerCase());
+  if (lowerAliases.includes(itemChannelId) || lowerAliases.includes(itemUserId)) return true;
+  if (lowerAliases.includes(String(item.botUserId || '').toLowerCase())) return true;
+
+  // Custom user items (e.g. tournament teams created during session without channelId)
+  if (!item.channelId && !item.userId) return true;
+
+  return false;
+}
+
 function matchDocWithFilters(docData: any, filters: Array<{ field: string; op: string; value: any }>): boolean {
   for (const f of filters) {
     const val = docData[f.field];
@@ -377,13 +441,36 @@ function matchDocWithFilters(docData: any, filters: Array<{ field: string; op: s
     
     const expected = f.value;
     if (f.op === '==' || f.op === 'EQUAL') {
-      if (val === expected) continue;
+      if (val === expected) {
+        if ((f.field === 'channelId' || f.field === 'userId' || f.field === 'botUserId') && typeof expected === 'string') {
+          const { canonicalId, aliases } = getRoomAliases(expected);
+          if (!verifyRoomMatchServer(docData, canonicalId, aliases)) return false;
+        }
+        continue;
+      }
       // Cross-account room alias matching for channelId, userId, botUserId
       if ((f.field === 'channelId' || f.field === 'userId' || f.field === 'botUserId') && typeof expected === 'string') {
-        const { aliases } = getRoomAliases(expected);
-        if (aliases.includes(val)) continue;
+        const { canonicalId, aliases } = getRoomAliases(expected);
+        if (aliases.includes(val) && verifyRoomMatchServer(docData, canonicalId, aliases)) continue;
       }
       return false;
+    } else if (f.op === 'in' || f.op === 'IN') {
+      if (!Array.isArray(expected)) return false;
+      if (f.field === 'channelId' || f.field === 'userId' || f.field === 'botUserId') {
+        let matched = false;
+        for (const expItem of expected) {
+          if (typeof expItem === 'string') {
+            const { canonicalId, aliases } = getRoomAliases(expItem);
+            if ((val === expItem || aliases.includes(val)) && verifyRoomMatchServer(docData, canonicalId, aliases)) {
+              matched = true;
+              break;
+            }
+          }
+        }
+        if (!matched) return false;
+      } else {
+        if (!expected.includes(val)) return false;
+      }
     } else if (f.op === '!=' || f.op === 'NOT_EQUAL') {
       if (val === expected) return false;
     } else if (f.op === '>' || f.op === 'GREATER_THAN') {
@@ -861,6 +948,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 app.post("/api/db/getDocs", async (req, res) => {
   try {
     const queryRef = req.body;
+    recordFirestoreRead(1);
     const snaps = await getDocs(queryRef);
     const docs = snaps.docs.map((d: any) => ({ id: d.id, data: d.data() }));
     res.json(docs);
@@ -870,6 +958,7 @@ app.post("/api/db/getDocs", async (req, res) => {
 app.post("/api/db/getDoc", async (req, res) => {
   try {
     const docRef = req.body;
+    recordFirestoreRead(1);
     const snap = await getDoc(docRef);
     res.json(snap.exists() ? { id: snap.id, data: snap.data() } : null);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -878,6 +967,7 @@ app.post("/api/db/getDoc", async (req, res) => {
 app.post("/api/db/setDoc", async (req, res) => {
   try {
     const { docRef, data, options } = req.body;
+    recordFirestoreWrite(1);
     await setDoc(docRef, data, options);
     res.json({ success: true });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -886,6 +976,7 @@ app.post("/api/db/setDoc", async (req, res) => {
 app.post("/api/db/updateDoc", async (req, res) => {
   try {
     const { docRef, data } = req.body;
+    recordFirestoreWrite(1);
     await updateDoc(docRef, data);
     res.json({ success: true });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -894,6 +985,7 @@ app.post("/api/db/updateDoc", async (req, res) => {
 app.post("/api/db/addDoc", async (req, res) => {
   try {
     const { collectionRef, data } = req.body;
+    recordFirestoreWrite(1);
     const result = await addDoc(collectionRef, data);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -902,6 +994,7 @@ app.post("/api/db/addDoc", async (req, res) => {
 app.post("/api/db/deleteDoc", async (req, res) => {
   try {
     const { docRef } = req.body;
+    recordFirestoreWrite(1);
     await deleteDoc(docRef);
     res.json({ success: true });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -913,6 +1006,7 @@ app.post("/api/db/batch", async (req, res) => {
     if (!Array.isArray(operations)) {
       return res.status(400).json({ error: "operations array is required" });
     }
+    recordFirestoreWrite(operations.length);
     for (const op of operations) {
       if (op.type === 'set') {
         await setDoc(op.docRef, op.data, op.options);
@@ -3942,6 +4036,7 @@ app.post("/api/sync-cache", async (req, res) => {
     }
 
     console.log(`Received cache sync request for user: ${userId} -> canonical room: ${canonicalId}`);
+    recordFirestoreWrite(Math.max(1, (teams?.length || 0) + (players?.length || 0)), canonicalId, 'sync-cache');
 
     // Helper to merge items into fallbackDb and Firestore to keep all databases up to date
     const syncCollection = async (collectionName: string, incomingItems: any[], userField: string) => {
@@ -4195,12 +4290,10 @@ app.get("/api/backup-data/:userId", async (req, res) => {
 
     const { canonicalId, aliases } = getRoomAliases(userId);
     console.log(`Serving backup-data request for user: ${userId} (canonical room: ${canonicalId}, aliases: ${aliases.join(', ')})`);
+    recordFirestoreRead(3, canonicalId, 'backup-data');
 
     const isRoomMatch = (item: any) => {
-      if (!item) return false;
-      return aliases.includes(item.channelId) || 
-             aliases.includes(item.userId) || 
-             aliases.includes(item.botUserId);
+      return verifyRoomMatchServer(item, canonicalId, aliases);
     };
 
     let settings = fallbackDb.get('settings', canonicalId);
@@ -4534,11 +4627,40 @@ app.post(["/api/auth/login", "/api/auth/channel-login"], (req, res) => {
   }
 });
 
-// Get Live Quota Statistics (Admin bamep only)
-app.get("/api/admin/quota-stats", (req, res) => {
+// Get Live Quota Statistics (Admin bamep only) - Connected directly to Google Cloud Firestore telemetry
+app.get("/api/admin/quota-stats", async (req, res) => {
   try {
-    const stats = getQuotaStats();
-    res.json({ success: true, ...stats });
+    const roomStats = getQuotaStats();
+    const firestoreTelemetry = await fetchLiveQuotaFromFirestore();
+
+    const combinedStats = {
+      ...roomStats,
+      readsToday: Math.max(roomStats.readsToday, firestoreTelemetry.readsToday),
+      writesToday: Math.max(roomStats.writesToday, firestoreTelemetry.writesToday),
+      remainingReads: firestoreTelemetry.remainingReads,
+      remainingWrites: firestoreTelemetry.remainingWrites,
+      percentReadsFormatted: firestoreTelemetry.percentReadsFormatted,
+      percentWritesFormatted: firestoreTelemetry.percentWritesFormatted,
+      firestoreConnected: firestoreTelemetry.firestoreConnected,
+      firestoreDatabaseId: firestoreTelemetry.firestoreDatabaseId,
+      projectId: firestoreTelemetry.projectId,
+      lastSyncWithFirestore: firestoreTelemetry.lastSyncWithFirestore,
+      collectionCounts: firestoreTelemetry.collectionCounts,
+      roomActivity: firestoreTelemetry.roomActivity
+    };
+
+    res.json({ success: true, ...combinedStats });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Force sync telemetry with Google Cloud Firestore
+app.post("/api/admin/quota-stats/sync-firestore", async (req, res) => {
+  try {
+    await syncToFirestore();
+    const fresh = await fetchLiveQuotaFromFirestore();
+    res.json({ success: true, telemetry: fresh });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -407,25 +407,15 @@ export class MatchEngine {
     if (s2 === regTarget && s1 < regTie) return true;
     
     // 2. Overtime logic (MR3 format: 6 rounds per OT set)
-    // No artificial round caps (removed 21/22 limit). Overtime continues until a team secures a 2-round lead!
+    // No artificial round caps. Overtime continues until a team secures a 2-round lead!
     if (s1 >= regTie && s2 >= regTie) {
-      if (!isCS2) {
-        // SO2 OT logic: 2-round halves. Win if securing 3 or 2 rounds lead in OT block
-        const totalRounds = s1 + s2;
-        const otRounds = Math.max(1, totalRounds - (regTie * 2));
-        const otNumber = Math.floor((otRounds - 1) / 4);
-        const otTarget = regTie + 3 + (otNumber * 2);
-        if (s1 >= otTarget && (s1 - s2) >= 2) return true;
-        if (s2 >= otTarget && (s2 - s1) >= 2) return true;
-      } else {
-        // CS2 OT logic: MR3 (3-round halves)
-        const totalRounds = s1 + s2;
-        const otRounds = Math.max(1, totalRounds - (regTie * 2));
-        const otNumber = Math.floor((otRounds - 1) / 6);
-        const otTarget = regTie + 4 + (otNumber * 3);
-        if (s1 >= otTarget && (s1 - s2) >= 2) return true;
-        if (s2 >= otTarget && (s2 - s1) >= 2) return true;
-      }
+      // Both CS2 and SO2 use identical competitive MR12/MR3 rules (regulation to 13, 3 rounds per OT half)
+      const totalRounds = s1 + s2;
+      const otRounds = Math.max(1, totalRounds - (regTie * 2));
+      const otNumber = Math.floor((otRounds - 1) / 6);
+      const otTarget = regTie + 4 + (otNumber * 3);
+      if (s1 >= otTarget && (s1 - s2) >= 2) return true;
+      if (s2 >= otTarget && (s2 - s1) >= 2) return true;
     }
     return false;
   }

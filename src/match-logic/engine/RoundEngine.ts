@@ -73,7 +73,7 @@ export class RoundEngine {
       }
     } else if (state.round > regulationMax) {
       const otRound = state.round - regulationMax;
-      const roundsPerHalf = state.isCS2 ? 3 : 2;
+      const roundsPerHalf = 3;
       const roundsPerOT = roundsPerHalf * 2;
       if (otRound === 1 || (otRound - 1) % roundsPerOT === 0) {
         if (teamIds[0] && state.teams[teamIds[0]]) state.teams[teamIds[0]].side = t1Orig;

@@ -225,7 +225,7 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
             'Balanced',
             'Balanced',
             mapsToSim,
-            game === 'cs2' ? 'MR12' : 'MR15',
+            'MR12',
             game === 'cs2',
             'Турнирный Матч'
         );

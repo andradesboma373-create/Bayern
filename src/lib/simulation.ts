@@ -474,7 +474,7 @@ function getEconomy(
             // Anti-Eco Buy for pistol winner (armor, cheap rifles/SMGs)
             const type = 'Anti-Eco Buy';
             const power = 0.94; 
-            const cost = isCS2 ? 3000 * 5 : 2500 * 5;
+            const cost = 3000 * 5;
             equipment = [
                 `${rifle}/Kevlar`,
                 `${smg}/Kevlar`,
@@ -515,9 +515,9 @@ function getEconomy(
     }
     
     const avgMoney = teamMoney / 5;
-    const full = isCS2 ? 4500 : 3500;
-    const half = isCS2 ? 3000 : 2500;
-    const awpCost = isCS2 ? 4750 : 4750;
+    const full = 4500;
+    const half = 3000;
+    const awpCost = 4750;
     
     let type = 'Eco';
     let power = 0.76;

@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-03",
+  "readsToday": 160,
+  "writesToday": 42,
+  "maxReads": 50000,
+  "maxWrites": 20000,
+  "remainingReads": 49840,
+  "remainingWrites": 19958,
+  "percentReads": 0.32,
+  "percentWrites": 0.21,
+  "percentReadsFormatted": "0.32%",
+  "percentWritesFormatted": "0.21%",
+  "lastUpdated": "2026-10-03T05:34:54.098Z",
+  "lastSyncWithFirestore": "2026-10-03T05:34:52.861Z",
+  "firestoreConnected": true,
+  "firestoreDatabaseId": "ai-studio-matchsimulator-cf882484-249e-4726-9c8b-046071d33a59",
+  "projectId": "conductive-state-tf6jr",
+  "collectionCounts": {
+    "teams": 20,
+    "players": 99,
+    "matches": 8,
+    "tournaments": 1,
+    "settings": 8,
+    "rooms": 4
+  },
+  "roomActivity": {
+    "channel_bamep_cs2": {
+      "writes": 30,
+      "lastActive": "2026-10-03T05:34:50.827Z",
+      "reads": 100
+    },
+    "channel_airy": {
+      "writes": 8,
+      "lastActive": "2026-10-03T05:34:41.954Z",
+      "reads": 35
+    },
+    "channel_simu": {
+      "writes": 4,
+      "reads": 25,
+      "lastActive": "2026-10-03T05:34:54.098Z"
+    }
+  }
+}

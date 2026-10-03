@@ -7,6 +7,7 @@ import PlayerAvatar from './PlayerAvatar';
 import PlayerProfileModal from './PlayerProfileModal';
 import { safeLocalStorageSet } from '../lib/utils';
 import { getCanonicalRoomId } from './setka_tourn/storage';
+import { filterItemsForRoom } from '../lib/roomIsolation';
 
 export default function Players({ user }: { user: any }) {
   const [players, setPlayers] = useState<any[]>([]);
@@ -164,10 +165,10 @@ export default function Players({ user }: { user: any }) {
       const res = await fetch(`/api/backup-data/${roomId}`);
       const data = await res.json();
       if (data && data.success) {
-        if (Array.isArray(data.teams) && data.teams.length > 0 && (!localTeams.length || localTeams.length < data.teams.length)) {
-          setTeams(data.teams);
-          safeLocalStorageSet(`teams_${user.uid}`, data.teams);
-          if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, data.teams);
+        if (Array.isArray(data.teams) && data.teams.length > 0) {
+          const roomTeams = filterItemsForRoom(data.teams, roomId);
+          setTeams(roomTeams);
+          safeLocalStorageSet(`teams_${roomId}`, roomTeams);
         }
         if (Array.isArray(data.players) && data.players.length > 0) {
           const pMap = new Map();
@@ -182,11 +183,10 @@ export default function Players({ user }: { user: any }) {
               pMap.set(p.id || p.nickname, existing ? { ...existing, ...p } : p);
             }
           });
-          const mergedPlayers = Array.from(pMap.values());
-          if (mergedPlayers.length > localPlayers.length || !localPlayers.length) {
+          const mergedPlayers = filterItemsForRoom(Array.from(pMap.values()), roomId);
+          if (mergedPlayers.length > 0) {
             setPlayers(mergedPlayers);
-            safeLocalStorageSet(`players_${user.uid}`, mergedPlayers);
-            if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, mergedPlayers);
+            safeLocalStorageSet(`players_${roomId}`, mergedPlayers);
             localPlayers = mergedPlayers;
           }
         }
@@ -199,25 +199,23 @@ export default function Players({ user }: { user: any }) {
     }
 
     try {
-      // Query players for both user.uid and canonical roomId
-      const qPlayers = query(collection(db, 'players'), where('channelId', 'in', Array.from(new Set([user.uid, roomId])).slice(0, 10)));
+      // Query players for canonical roomId
+      const qPlayers = query(collection(db, 'players'), where('channelId', '==', roomId));
       const qsPlayers = await getDocs(qPlayers);
-      const dbPlayers = qsPlayers.docs.map(d => ({ id: d.id, ...d.data() }));
+      const dbPlayers = filterItemsForRoom(qsPlayers.docs.map(d => ({ id: d.id, ...d.data() })), roomId);
       
       // CRITICAL: Only overwrite local data if Firestore returned ACTUAL non-empty records!
       if (dbPlayers.length > 0) {
         setPlayers(dbPlayers);
-        safeLocalStorageSet(`players_${user.uid}`, dbPlayers);
-        if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, dbPlayers);
+        safeLocalStorageSet(`players_${roomId}`, dbPlayers);
       }
 
-      const qTeams = query(collection(db, 'teams'), where('channelId', 'in', Array.from(new Set([user.uid, roomId])).slice(0, 10)));
+      const qTeams = query(collection(db, 'teams'), where('channelId', '==', roomId));
       const qsTeams = await getDocs(qTeams);
-      const dbTeams = qsTeams.docs.map(d => ({ id: d.id, ...d.data() }));
+      const dbTeams = filterItemsForRoom(qsTeams.docs.map(d => ({ id: d.id, ...d.data() })), roomId);
       if (dbTeams.length > 0) {
         setTeams(dbTeams);
-        safeLocalStorageSet(`teams_${user.uid}`, dbTeams);
-        if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, dbTeams);
+        safeLocalStorageSet(`teams_${roomId}`, dbTeams);
       }
     } catch (e) {
       console.warn("Failed to fetch from Firestore, relying on local cache", e);

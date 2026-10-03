@@ -6,6 +6,7 @@ import { auth, logout, db } from './firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from './firebase';
 import { collection, query, where, getDocs, onSnapshot } from './firebase';
 import { saveMatchesToLocalStorage } from './lib/utils';
+import { filterItemsForRoom } from './lib/roomIsolation';
 
 import TournamentBracket from './components/setka_tourn/TournamentBracket';
 import Simulator from './components/Simulator';
@@ -367,7 +368,10 @@ export default function App() {
                 }
               }
 
-              const finalArray = Array.from(mergedMap.values());
+              const rawFinalArray = Array.from(mergedMap.values());
+              const finalArray = (col.prop === 'players' || col.prop === 'teams') 
+                ? filterItemsForRoom(rawFinalArray, roomId)
+                : rawFinalArray;
               if (col.cacheKey === `matches_${roomId}`) {
                 const prevRaw = localStorage.getItem(col.cacheKey);
                 const deletedIdsRaw = localStorage.getItem(`deleted_matches_${roomId}`) || localStorage.getItem(`deleted_matches_${user.uid}`);

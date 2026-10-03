@@ -14,7 +14,8 @@ export class BombSystem {
                planter.state = 'IDLE';
                planter.statistics.plants++;
                (planter as any).contributedObjectiveInRound = true;
-               planter.statistics.roundSwing = (planter.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.BOMB_PLANT || 0.08);
+               const swingMult = (state.formatProfile?.swingMultiplier) || 1.0;
+               planter.statistics.roundSwing = (planter.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.BOMB_PLANT || 0.08) * swingMult;
            }
            state.events.push({ type: 'BOMB_PLANTED', tick: state.tick, data: { nodeId: state.bomb.nodeId } });
        } else {
@@ -37,7 +38,8 @@ export class BombSystem {
                    defuser.state = 'IDLE';
                    defuser.statistics.defuses++;
                    (defuser as any).contributedObjectiveInRound = true;
-                   defuser.statistics.roundSwing = (defuser.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.BOMB_DEFUSE || 0.16);
+                   const swingMult = (state.formatProfile?.swingMultiplier) || 1.0;
+                   defuser.statistics.roundSwing = (defuser.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.BOMB_DEFUSE || 0.16) * swingMult;
                }
            }
        } else {

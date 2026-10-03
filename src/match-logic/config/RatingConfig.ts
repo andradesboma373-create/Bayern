@@ -104,3 +104,71 @@ export const RATING_CONFIG = {
     BASE_OFFSET: 0.16              // Anchor constant
   }
 };
+
+/**
+ * FormatWeightProfile: Specialized esports weights for Swing (luck / comebacks / upset variance)
+ * and Cast (roster baseline strength / KAST discipline) depending on match format (Bo1 vs Bo3 vs Bo5).
+ */
+export interface FormatWeightProfile {
+  format: 'BO1' | 'BO3' | 'BO5';
+  name: string;
+  shortLabel: string;
+  swingMultiplier: number;     // Вес "Свинга": удача, клатчи, камбеки, эко-раунды, апсеты
+  castMultiplier: number;      // Вес "Каста": фундаментальная сила ростера, скилл и синергия
+  momentumWeight: number;      // Влияние винстриков и психологического моментума
+  kastMultiplier: number;      // Вес системной стабильности и разменов KAST
+  upsetPotential: number;      // Процентная оценка вероятности сенсации (апсета)
+  upsetChanceDescription: string;
+  summary: string;
+}
+
+export const MATCH_FORMAT_PROFILES: Record<string, FormatWeightProfile> = {
+  BO1: {
+    format: 'BO1',
+    name: 'Best of 1 (Матч на одной карте)',
+    shortLabel: 'Bo1 • Высокий свинг / Апсеты',
+    swingMultiplier: 1.35,      // +35% влияние удачи, камбеков, пистолеток и клатчей
+    castMultiplier: 0.82,       // Разрыв в базовой силе команд сглажен (андердог опасен)
+    momentumWeight: 1.30,       // Повышенный моментум раундов
+    kastMultiplier: 0.88,       // Хаос раундов снижает долю чистой системности
+    upsetPotential: 42,
+    upsetChanceDescription: 'Высокая (до 42% апсетов)',
+    summary: 'Удача и камбеки (Свинг 1.35x) решают исход матча. Преимущество фаворита сглажено (Каст 0.82x).'
+  },
+  BO3: {
+    format: 'BO3',
+    name: 'Best of 3 (Турнирный стандарт)',
+    shortLabel: 'Bo3 • Турнирный эталон',
+    swingMultiplier: 1.00,      // Эталонный киберспортивный баланс HLTV
+    castMultiplier: 1.00,       // Базовая сила ростера и синергия раскрываются полностью
+    momentumWeight: 1.00,       // Сбалансированный моментум
+    kastMultiplier: 1.00,       // Стандартный вес KAST
+    upsetPotential: 22,
+    upsetChanceDescription: 'Сбалансированная (~22% апсетов)',
+    summary: 'Золотой стандарт киберспорта: баланс базовой мощи команд (Каст 1.0x) и тактических камбеков (Свинг 1.0x).'
+  },
+  BO5: {
+    format: 'BO5',
+    name: 'Best of 5 (Гранд-финал / Выносливость)',
+    shortLabel: 'Bo5 • Доминирование базы',
+    swingMultiplier: 0.85,      // Случайные флюки нивелируются на длинной дистанции
+    castMultiplier: 1.18,       // Побеждает фундаментальный скилл, мап-пул и выносливость
+    momentumWeight: 0.85,       // Высокая дисциплина
+    kastMultiplier: 1.15,       // Высочайшая ценность выживаемости и трейдов (KAST)
+    upsetPotential: 9,
+    upsetChanceDescription: 'Минимальная (<10% апсетов)',
+    summary: 'Дистанция исключает случайности. Доминирует фундаментальный скилл ростера (Каст 1.18x) и KAST-дисциплина.'
+  }
+};
+
+export function getFormatProfile(formatInput?: string, mapCount?: number): FormatWeightProfile {
+  const norm = (formatInput || '').toUpperCase().trim();
+  if (norm === 'BO1' || norm.includes('1') || mapCount === 1) {
+    return MATCH_FORMAT_PROFILES.BO1;
+  }
+  if (norm === 'BO5' || norm.includes('5') || mapCount === 5) {
+    return MATCH_FORMAT_PROFILES.BO5;
+  }
+  return MATCH_FORMAT_PROFILES.BO3;
+}
+

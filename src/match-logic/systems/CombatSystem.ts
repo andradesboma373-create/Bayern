@@ -94,12 +94,13 @@ export class CombatSystem {
     // In competitive CS2, trailing teams use timeouts and adapt tactically
     if (shooterTeam && targetTeam) {
       const scoreDiff = shooterTeam.score - targetTeam.score; // negative means shooter's team is trailing
+      const profile = state.formatProfile || { swingMultiplier: 1.0, momentumWeight: 1.0 };
       
       if (scoreDiff <= -3) {
-        // Trailing team tactical timeout & reset
+        // Trailing team tactical timeout & reset (amplified by format swing / comeback multiplier)
         const trailingAmount = Math.min(6, Math.abs(scoreDiff));
-        effectiveAim += trailingAmount * 0.5; // subtle +1.5 to +3.0 max
-        effectiveIq += trailingAmount * 0.4;
+        effectiveAim += trailingAmount * 0.5 * profile.swingMultiplier;
+        effectiveIq += trailingAmount * 0.4 * profile.swingMultiplier;
       }
       
       // Clutch moment: 1vX situation boosts high-IQ / clutch star players
@@ -107,10 +108,10 @@ export class CombatSystem {
       const targetTeamAlive = Object.values(state.players).filter(p => p.teamId === target.teamId && p.alive).length;
       if (shooterTeamAlive === 1 && targetTeamAlive >= 1) {
         if ((shooter.iq || 100) > 105) {
-          effectiveAim += 4; // Clutch gene for stars
+          effectiveAim += 4 * profile.swingMultiplier; // Clutch gene for stars scaled with format
         }
         if (shooter.perk?.clutchBonus) {
-          effectiveAim += shooter.perk.clutchBonus * 20; // Explicit individual clutch perk boost
+          effectiveAim += shooter.perk.clutchBonus * 20 * profile.swingMultiplier; // Explicit individual clutch perk boost
         }
       }
     }
@@ -323,7 +324,8 @@ export class CombatSystem {
 
         // Round Swing calculation
         const pWinAfterKiller = RatingSystem.calculateWinProbability(state, shooter.teamId);
-        const actionSwing = RatingSystem.calculateActionSwing(pWinBeforeKiller, pWinAfterKiller, shooter, target, isOpeningKill, isTrade);
+        const formatSwingMult = state.formatProfile?.swingMultiplier || 1.0;
+        const actionSwing = RatingSystem.calculateActionSwing(pWinBeforeKiller, pWinAfterKiller, shooter, target, isOpeningKill, isTrade, formatSwingMult);
 
         // Track potential clutch situation after this death
         const targetTeamAlive = Object.values(state.players).filter(p => p && p.alive && p.teamId === target.teamId);

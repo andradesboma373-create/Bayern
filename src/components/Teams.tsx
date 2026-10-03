@@ -8,6 +8,7 @@ import TeamProfileModal from './TeamProfileModal';
 import { safeLocalStorageSet } from '../lib/utils';
 import { getAutoMatchedVectorLogo } from '../lib/logoMatcher';
 import { getCanonicalRoomId } from './setka_tourn/storage';
+import { filterItemsForRoom } from '../lib/roomIsolation';
 
 export default function Teams({ user }: { user: any }) {
   const [teams, setTeams] = useState<any[]>([]);
@@ -256,15 +257,14 @@ export default function Teams({ user }: { user: any }) {
                   mergedMap.set(key, existing ? { ...existing, ...t } : t);
                 }
               });
-              const merged = Array.from(mergedMap.values());
-              safeLocalStorageSet(`teams_${user.uid}`, merged);
-              if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, merged);
+              const merged = filterItemsForRoom(Array.from(mergedMap.values()), roomId);
+              safeLocalStorageSet(`teams_${roomId}`, merged);
               return merged;
             });
           }
           if (Array.isArray(data.players) && data.players.length > 0) {
             setPlayers(prevPlayers => {
-              const localRaw = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
+              const localRaw = localStorage.getItem(`players_${roomId}`);
               let localPlayers: any[] = [];
               try { localPlayers = localRaw ? JSON.parse(localRaw) : prevPlayers; } catch (e) { localPlayers = prevPlayers; }
 
@@ -281,9 +281,8 @@ export default function Teams({ user }: { user: any }) {
                   mergedMap.set(key, existing ? { ...existing, ...p } : p);
                 }
               });
-              const merged = Array.from(mergedMap.values());
-              safeLocalStorageSet(`players_${user.uid}`, merged);
-              if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, merged);
+              const merged = filterItemsForRoom(Array.from(mergedMap.values()), roomId);
+              safeLocalStorageSet(`players_${roomId}`, merged);
               return merged;
             });
           }

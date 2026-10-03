@@ -148,6 +148,8 @@ export interface MatchState {
   mapId: string;
   isCS2: boolean;
   format: string; // MR12, MR15
+  seriesFormat?: string; // BO1, BO3, BO5
+  formatProfile?: any; // FormatWeightProfile
   
   phase: 'FREEZE' | 'BUY' | 'LIVE' | 'ROUND_END' | 'MATCH_END';
   round: number;

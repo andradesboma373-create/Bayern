@@ -553,7 +553,7 @@ export default function Simulator({ user }: { user: any }) {
       // Simulation engine execution (100% in-memory)
       const tSimStart = performance.now();
       const simResult = simulateMatchSeries(
-        team1, team2, team1Synergy, team2Synergy, 'default', 'default', pickedMaps, isCS2 ? 'MR12' : 'MR15', isCS2, tourneyName,
+        team1, team2, team1Synergy, team2Synergy, 'default', 'default', pickedMaps, 'MR12', isCS2, tourneyName,
         team1Form, team2Form, team1MapExp, team2MapExp
       );
       const simDuration = performance.now() - tSimStart;
