@@ -210,7 +210,7 @@ export default function SwissStage({
   const isCurrentRoundFinished = () => {
     if (swissRounds.length === 0) return false;
     const currentRound = swissRounds[swissRounds.length - 1];
-    return currentRound.every(m => m.winnerId !== null);
+    return Array.isArray(currentRound) && currentRound.every(m => m.winnerId !== null);
   };
 
   // Check if entire Swiss Stage is finished
@@ -378,7 +378,7 @@ export default function SwissStage({
 
     const currentRIdx = swissRounds.length - 1;
     const currentRound = swissRounds[currentRIdx];
-    const hasAnyPlayedMatches = currentRound.some(m => m.winnerId && m.team1?.id !== 'BYE' && m.team2?.id !== 'BYE');
+    const hasAnyPlayedMatches = Array.isArray(currentRound) && currentRound.some(m => m.winnerId && m.team1?.id !== 'BYE' && m.team2?.id !== 'BYE');
 
     if (hasAnyPlayedMatches) {
       // If current round has played matches, reset current round so it can be replayed
@@ -806,7 +806,7 @@ export default function SwissStage({
             </button>
           )}
 
-          {(swissRounds.length > 1 || (swissRounds.length === 1 && swissRounds[0]?.some(m => m.winnerId))) && !isExporting && (
+          {(swissRounds.length > 1 || (swissRounds.length === 1 && Array.isArray(swissRounds[0]) && swissRounds[0].some(m => m.winnerId))) && !isExporting && (
             <div className="flex items-center gap-1.5 bg-red-500/10 p-1 rounded-xl border border-red-500/30 shadow-sm">
               <button
                 onClick={() => handleUndoRounds(1)}

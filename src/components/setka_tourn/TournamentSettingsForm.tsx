@@ -86,7 +86,7 @@ export default function TournamentSettingsForm({
         
         for (let i = 0; i < gCount; i++) {
           const key = `gsl-group-${i}`;
-          next[key] = (prev[key] || []).filter(id => teams.some(t => t.id === id));
+          next[key] = (prev[key] || []).filter(id => Array.isArray(teams) && teams.some(t => t.id === id));
           allAssignedIds.push(...next[key]);
         }
         

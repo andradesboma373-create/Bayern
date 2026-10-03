@@ -129,7 +129,7 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
     });
   };
 
-  const allMatchesFinished = groups.every(g => g.matches.every(m => m.winnerId || m.isDraw));
+  const allMatchesFinished = Array.isArray(groups) && groups.every(g => Array.isArray(g?.matches) && g.matches.every(m => m.winnerId || m.isDraw));
 
   return (
     <div className="flex flex-col gap-12">

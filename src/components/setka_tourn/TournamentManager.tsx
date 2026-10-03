@@ -418,22 +418,24 @@ export default function TournamentManager({ user }: { user: any }) {
         try { currentRoomTeams = storedRaw ? JSON.parse(storedRaw) : []; } catch (e) {}
 
         let addedAny = false;
-        for (const tItem of teams) {
-          if (tItem && tItem.name && !currentRoomTeams.some((ct: any) => ct && ct.name && ct.name.toLowerCase() === tItem.name.trim().toLowerCase())) {
-            const autoLogo = tItem.logoUrl || getAutoMatchedVectorLogo(tItem.name.trim());
-            currentRoomTeams.push({
-              id: 't_' + tItem.id,
-              name: tItem.name.trim(),
-              channelId: roomId,
-              userId: roomId,
-              logoUrl: autoLogo || '',
-              isAcademy: false,
-              players: [],
-              balance: 0,
-              leader: '',
-              createdAt: new Date().toISOString()
-            });
-            addedAny = true;
+        if (Array.isArray(currentRoomTeams)) {
+          for (const tItem of teams) {
+            if (tItem && tItem.name && !currentRoomTeams.some((ct: any) => ct && ct.name && ct.name.toLowerCase() === tItem.name.trim().toLowerCase())) {
+              const autoLogo = tItem.logoUrl || getAutoMatchedVectorLogo(tItem.name.trim());
+              currentRoomTeams.push({
+                id: 't_' + tItem.id,
+                name: tItem.name.trim(),
+                channelId: roomId,
+                userId: roomId,
+                logoUrl: autoLogo || '',
+                isAcademy: false,
+                players: [],
+                balance: 0,
+                leader: '',
+                createdAt: new Date().toISOString()
+              });
+              addedAny = true;
+            }
           }
         }
         if (addedAny) {
@@ -469,12 +471,12 @@ export default function TournamentManager({ user }: { user: any }) {
   const canUndoTournament = (t?: Tournament | null): boolean => {
     if (!t) return false;
     if (t.activeStage === 2 && (t.swissRounds || t.groups)) return true;
-    if (t.swissRounds && (t.swissRounds.length > 1 || t.swissRounds[0]?.some(m => m.winnerId))) return true;
-    if (t.tieredBracketRounds?.some(r => r.some(m => m.winnerId))) return true;
-    if (t.bracketRounds?.some(r => r.some(m => m.winnerId))) return true;
-    if (t.losersBracketRounds?.some(r => r.some(m => m.winnerId))) return true;
-    if (t.grandFinal?.some(m => m.winnerId)) return true;
-    if (t.groups?.some(g => g.matches?.some(m => m.winnerId))) return true;
+    if (Array.isArray(t.swissRounds) && (t.swissRounds.length > 1 || (Array.isArray(t.swissRounds[0]) && t.swissRounds[0].some(m => m.winnerId)))) return true;
+    if (Array.isArray(t.tieredBracketRounds) && t.tieredBracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
+    if (Array.isArray(t.bracketRounds) && t.bracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
+    if (Array.isArray(t.losersBracketRounds) && t.losersBracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
+    if (Array.isArray(t.grandFinal) && t.grandFinal.some(m => m.winnerId)) return true;
+    if (Array.isArray(t.groups) && t.groups.some(g => Array.isArray(g?.matches) && g.matches.some(m => m.winnerId))) return true;
     return false;
   };
 
@@ -488,12 +490,12 @@ export default function TournamentManager({ user }: { user: any }) {
     const hasSwissStage1 = Boolean(updated.swissRounds && updated.swissRounds.length > 0);
     const hasGroupsStage1 = Boolean(updated.groups && updated.groups.length > 0);
 
-    const hasPlayedTieredMatch = Boolean(updated.tieredBracketRounds?.some(r => r.some(m => m.winnerId)));
-    const hasPlayedSingleMatch = Boolean(updated.bracketRounds?.some(r => r.some(m => m.winnerId)));
+    const hasPlayedTieredMatch = Boolean(Array.isArray(updated.tieredBracketRounds) && updated.tieredBracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId)));
+    const hasPlayedSingleMatch = Boolean(Array.isArray(updated.bracketRounds) && updated.bracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId)));
     const hasPlayedDoubleMatch = Boolean(
-      updated.bracketRounds?.some(r => r.some(m => m.winnerId)) ||
-      updated.losersBracketRounds?.some(r => r.some(m => m.winnerId)) ||
-      updated.grandFinal?.some(m => m.winnerId)
+      (Array.isArray(updated.bracketRounds) && updated.bracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) ||
+      (Array.isArray(updated.losersBracketRounds) && updated.losersBracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) ||
+      (Array.isArray(updated.grandFinal) && updated.grandFinal.some(m => m.winnerId))
     );
 
     const isDouble = updated.settings?.eliminationType === 'double';
@@ -509,7 +511,7 @@ export default function TournamentManager({ user }: { user: any }) {
       let lBracket = updated.losersBracketRounds ? JSON.parse(JSON.stringify(updated.losersBracketRounds)) : [];
       let gFinal = updated.grandFinal ? JSON.parse(JSON.stringify(updated.grandFinal)) : [];
 
-      if (gFinal.some((m: any) => m.winnerId)) {
+      if (Array.isArray(gFinal) && gFinal.some((m: any) => m.winnerId)) {
         gFinal = gFinal.map((m: any) => ({
           ...m,
           winnerId: null,
@@ -523,7 +525,7 @@ export default function TournamentManager({ user }: { user: any }) {
         didChange = true;
       } else {
         for (let i = lBracket.length - 1; i >= 0; i--) {
-          if (lBracket[i].some((m: any) => m.winnerId)) {
+          if (Array.isArray(lBracket[i]) && lBracket[i].some((m: any) => m.winnerId)) {
             lBracket[i] = lBracket[i].map((m: any) => ({
               ...m,
               winnerId: null,
@@ -540,7 +542,7 @@ export default function TournamentManager({ user }: { user: any }) {
         }
         if (!didChange) {
           for (let i = wBracket.length - 1; i >= 0; i--) {
-            if (wBracket[i].some((m: any) => m.winnerId)) {
+            if (Array.isArray(wBracket[i]) && wBracket[i].some((m: any) => m.winnerId)) {
               wBracket[i] = wBracket[i].map((m: any) => ({
                 ...m,
                 winnerId: null,
@@ -570,7 +572,7 @@ export default function TournamentManager({ user }: { user: any }) {
       const rounds = updated.tieredBracketRounds.map(r => r.map(m => ({ ...m })));
       let targetRoundIdx = -1;
       for (let i = rounds.length - 1; i >= 0; i--) {
-        if (rounds[i].some(m => m.winnerId)) {
+        if (Array.isArray(rounds[i]) && rounds[i].some(m => m.winnerId)) {
           targetRoundIdx = i;
           break;
         }
@@ -611,7 +613,7 @@ export default function TournamentManager({ user }: { user: any }) {
       const rounds = updated.bracketRounds.map(r => r.map(m => ({ ...m })));
       let targetRoundIdx = -1;
       for (let i = rounds.length - 1; i >= 0; i--) {
-        if (rounds[i].some(m => m.winnerId)) {
+        if (Array.isArray(rounds[i]) && rounds[i].some(m => m.winnerId)) {
           targetRoundIdx = i;
           break;
         }
@@ -651,7 +653,7 @@ export default function TournamentManager({ user }: { user: any }) {
     else if (updated.swissRounds && updated.swissRounds.length > 0) {
       const currentRIdx = updated.swissRounds.length - 1;
       const currentRound = updated.swissRounds[currentRIdx];
-      const hasAnyPlayedMatches = currentRound.some(m => m.winnerId && m.team1?.id !== 'BYE' && m.team2?.id !== 'BYE');
+      const hasAnyPlayedMatches = Array.isArray(currentRound) && currentRound.some(m => m.winnerId && m.team1?.id !== 'BYE' && m.team2?.id !== 'BYE');
 
       if (hasAnyPlayedMatches) {
         // Reset played matches in current round
@@ -1563,19 +1565,19 @@ export default function TournamentManager({ user }: { user: any }) {
       const hasStarted = (() => {
         if (!activeTournament) return false;
         // Check groups
-        if (activeTournament.groups && activeTournament.groups.length > 0) {
-          if (activeTournament.groups.some(g => g.matches.some(m => m.winnerId))) return true;
+        if (Array.isArray(activeTournament.groups) && activeTournament.groups.length > 0) {
+          if (activeTournament.groups.some(g => Array.isArray(g?.matches) && g.matches.some(m => m.winnerId))) return true;
         }
         // Check swiss
-        if (activeTournament.swissRounds && activeTournament.swissRounds.length > 0) {
-          if (activeTournament.swissRounds.some(r => r.some(m => m.winnerId))) return true;
+        if (Array.isArray(activeTournament.swissRounds) && activeTournament.swissRounds.length > 0) {
+          if (activeTournament.swissRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
         }
         // Check playoffs
-        if (activeTournament.bracketRounds && activeTournament.bracketRounds.length > 0) {
-          if (activeTournament.bracketRounds.some(r => r.some(m => m.winnerId))) return true;
+        if (Array.isArray(activeTournament.bracketRounds) && activeTournament.bracketRounds.length > 0) {
+          if (activeTournament.bracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
         }
-        if (activeTournament.losersBracketRounds && activeTournament.losersBracketRounds.length > 0) {
-          if (activeTournament.losersBracketRounds.some(r => r.some(m => m.winnerId))) return true;
+        if (Array.isArray(activeTournament.losersBracketRounds) && activeTournament.losersBracketRounds.length > 0) {
+          if (activeTournament.losersBracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
         }
         return false;
       })();
@@ -2505,18 +2507,18 @@ export default function TournamentManager({ user }: { user: any }) {
       );
   }
 
-  const currentUniverseTournaments = tournaments.filter(t => {
+  const currentUniverseTournaments = Array.isArray(tournaments) ? tournaments.filter(t => {
     const tGame = t.game || t.settings?.game || 'cs2';
     if (activeGame === 'so2') return tGame === 'so2';
     return tGame !== 'so2';
-  });
+  }) : [];
 
-  const filteredTournaments = currentUniverseTournaments.filter(t => {
+  const filteredTournaments = Array.isArray(currentUniverseTournaments) ? currentUniverseTournaments.filter(t => {
     if (activeTabList === 'templates') return (t as any).isTemplate === true;
     if ((t as any).isTemplate === true) return false; // Hide templates from active/completed
     if (activeTabList === 'completed') return (t.completed || (t as any).status === 'completed');
     return (!t.completed && (t as any).status !== 'completed');
-  });
+  }) : [];
 
   return (
     <div className="w-full">
@@ -2599,7 +2601,7 @@ export default function TournamentManager({ user }: { user: any }) {
                   : 'text-white/60 hover:text-white'
               }`}
             >
-              📑 Шаблоны ({currentUniverseTournaments.filter(t => (t as any).isTemplate === true).length})
+              📑 Шаблоны ({Array.isArray(currentUniverseTournaments) ? currentUniverseTournaments.filter(t => (t as any).isTemplate === true).length : 0})
             </button>
           </div>
 
