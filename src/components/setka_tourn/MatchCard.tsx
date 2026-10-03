@@ -52,14 +52,37 @@ export default function MatchCard({
     if (!match) {
         return <div className="flex-1 min-h-[140px]" />;
     }
-    if (match.team1?.id === 'BYE' && match.team2?.id === 'BYE') {
+
+    const getTeamId = (tm: any): string => {
+        if (!tm) return '';
+        if (typeof tm === 'string') return tm;
+        return tm.id || tm.name || '';
+    };
+
+    const getTeamName = (tm: any, fallback = 'TBD'): string => {
+        if (!tm) return fallback;
+        if (typeof tm === 'string') return tm;
+        return tm.name || tm.teamName || tm.title || fallback;
+    };
+
+    const getTeamLogo = (tm: any): string | undefined => {
+        if (!tm || typeof tm !== 'object') return undefined;
+        return tm.logoUrl || tm.logo || undefined;
+    };
+
+    const t1Id = getTeamId(match.team1);
+    const t2Id = getTeamId(match.team2);
+    const t1Name = getTeamName(match.team1, (match as any).team1Name);
+    const t2Name = getTeamName(match.team2, (match as any).team2Name);
+
+    if (t1Id === 'BYE' && t2Id === 'BYE') {
         return <div className="flex-1 min-h-[140px]" />;
     }
 
     const hasWinner = !!match.winnerId;
     const accentColor = cardThemeColor || '#ff8f00';
     const lineColor = hasWinner ? 'border-[#ff8f00]' : 'border-white/10';
-    const prevHasTeams = match.team1 || match.team2;
+    const prevHasTeams = !!(match.team1 || match.team2);
     const inLineColor = prevHasTeams ? 'border-white/30' : 'border-white/5';
 
     let outConnector = null;
@@ -96,6 +119,9 @@ export default function MatchCard({
         textShadow: `0 0 8px ${accentColor}60`
     } : undefined;
 
+    const isT1Winner = match.winnerId && (match.winnerId === t1Id || (t1Name && match.winnerId === t1Name));
+    const isT2Winner = match.winnerId && (match.winnerId === t2Id || (t2Name && match.winnerId === t2Name));
+
     return (
         <div className="relative flex flex-col justify-center flex-1 px-6 min-h-[140px] group">
             <div className={`relative z-10 w-full transition-all ${boxCls.outerCard}`}>
@@ -103,19 +129,19 @@ export default function MatchCard({
                     {/* Team 1 */}
                     <div 
                         className={`${
-                            match.winnerId === match.team1?.id 
+                            isT1Winner 
                                 ? boxCls.selectedTeamRow 
                                 : hasWinner 
                                     ? boxCls.nonSelectedTeamRow 
                                     : boxCls.innerTeamRow
                         }`}
-                        style={match.winnerId === match.team1?.id ? selectedCustomStyle : undefined}
+                        style={isT1Winner ? selectedCustomStyle : undefined}
                     >
                         <div className="flex items-center gap-3">
-                            <TeamLogo teamName={match.team1?.name || ''} logoUrl={match.team1?.logoUrl} sizeClassName="w-6 h-6" />
+                            <TeamLogo teamName={t1Name} logoUrl={getTeamLogo(match.team1)} sizeClassName="w-6 h-6" />
                             {!hasWinner && !isExporting && isSwapMode && onSwapTeam && allTeams ? (
                                 <select
-                                    value={match.team1?.id || ''}
+                                    value={t1Id}
                                     onChange={(e) => onSwapTeam(bracketType, rIdx, mIdx, 1, e.target.value)}
                                     className="bg-transparent text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate"
                                 >
@@ -130,30 +156,30 @@ export default function MatchCard({
                             ) : (
                                 <span 
                                     className={`truncate max-w-[120px] ${
-                                        match.winnerId === match.team1?.id 
+                                        isT1Winner 
                                             ? boxCls.winnerText 
                                             : hasWinner 
                                                 ? boxCls.loserText 
                                                 : boxCls.defaultText
                                     }`}
-                                    style={match.winnerId === match.team1?.id ? winnerCustomTextStyle : undefined}
+                                    style={isT1Winner ? winnerCustomTextStyle : undefined}
                                 >
-                                    {match.team1?.name || 'TBD'}
+                                    {t1Name}
                                 </span>
                             )}
                         </div>
-                        {match.team1 && match.team2 && !match.winnerId && match.team1.id !== 'BYE' && match.team2.id !== 'BYE' && bracketMode !== 'realtime' && (
+                        {match.team1 && match.team2 && !match.winnerId && t1Id !== 'BYE' && t2Id !== 'BYE' && bracketMode !== 'realtime' && (
                             <input 
                                 type="number" 
                                 className={boxCls.scoreInput} 
                                 placeholder="0" 
-                                value={match.score1 === 0 ? 0 : (match.score1 || '')}
+                                value={match.score1 === 0 ? 0 : (match.score1 ?? '')}
                                 onChange={(e) => onUpdateScore(bracketType, rIdx, mIdx, 1, parseInt(e.target.value) || 0)} 
                             />
                         )}
-                        {match.winnerId && match.team1?.id !== 'BYE' && match.team2?.id !== 'BYE' && (
-                            <span className="font-mono font-black text-lg" style={isCustomAccent && match.winnerId === match.team1?.id ? { color: accentColor } : undefined}>
-                                {match.score1}
+                        {match.winnerId && t1Id !== 'BYE' && t2Id !== 'BYE' && (
+                            <span className="font-mono font-black text-lg" style={isCustomAccent && isT1Winner ? { color: accentColor } : undefined}>
+                                {match.score1 ?? 0}
                             </span>
                         )}
                     </div>
@@ -161,19 +187,19 @@ export default function MatchCard({
                     {/* Team 2 */}
                     <div 
                         className={`${
-                            match.winnerId === match.team2?.id 
+                            isT2Winner 
                                 ? boxCls.selectedTeamRow 
                                 : hasWinner 
                                     ? boxCls.nonSelectedTeamRow 
                                     : boxCls.innerTeamRow
                         }`}
-                        style={match.winnerId === match.team2?.id ? selectedCustomStyle : undefined}
+                        style={isT2Winner ? selectedCustomStyle : undefined}
                     >
                         <div className="flex items-center gap-3">
-                            <TeamLogo teamName={match.team2?.name || ''} logoUrl={match.team2?.logoUrl} sizeClassName="w-6 h-6" />
+                            <TeamLogo teamName={t2Name} logoUrl={getTeamLogo(match.team2)} sizeClassName="w-6 h-6" />
                             {!hasWinner && !isExporting && isSwapMode && onSwapTeam && allTeams ? (
                                 <select
-                                    value={match.team2?.id || ''}
+                                    value={t2Id}
                                     onChange={(e) => onSwapTeam(bracketType, rIdx, mIdx, 2, e.target.value)}
                                     className="bg-transparent text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate"
                                 >
@@ -188,30 +214,30 @@ export default function MatchCard({
                             ) : (
                                 <span 
                                     className={`truncate max-w-[120px] ${
-                                        match.winnerId === match.team2?.id 
+                                        isT2Winner 
                                             ? boxCls.winnerText 
                                             : hasWinner 
                                                 ? boxCls.loserText 
                                                 : boxCls.defaultText
                                     }`}
-                                    style={match.winnerId === match.team2?.id ? winnerCustomTextStyle : undefined}
+                                    style={isT2Winner ? winnerCustomTextStyle : undefined}
                                 >
-                                    {match.team2?.name || 'TBD'}
+                                    {t2Name}
                                 </span>
                             )}
                         </div>
-                        {match.team1 && match.team2 && !match.winnerId && match.team1.id !== 'BYE' && match.team2.id !== 'BYE' && bracketMode !== 'realtime' && (
+                        {match.team1 && match.team2 && !match.winnerId && t1Id !== 'BYE' && t2Id !== 'BYE' && bracketMode !== 'realtime' && (
                             <input 
                                 type="number" 
                                 className={boxCls.scoreInput} 
                                 placeholder="0" 
-                                value={match.score2 === 0 ? 0 : (match.score2 || '')}
+                                value={match.score2 === 0 ? 0 : (match.score2 ?? '')}
                                 onChange={(e) => onUpdateScore(bracketType, rIdx, mIdx, 2, parseInt(e.target.value) || 0)} 
                             />
                         )}
-                        {match.winnerId && match.team1?.id !== 'BYE' && match.team2?.id !== 'BYE' && (
-                            <span className="font-mono font-black text-lg" style={isCustomAccent && match.winnerId === match.team2?.id ? { color: accentColor } : undefined}>
-                                {match.score2}
+                        {match.winnerId && t1Id !== 'BYE' && t2Id !== 'BYE' && (
+                            <span className="font-mono font-black text-lg" style={isCustomAccent && isT2Winner ? { color: accentColor } : undefined}>
+                                {match.score2 ?? 0}
                             </span>
                         )}
                     </div>

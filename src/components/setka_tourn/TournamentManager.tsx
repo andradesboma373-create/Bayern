@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2 } from 'lucide-react';
 import { Tournament, TournamentSettings, Team, Match, Group } from './types';
-import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage, syncTournamentsWithServer } from './storage';
+import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage, syncTournamentsWithServer, normalizeTournament } from './storage';
 import SingleEliminationStage from './SingleEliminationStage';
 import GroupStage from './GroupStage';
 import SwissStage from './SwissStage';
@@ -10,7 +10,7 @@ import GslGroupStage from './GslGroupStage';
 import TieredPlayoffStage from './TieredPlayoffStage';
 import TournamentSettingsForm from './TournamentSettingsForm';
 import MatchCard from './MatchCard';
-import { generateDoubleElimination, cascadeAdvancements, advanceDoubleElimMatch } from './doubleEliminationLogic';
+import { generateDoubleElimination, cascadeAdvancements, advanceDoubleElimMatch, BYE_TEAM } from './doubleEliminationLogic';
 import { generateNextSwissRound } from './swissLogic';
 import { generateGslGroups, generateTieredPlayoffBracket, generateTieredPlayoffFromStandings, getGslGroupStandings, updateGslMatch, advanceTieredPlayoffMatch } from './gslLogic';
 import TeamLogo from '../TeamLogo';
@@ -241,7 +241,7 @@ export default function TournamentManager({ user }: { user: any }) {
     for (let j = 0; j < numRealVsBye; j++) {
       const mIdx = numRealVsReal + j;
       const t1 = teamsList[numRealVsReal * 2 + j];
-      currentRound.push({ id: `r0-m${mIdx}`, team1: t1, team2: null, score1: 0, score2: 0, winnerId: t1.id });
+      currentRound.push({ id: `r0-m${mIdx}`, team1: t1, team2: BYE_TEAM, score1: 0, score2: 0, winnerId: t1.id });
     }
 
     rounds.push(currentRound);
@@ -2106,63 +2106,133 @@ export default function TournamentManager({ user }: { user: any }) {
                           </div>
                       </div>
                       
-                      {activeTournament.activeStage === 1 && activeTournament.settings.stage1Type === 'gsl_groups' && (
-                          <GslGroupStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
-                      )}
-                      {activeTournament.activeStage === 1 && (activeTournament.settings.stage1Type === 'groups' || (!activeTournament.settings.stage1Type && activeTournament.settings.mode === 'two_stage')) && (
-                          <GroupStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
-                      )}
-                      {activeTournament.activeStage === 1 && (activeTournament.settings.stage1Type === 'swiss' || (!activeTournament.settings.stage1Type && activeTournament.settings.mode === 'swiss')) && (
-                          <SwissStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
-                      )}
-                      {activeTournament.status === 'in_progress' && isTournamentFinished() && !isExporting && (
-                          <div className="mt-12 flex justify-center animate-fade-in-up">
-                              <button
-                                  onClick={() => {
-                                      let wName = '';
-                                      if (activeTournament.tieredBracketRounds && activeTournament.tieredBracketRounds.length > 0) {
-                                          const lastRound = activeTournament.tieredBracketRounds[activeTournament.tieredBracketRounds.length - 1];
-                                          if (lastRound && lastRound.length > 0 && lastRound[0].winnerId) {
-                                              wName = lastRound[0].winnerId === lastRound[0].team1?.id ? (lastRound[0].team1?.name || '') : (lastRound[0].team2 ? lastRound[0].team2.name : '');
-                                          }
-                                      } else if (activeTournament.settings.eliminationType === 'double') {
-                                          if (activeTournament.grandFinal && activeTournament.grandFinal.length > 0) {
-                                              const gf = activeTournament.grandFinal;
-                                              if (gf[1] && gf[1].winnerId) {
-                                                  wName = gf[1].winnerId === gf[1].team1?.id ? gf[1].team1.name : (gf[1].team2 ? gf[1].team2.name : '');
-                                              } else if (gf[0].winnerId) {
-                                                  wName = gf[0].winnerId === gf[0].team1?.id ? gf[0].team1.name : (gf[0].team2 ? gf[0].team2.name : '');
-                                              }
-                                          }
-                                      } else {
-                                          if (activeTournament.bracketRounds && activeTournament.bracketRounds.length > 0) {
-                                              const lastRound = activeTournament.bracketRounds[activeTournament.bracketRounds.length - 1];
-                                              if (lastRound && lastRound.length > 0 && lastRound[0].winnerId) {
-                                                  wName = lastRound[0].winnerId === lastRound[0].team1?.id ? lastRound[0].team1.name : (lastRound[0].team2 ? lastRound[0].team2.name : '');
-                                              }
-                                          }
-                                      }
-                                      const t = { ...activeTournament, status: 'completed', winnerName: wName };
-                                      saveTournament(userId, t);
-                                      setTournaments(loadTournaments(userId));
-                                      setActiveTournament(t);
-                                      setShowTop20(true);
-                                  }}
-                                  className="px-12 py-6 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-2xl font-black text-2xl uppercase tracking-[0.2em] shadow-[0_0_40px_rgba(239,68,68,0.4)] hover:scale-105 transition-all hover:shadow-[0_0_60px_rgba(239,68,68,0.6)] flex flex-col items-center gap-2"
-                              >
-                                  <span>Завершить турнир</span>
-                                  <span className="text-sm font-bold text-white/70">Подвести итоги и Топ-20</span>
-                              </button>
-                          </div>
-                      )}
+                      {(() => {
+                          const hasGroupStage = !!(
+                              (Array.isArray(activeTournament.gslGroups) && activeTournament.gslGroups.length > 0) ||
+                              (Array.isArray(activeTournament.groups) && activeTournament.groups.length > 0) ||
+                              (Array.isArray(activeTournament.swissRounds) && activeTournament.swissRounds.length > 0) ||
+                              activeTournament.settings?.stage1Type === 'gsl_groups' ||
+                              activeTournament.settings?.stage1Type === 'groups' ||
+                              activeTournament.settings?.stage1Type === 'swiss' ||
+                              activeTournament.settings?.mode === 'two_stage' ||
+                              activeTournament.settings?.mode === 'swiss'
+                          );
 
-                      {activeTournament.activeStage === 2 && activeTournament.tieredBracketRounds && (
-                          <TieredPlayoffStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} />
-                      )}
-        
-                      {((activeTournament.activeStage === 2 && !activeTournament.tieredBracketRounds) || activeTournament.settings.stage1Type === 'playoff' || (!activeTournament.settings.stage1Type && activeTournament.settings.mode === 'single_stage')) && (
-                          <SingleEliminationStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} />
-                      )}
+                          const hasPlayoffStage = !!(
+                              (Array.isArray(activeTournament.bracketRounds) && activeTournament.bracketRounds.length > 0) ||
+                              (Array.isArray(activeTournament.tieredBracketRounds) && activeTournament.tieredBracketRounds.length > 0) ||
+                              (Array.isArray(activeTournament.losersBracketRounds) && activeTournament.losersBracketRounds.length > 0) ||
+                              activeTournament.settings?.stage1Type === 'playoff' ||
+                              activeTournament.settings?.mode === 'single_stage' ||
+                              (activeTournament.settings?.mode as string) === 'playoff'
+                          );
+
+                          const isMultiStage = hasGroupStage && (hasPlayoffStage || activeTournament.activeStage === 2 || (activeTournament.teams && activeTournament.teams.length >= 4));
+                          const effectiveStage = activeTournament.activeStage || (hasPlayoffStage && !hasGroupStage ? 2 : 1);
+
+                          const stage1Label = activeTournament.settings?.stage1Type === 'gsl_groups' 
+                              ? 'GSL Группы' 
+                              : (activeTournament.settings?.stage1Type === 'swiss' || activeTournament.settings?.mode === 'swiss')
+                                  ? 'Швейцарка' 
+                                  : 'Групповой этап';
+
+                          return (
+                              <>
+                                  {/* Prominent Stage Selector Tabs for Multi-Stage tournaments */}
+                                  {!isExporting && isMultiStage && (
+                                      <div className="flex items-center gap-3 mb-6 p-1.5 bg-black/60 border border-white/10 rounded-2xl w-fit backdrop-blur-md shadow-xl">
+                                          <button
+                                              type="button"
+                                              onClick={() => handleUpdateActive({ ...activeTournament, activeStage: 1 })}
+                                              className={`px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                                                  effectiveStage === 1
+                                                      ? 'bg-[#ff8f00] text-black shadow-[0_0_20px_rgba(255,143,0,0.4)]'
+                                                      : 'text-white/60 hover:text-white hover:bg-white/5'
+                                              }`}
+                                          >
+                                              <span>1️⃣ {stage1Label}</span>
+                                          </button>
+                                          <button
+                                              type="button"
+                                              onClick={() => handleUpdateActive({ ...activeTournament, activeStage: 2 })}
+                                              className={`px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                                                  effectiveStage === 2
+                                                      ? 'bg-[#ff8f00] text-black shadow-[0_0_20px_rgba(255,143,0,0.4)]'
+                                                      : 'text-white/60 hover:text-white hover:bg-white/5'
+                                              }`}
+                                          >
+                                              <span>2️⃣ Сетка Плей-офф</span>
+                                          </button>
+                                      </div>
+                                  )}
+
+                                  {/* STAGE 1: GROUPS / GSL / SWISS */}
+                                  {effectiveStage === 1 && hasGroupStage && (
+                                      <>
+                                          {(activeTournament.settings?.stage1Type === 'gsl_groups' || (!activeTournament.settings?.stage1Type && activeTournament.gslGroups && activeTournament.gslGroups.length > 0)) && (
+                                              <GslGroupStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                          )}
+                                          {(activeTournament.settings?.stage1Type === 'groups' || (!activeTournament.settings?.stage1Type && ((activeTournament.groups && activeTournament.groups.length > 0) || activeTournament.settings?.mode === 'two_stage'))) && (
+                                              <GroupStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                          )}
+                                          {(activeTournament.settings?.stage1Type === 'swiss' || (!activeTournament.settings?.stage1Type && ((activeTournament.swissRounds && activeTournament.swissRounds.length > 0) || activeTournament.settings?.mode === 'swiss'))) && (
+                                              <SwissStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                          )}
+                                      </>
+                                  )}
+
+                                  {/* STAGE 2 OR SINGLE STAGE PLAYOFF (FAIL-SAFE BRACKET RENDERING) */}
+                                  {(effectiveStage === 2 || !hasGroupStage) && (
+                                      activeTournament.tieredBracketRounds && activeTournament.tieredBracketRounds.length > 0 ? (
+                                          <TieredPlayoffStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                      ) : (
+                                          <SingleEliminationStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                      )
+                                  )}
+
+                                  {activeTournament.status === 'in_progress' && isTournamentFinished() && !isExporting && (
+                                      <div className="mt-12 flex justify-center animate-fade-in-up">
+                                          <button
+                                              onClick={() => {
+                                                  let wName = '';
+                                                  if (activeTournament.tieredBracketRounds && activeTournament.tieredBracketRounds.length > 0) {
+                                                      const lastRound = activeTournament.tieredBracketRounds[activeTournament.tieredBracketRounds.length - 1];
+                                                      if (lastRound && lastRound.length > 0 && lastRound[0].winnerId) {
+                                                          wName = lastRound[0].winnerId === lastRound[0].team1?.id ? (lastRound[0].team1?.name || '') : (lastRound[0].team2 ? lastRound[0].team2.name : '');
+                                                      }
+                                                  } else if (activeTournament.settings?.eliminationType === 'double') {
+                                                      if (activeTournament.grandFinal && activeTournament.grandFinal.length > 0) {
+                                                          const gf = activeTournament.grandFinal;
+                                                          if (gf[1] && gf[1].winnerId) {
+                                                              wName = gf[1].winnerId === gf[1].team1?.id ? gf[1].team1.name : (gf[1].team2 ? gf[1].team2.name : '');
+                                                          } else if (gf[0].winnerId) {
+                                                              wName = gf[0].winnerId === gf[0].team1?.id ? gf[0].team1.name : (gf[0].team2 ? gf[0].team2.name : '');
+                                                          }
+                                                      }
+                                                  } else {
+                                                      if (activeTournament.bracketRounds && activeTournament.bracketRounds.length > 0) {
+                                                          const lastRound = activeTournament.bracketRounds[activeTournament.bracketRounds.length - 1];
+                                                          if (lastRound && lastRound.length > 0 && lastRound[0].winnerId) {
+                                                              wName = lastRound[0].winnerId === lastRound[0].team1?.id ? lastRound[0].team1.name : (lastRound[0].team2 ? lastRound[0].team2.name : '');
+                                                          }
+                                                      }
+                                                  }
+                                                  const t = { ...activeTournament, status: 'completed', winnerName: wName };
+                                                  saveTournament(userId, t);
+                                                  setTournaments(loadTournaments(userId));
+                                                  setActiveTournament(t);
+                                                  setShowTop20(true);
+                                              }}
+                                              className="px-12 py-6 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-2xl font-black text-2xl uppercase tracking-[0.2em] shadow-[0_0_40px_rgba(239,68,68,0.4)] hover:scale-105 transition-all hover:shadow-[0_0_60px_rgba(239,68,68,0.6)] flex flex-col items-center gap-2 cursor-pointer"
+                                          >
+                                              <span>Завершить турнир</span>
+                                              <span className="text-sm font-bold text-white/70">Подвести итоги и Топ-20</span>
+                                          </button>
+                                      </div>
+                                  )}
+                              </>
+                          );
+                      })()}
                   </div>
               </div>
 

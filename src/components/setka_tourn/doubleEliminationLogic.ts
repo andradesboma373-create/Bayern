@@ -186,3 +186,74 @@ export const cascadeAdvancements = (
     
     return { winnersBracket: wBracket, losersBracket: lBracket, grandFinal: gf };
 };
+
+export const generateSingleEliminationBracket = (teamsList: Team[]): Match[][] => {
+    let rounds: Match[][] = [];
+    const numTeams = teamsList ? teamsList.length : 0;
+    if (numTeams === 0) return [];
+    
+    let nextPowerOfTwo = 1;
+    while (nextPowerOfTwo < numTeams) nextPowerOfTwo *= 2;
+
+    let currentRound: Match[] = [];
+    const byes = nextPowerOfTwo - numTeams;
+    const numRealVsReal = numTeams - nextPowerOfTwo / 2;
+    const numRealVsBye = byes;
+
+    for (let i = 0; i < numRealVsReal; i++) {
+      const t1 = teamsList[i * 2];
+      const t2 = teamsList[i * 2 + 1];
+      currentRound.push({ id: `r0-m${i}`, team1: t1, team2: t2, score1: 0, score2: 0, winnerId: null });
+    }
+
+    for (let j = 0; j < numRealVsBye; j++) {
+      const mIdx = numRealVsReal + j;
+      const t1 = teamsList[numRealVsReal * 2 + j];
+      currentRound.push({ id: `r0-m${mIdx}`, team1: t1, team2: BYE_TEAM, score1: 0, score2: 0, winnerId: t1 ? t1.id : null });
+    }
+
+    rounds.push(currentRound);
+
+    let roundSize = nextPowerOfTwo / 4;
+    let rIdx = 1;
+    while (roundSize >= 1) {
+      let nextRound: Match[] = [];
+      for (let i = 0; i < roundSize; i++) {
+        nextRound.push({ id: `r${rIdx}-m${i}`, team1: null, team2: null, score1: 0, score2: 0, winnerId: null });
+      }
+      rounds.push(nextRound);
+      roundSize /= 2;
+      rIdx++;
+    }
+
+    // Auto-advance initial winners (e.g., BYEs)
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let r = 0; r < rounds.length - 1; r++) {
+        for (let m = 0; m < rounds[r].length; m++) {
+          const match = rounds[r][m];
+          if (match.winnerId) {
+            const winningTeam = match.team1?.id === match.winnerId ? match.team1 : match.team2?.id === match.winnerId ? match.team2 : null;
+            if (winningTeam) {
+              const nextRoundIdx = r + 1;
+              const nextMatchIdx = Math.floor(m / 2);
+              const isTeam1 = m % 2 === 0;
+              const nextMatch = rounds[nextRoundIdx]?.[nextMatchIdx];
+              if (nextMatch) {
+                if (isTeam1 && nextMatch.team1?.id !== winningTeam.id) {
+                  nextMatch.team1 = winningTeam;
+                  changed = true;
+                } else if (!isTeam1 && nextMatch.team2?.id !== winningTeam.id) {
+                  nextMatch.team2 = winningTeam;
+                  changed = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return rounds;
+};

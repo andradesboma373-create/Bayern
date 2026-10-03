@@ -942,25 +942,28 @@ export default function SwissStage({
 
                   {/* MIDDLE SECTION: BASKETS / MATCHES */}
                   <div className="flex flex-col gap-3 my-auto">
-                    {baskets.map((basket) => {
-                      const basketKey = `${basket.w}-${basket.l}`;
+                    {(() => {
+                      const matchedOriginalIndices = new Set<number>();
+                      const renderedBaskets = baskets.map((basket) => {
+                        const basketKey = `${basket.w}-${basket.l}`;
 
-                      // Extract matches in this basket if round is active
-                      let basketMatches: { match: Match; originalIndex: number }[] = [];
-                      if (roundData) {
-                        roundData.forEach((m, mIdx) => {
-                          const t1Score = m.team1 ? getTeamScoreBeforeRound(m.team1.id, rIdx) : { w: 0, l: 0 };
-                          const t2Score = m.team2 ? getTeamScoreBeforeRound(m.team2.id, rIdx) : { w: 0, l: 0 };
+                        // Extract matches in this basket if round is active
+                        let basketMatches: { match: Match; originalIndex: number }[] = [];
+                        if (roundData) {
+                          roundData.forEach((m, mIdx) => {
+                            const t1Score = m.team1 ? getTeamScoreBeforeRound(m.team1.id, rIdx) : { w: 0, l: 0 };
+                            const t2Score = m.team2 ? getTeamScoreBeforeRound(m.team2.id, rIdx) : { w: 0, l: 0 };
 
-                          if (
-                            (t1Score.w === basket.w && t1Score.l === basket.l) ||
-                            (t2Score.w === basket.w && t2Score.l === basket.l) ||
-                            (rIdx === 0 && basket.w === 0 && basket.l === 0)
-                          ) {
-                            basketMatches.push({ match: m, originalIndex: mIdx });
-                          }
-                        });
-                      }
+                            if (
+                              (t1Score.w === basket.w && t1Score.l === basket.l) ||
+                              (t2Score.w === basket.w && t2Score.l === basket.l) ||
+                              (rIdx === 0 && basket.w === 0 && basket.l === 0)
+                            ) {
+                              basketMatches.push({ match: m, originalIndex: mIdx });
+                              matchedOriginalIndices.add(mIdx);
+                            }
+                          });
+                        }
 
                       // If round is not yet generated, create visual placeholders
                       const matchesToRender = isRoundActiveOrPast && basketMatches.length > 0
@@ -1248,7 +1251,75 @@ export default function SwissStage({
                           </div>
                         </div>
                       );
-                    })}
+                    });
+
+                    const unmatchedMatches = (roundData && isRoundActiveOrPast)
+                      ? roundData.map((m, mIdx) => ({ match: m, originalIndex: mIdx })).filter(item => !matchedOriginalIndices.has(item.originalIndex))
+                      : [];
+
+                    return (
+                      <>
+                        {renderedBaskets}
+                        {unmatchedMatches.length > 0 && (
+                          <div className="flex flex-col gap-1.5 p-2 rounded-xl bg-black/60 border border-amber-500/30 shadow-xl">
+                            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] font-black uppercase tracking-wider border-amber-500/40 bg-amber-500/20 text-amber-300">
+                              <span>МАТЧИ РАУНДА {roundNumber}</span>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              {unmatchedMatches.map(({ match, originalIndex: mIdx }) => {
+                                const hasWinner = !!match.winnerId;
+                                const isBye = match.team1?.id === 'BYE' || match.team2?.id === 'BYE';
+                                if (isBye) {
+                                  const activeTeam = match.team1?.id === 'BYE' ? match.team2 : match.team1;
+                                  return (
+                                    <div
+                                      key={match.id}
+                                      className={`h-11 bg-black/70 border border-emerald-500/30 px-3 rounded-lg flex items-center ${isLogosOnly ? 'justify-center gap-3' : 'justify-between'}`}
+                                      title={activeTeam?.name}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <TeamLogo teamName={activeTeam?.name || ''} logoUrl={activeTeam?.logoUrl} sizeClassName="w-5 h-5 shrink-0" />
+                                        {!isLogosOnly && <span className="font-extrabold text-xs text-white truncate max-w-[120px]">{activeTeam?.name}</span>}
+                                      </div>
+                                      <span className="text-[9px] font-black bg-emerald-500/15 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">BYE</span>
+                                    </div>
+                                  );
+                                }
+                                const t1Won = match.winnerId === match.team1?.id;
+                                const t2Won = match.winnerId === match.team2?.id;
+                                return (
+                                  <div
+                                    key={match.id}
+                                    className={`group relative flex items-center justify-between ${isLogosOnly ? 'px-2 py-1.5 h-11' : 'px-2.5 py-1.5'} rounded-lg border transition-all duration-200 shadow-md ${
+                                      hasWinner ? 'bg-black/80 border-white/20' : 'bg-[#151824] border-white/15 hover:border-[#ff8f00]/50 hover:bg-[#1a1f2e]'
+                                    }`}
+                                  >
+                                    <div
+                                      onClick={() => match.team1 && setQuickWinner(rIdx, mIdx, match.team1)}
+                                      className={`flex items-center ${isLogosOnly ? 'justify-start' : 'gap-1.5 flex-1 min-w-0 pr-1'} cursor-pointer`}
+                                    >
+                                      <TeamLogo teamName={match.team1?.name || ''} logoUrl={match.team1?.logoUrl} sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"} />
+                                      {!isLogosOnly && <span className={`text-[11px] font-extrabold truncate ${t1Won ? 'text-emerald-400 font-black' : 'text-white'}`}>{match.team1?.name || 'TBD'}</span>}
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0 px-1">
+                                      <span className="font-mono text-xs font-black text-white/80">{match.score1 ?? 0} : {match.score2 ?? 0}</span>
+                                    </div>
+                                    <div
+                                      onClick={() => match.team2 && setQuickWinner(rIdx, mIdx, match.team2)}
+                                      className={`flex items-center ${isLogosOnly ? 'justify-end' : 'gap-1.5 flex-1 min-w-0 pl-1 justify-end'} cursor-pointer`}
+                                    >
+                                      {!isLogosOnly && <span className={`text-[11px] font-extrabold truncate text-right ${t2Won ? 'text-emerald-400 font-black' : 'text-white'}`}>{match.team2?.name || 'TBD'}</span>}
+                                      <TeamLogo teamName={match.team2?.name || ''} logoUrl={match.team2?.logoUrl} sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   </div>
 
                   {/* BOTTOM SECTION: ELIMINATED BOX (Rounds 3, 4, 5) */}

@@ -33,21 +33,27 @@ export default function BracketRenderer({
     return `Раунд ${rIdx + 1}`;
   };
 
+  const safeRounds = Array.isArray(rounds) ? rounds : [];
+
   return (
     <div className="flex flex-col mb-12">
         <h3 className="text-xl font-black text-white/60 uppercase tracking-widest flex items-center gap-2 mb-6">
             🛡️ {title}
         </h3>
         <div className="flex gap-0 overflow-x-auto overflow-y-auto items-stretch w-full bg-black/20 p-6 rounded-2xl border border-white/5" style={{ minHeight: '300px' }}>
-            {rounds.map((round, rIdx) => (
+            {safeRounds.map((round, rIdx) => {
+                const safeMatches = Array.isArray(round) ? round : [];
+                return (
                 <div key={`${bracketType}-${rIdx}`} className="flex flex-col w-[320px] shrink-0">
                     <div className="h-10 flex items-center justify-center font-black text-white/40 uppercase tracking-widest text-sm mb-4">
-                        {getRoundLabel(rIdx, rounds.length)}
+                        {getRoundLabel(rIdx, safeRounds.length)}
                     </div>
                     <div className="flex flex-col flex-1">
-                        {round.map((match, mIdx) => (
+                        {safeMatches.map((match, mIdx) => {
+                            if (!match) return null;
+                            return (
                             <MatchCard
-                                key={match.id}
+                                key={match.id || `m-${bracketType}-${rIdx}-${mIdx}`}
                                 match={match}
                                 bracketType={bracketType}
                                 rIdx={rIdx}
@@ -55,10 +61,10 @@ export default function BracketRenderer({
                                 onUpdateScore={onUpdateScore}
                                 onAdvanceWinner={onAdvanceWinner}
                                 onVetoMatch={onVetoMatch}
-                                isFinal={rIdx === rounds.length - 1}
+                                isFinal={rIdx === safeRounds.length - 1}
                                 isTop={mIdx % 2 === 0}
                                 hasInConnector={rIdx > 0}
-                                hasOutConnector={true}
+                                hasOutConnector={rIdx < safeRounds.length - 1}
                                 boxStyle={boxStyle}
                                 cardThemeColor={cardThemeColor}
                                 btnStyle={btnStyle}
@@ -68,10 +74,12 @@ export default function BracketRenderer({
                                 isExporting={isExporting}
                                 isSwapMode={isSwapMode}
                             />
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
-            ))}
+                );
+            })}
         </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { Match, Tournament, Team } from './types';
 import BracketRenderer from './BracketRenderer';
 import MatchCard from './MatchCard';
 
-import { cascadeAdvancements, advanceDoubleElimMatch } from './doubleEliminationLogic';
+import { cascadeAdvancements, advanceDoubleElimMatch, generateDoubleElimination, generateSingleEliminationBracket } from './doubleEliminationLogic';
 
 interface Props {
   tournament: Tournament;
@@ -14,11 +14,11 @@ interface Props {
 }
 
 export default function SingleEliminationStage({ tournament, onUpdate, isExporting, isSwapMode, onVetoMatch }: Props) {
-  const wRounds = tournament.bracketRounds || [];
-  const lRounds = tournament.losersBracketRounds || [];
-  const gf = tournament.grandFinal || [];
+  const wRounds = Array.isArray(tournament.bracketRounds) ? tournament.bracketRounds : [];
+  const lRounds = Array.isArray(tournament.losersBracketRounds) ? tournament.losersBracketRounds : [];
+  const gf = Array.isArray(tournament.grandFinal) ? tournament.grandFinal : [];
   
-  const isDouble = tournament.settings.eliminationType === 'double';
+  const isDouble = tournament.settings?.eliminationType === 'double';
 
   const handleUpdateScore = (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number, teamNum: 1 | 2, score: number) => {
     let newTournament = { ...tournament };
@@ -161,6 +161,41 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                     <h3 className="text-xl font-black text-[#ff8f00] uppercase tracking-widest flex items-center gap-2">
                         🏆 {isDouble ? "Верхняя сетка (Winners) & Гранд-Финал" : "Сетка Плей-офф"}
                     </h3>
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-white/50 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
+                            Команд: {tournament.teams?.length || 0}
+                        </span>
+                        {!isExporting && (
+                            <button
+                                onClick={() => {
+                                    if (window.confirm("Пересобрать турнирную сетку плей-офф по списку команд? Все текущие результаты плей-офф будут сброшены.")) {
+                                        const teams = tournament.teams || [];
+                                        if (teams.length >= 2) {
+                                            if (isDouble) {
+                                                const res = generateDoubleElimination(teams);
+                                                onUpdate({
+                                                    ...tournament,
+                                                    bracketRounds: res.winnersBracket,
+                                                    losersBracketRounds: res.losersBracket,
+                                                    grandFinal: res.grandFinal
+                                                });
+                                            } else {
+                                                const rounds = generateSingleEliminationBracket(teams);
+                                                onUpdate({
+                                                    ...tournament,
+                                                    bracketRounds: rounds
+                                                });
+                                            }
+                                        }
+                                    }
+                                }}
+                                className="text-white/40 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-white/10 cursor-pointer flex items-center gap-1.5"
+                                title="Сбросить и заново сгенерировать сетку плей-офф"
+                            >
+                                🔄 Пересобрать сетку
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex gap-0 overflow-x-auto overflow-y-auto items-stretch w-full bg-black/20 p-6 rounded-2xl border border-white/5" style={{ minHeight: '400px' }}>
@@ -185,10 +220,10 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                                         isTop={mIdx % 2 === 0}
                                         hasInConnector={rIdx > 0}
                                         hasOutConnector={true}
-                                        boxStyle={tournament.settings.boxStyle as any}
-                                        cardThemeColor={tournament.settings.cardThemeColor}
-                                        btnStyle={tournament.settings.btnStyle}
-                                        bracketMode={tournament.settings.bracketMode}
+                                        boxStyle={tournament.settings?.boxStyle as any}
+                                        cardThemeColor={tournament.settings?.cardThemeColor}
+                                        btnStyle={tournament.settings?.btnStyle}
+                                        bracketMode={tournament.settings?.bracketMode}
                                         onSwapTeam={handleSwapTeam}
                                         allTeams={tournament.teams}
                                         isExporting={isExporting}
@@ -225,10 +260,10 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                                         isTop={true}
                                         hasInConnector={true}
                                         hasOutConnector={false}
-                                        boxStyle={tournament.settings.boxStyle as any}
-                                        cardThemeColor={tournament.settings.cardThemeColor}
-                                        btnStyle={tournament.settings.btnStyle}
-                                        bracketMode={tournament.settings.bracketMode}
+                                        boxStyle={tournament.settings?.boxStyle as any}
+                                        cardThemeColor={tournament.settings?.cardThemeColor}
+                                        btnStyle={tournament.settings?.btnStyle}
+                                        bracketMode={tournament.settings?.bracketMode}
                                         onSwapTeam={handleSwapTeam}
                                         allTeams={tournament.teams}
                                         isExporting={isExporting}
@@ -236,6 +271,38 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                                     />
                                 </div>
                             </div>
+
+                            {/* Grand Final Match 2 (Reset match if needed) */}
+                            {gf.length > 1 && (gf[1].team1 || gf[1].team2 || gf[1].winnerId || (gf[0]?.winnerId && gf[0]?.team2 && gf[0].winnerId === gf[0].team2.id)) && (
+                                <div className="flex flex-col w-[320px] shrink-0">
+                                    <div className="h-10 flex items-center justify-center font-black text-amber-400 uppercase tracking-widest text-sm mb-4">
+                                        👑 ГФ Ресет (Матч 2)
+                                    </div>
+                                    <div className="flex flex-col flex-1 justify-center">
+                                        <MatchCard
+                                            match={gf[1]}
+                                            bracketType="gf"
+                                            rIdx={1}
+                                            mIdx={0}
+                                            onUpdateScore={handleUpdateScore}
+                                            onAdvanceWinner={handleAdvanceWinner}
+                                            onVetoMatch={onVetoMatch}
+                                            isFinal={true}
+                                            isTop={true}
+                                            hasInConnector={true}
+                                            hasOutConnector={false}
+                                            boxStyle={tournament.settings?.boxStyle as any}
+                                            cardThemeColor={tournament.settings?.cardThemeColor}
+                                            btnStyle={tournament.settings?.btnStyle}
+                                            bracketMode={tournament.settings?.bracketMode}
+                                            onSwapTeam={handleSwapTeam}
+                                            allTeams={tournament.teams}
+                                            isExporting={isExporting}
+                                            isSwapMode={isSwapMode}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>
@@ -259,6 +326,43 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                     isExporting={isExporting}
                     isSwapMode={isSwapMode}
                 />
+            </div>
+        )}
+
+        {wRounds.length === 0 && (
+            <div className="flex flex-col items-center justify-center p-12 bg-black/40 rounded-3xl border border-white/10 text-center max-w-xl mx-auto my-8 animate-fade-in">
+                <div className="w-16 h-16 rounded-2xl bg-[#ff8f00]/10 border border-[#ff8f00]/20 flex items-center justify-center text-3xl mb-4 text-[#ff8f00]">
+                    🏆
+                </div>
+                <h3 className="text-2xl font-black text-white mb-2">Сетка плей-офф еще не сформирована</h3>
+                <p className="text-white/60 text-sm mb-6">
+                    В турнире зарегистрировано команд: <span className="text-[#ff8f00] font-bold">{tournament.teams?.length || 0}</span>. Нажмите кнопку ниже, чтобы автоматически сформировать турнирную сетку.
+                </p>
+                <button
+                    onClick={() => {
+                        const teams = tournament.teams || [];
+                        if (teams.length >= 2) {
+                            if (isDouble) {
+                                const res = generateDoubleElimination(teams);
+                                onUpdate({
+                                    ...tournament,
+                                    bracketRounds: res.winnersBracket,
+                                    losersBracketRounds: res.losersBracket,
+                                    grandFinal: res.grandFinal
+                                });
+                            } else {
+                                const rounds = generateSingleEliminationBracket(teams);
+                                onUpdate({
+                                    ...tournament,
+                                    bracketRounds: rounds
+                                });
+                            }
+                        }
+                    }}
+                    className="px-8 py-4 bg-[#ff8f00] hover:bg-[#ffa733] text-black font-black uppercase tracking-wider rounded-xl transition-all shadow-[0_0_20px_rgba(255,143,0,0.3)] cursor-pointer flex items-center gap-2"
+                >
+                    ⚡ Сформировать сетку плей-офф ({tournament.teams?.length || 0} команд)
+                </button>
             </div>
         )}
     </div>

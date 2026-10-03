@@ -4071,7 +4071,8 @@ app.post("/api/sync-cache", async (req, res) => {
 
         // Crucial: also save to Firestore so queries from client never revert to old rating!
         try {
-          setDoc(doc(db, collectionName, itemId), enhancedItem, { merge: true }).catch(() => {});
+          const itemForFirestore = sanitizeForFirestore(enhancedItem);
+          setDoc(doc(db, collectionName, itemId), itemForFirestore, { merge: true }).catch(() => {});
         } catch (e) {
           // ignore doc errors
         }
