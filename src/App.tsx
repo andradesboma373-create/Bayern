@@ -1,12 +1,15 @@
 import { loadTournaments, compactTournamentForStorage, cleanupTournamentStorageQuota, getCanonicalRoomId } from './components/setka_tourn/storage';
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity } from 'lucide-react';
+import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity, Folder, Flame } from 'lucide-react';
 import { auth, logout, db } from './firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from './firebase';
 import { collection, query, where, getDocs, onSnapshot } from './firebase';
 import { saveMatchesToLocalStorage } from './lib/utils';
 import { filterItemsForRoom } from './lib/roomIsolation';
+import { useGameUniverse } from './lib/gameUniverse';
+import So2MediaLibraryModal from './components/So2MediaLibraryModal';
+import { RATING_CONFIG } from './match-logic/config/RatingConfig';
 
 import TournamentBracket from './components/setka_tourn/TournamentBracket';
 import Simulator from './components/Simulator';
@@ -22,8 +25,9 @@ import AdminAnalytics from './components/AdminAnalytics';
 import ChannelLogin from './components/ChannelLogin';
 import AccessDenied from './components/AccessDenied';
 
-function Sidebar({ isOpen, onClose, user }: { isOpen: boolean, onClose: () => void, user: any }) {
+function Sidebar({ isOpen, onClose, user, onOpenSo2Media }: { isOpen: boolean, onClose: () => void, user: any, onOpenSo2Media?: () => void }) {
   const location = useLocation();
+  const [game, setGame] = useGameUniverse();
   
   const isBamepAdmin = 
     (user?.name || user?.username || user?.displayName || '').toLowerCase() === 'bamep' ||
@@ -92,6 +96,42 @@ function Sidebar({ isOpen, onClose, user }: { isOpen: boolean, onClose: () => vo
           })}
         </div>
 
+        {/* World / Discipline Selector Card */}
+        <div className="px-3 pt-2">
+          <div className="bg-black/40 border border-white/10 rounded-2xl p-3 shadow-inner">
+            <div className="text-[10px] text-white/40 uppercase font-black tracking-wider mb-2 flex items-center justify-between">
+              <span>Выбор мира</span>
+              <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded font-mono ${game === 'so2' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+                {game === 'so2' ? 'Standoff 2' : 'CS2'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={() => setGame('cs2')}
+                className={`py-1.5 px-2 rounded-xl text-xs font-black uppercase flex items-center justify-center transition-all cursor-pointer ${
+                  game === 'cs2'
+                    ? 'bg-[#ff8f00] text-black shadow-[0_0_12px_rgba(255,143,0,0.35)]'
+                    : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                }`}
+                title="Переключиться на Counter-Strike 2"
+              >
+                CS2
+              </button>
+              <button
+                onClick={() => setGame('so2')}
+                className={`py-1.5 px-2 rounded-xl text-xs font-black uppercase flex items-center justify-center transition-all cursor-pointer ${
+                  game === 'so2'
+                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-[0_0_12px_rgba(249,115,22,0.35)]'
+                    : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                }`}
+                title="Переключиться на Standoff 2"
+              >
+                SO2
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Current Room Info Card */}
         <div className="p-4 border-t border-white/5 bg-black/30 m-3 rounded-2xl">
           <div className="flex items-center justify-between gap-2">
@@ -125,8 +165,9 @@ const CHANNELS = [
   { username: 'airy', password: '212121', channelId: 'channel_airy', channelName: 'бомбардиро крокодило' }
 ];
 
-function TopBar({ user, onCustomLogin, onLogout, onToggleSidebar }: { user: any, onCustomLogin: () => void, onLogout: () => void, onToggleSidebar: () => void }) {
+function TopBar({ user, onCustomLogin, onLogout, onToggleSidebar, onOpenSo2Media }: { user: any, onCustomLogin: () => void, onLogout: () => void, onToggleSidebar: () => void, onOpenSo2Media?: () => void }) {
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+  const [game, setGame] = useGameUniverse();
   const [dbUser, setDbUser] = useState<any>(() => {
     if (!user) return null;
     try {
@@ -203,7 +244,7 @@ function TopBar({ user, onCustomLogin, onLogout, onToggleSidebar }: { user: any,
           </div>
         )}
       </div>
-      
+
       <div className="flex items-center gap-6">
         {user ? (
           <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-xl">
@@ -237,6 +278,7 @@ function TopBar({ user, onCustomLogin, onLogout, onToggleSidebar }: { user: any,
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showSo2Media, setShowSo2Media] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -338,6 +380,15 @@ export default function App() {
               const localObj = localRaw ? JSON.parse(localRaw) : {};
               const merged = { ...serverItems, ...localObj };
               const mergedStr = JSON.stringify(merged);
+              
+              // Apply rating settings if present
+              if (merged.useKast !== undefined || merged.useSwing !== undefined) {
+                RATING_CONFIG.applyRatingSettings({
+                  useKast: merged.useKast,
+                  useSwing: merged.useSwing
+                });
+              }
+
               if (mergedStr !== localRaw) {
                 try {
                   localStorage.setItem(col.cacheKey, mergedStr);
@@ -636,13 +687,24 @@ export default function App() {
   return (
     <Router>
       <div className="flex h-screen bg-[#08080c] font-sans text-white overflow-hidden">
-        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={user} />
+        <Sidebar 
+          isOpen={isSidebarOpen} 
+          onClose={() => setIsSidebarOpen(false)} 
+          user={user} 
+          onOpenSo2Media={() => setShowSo2Media(true)}
+        />
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
           {/* Background decorations */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/20 rounded-full blur-[100px] pointer-events-none -translate-y-1/2 translate-x-1/3"></div>
           <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none translate-y-1/3 -translate-x-1/3"></div>
           
-          <TopBar user={user} onCustomLogin={() => setShowLoginModal(true)} onLogout={handleLogout} onToggleSidebar={() => setIsSidebarOpen(true)} />
+          <TopBar 
+            user={user} 
+            onCustomLogin={() => setShowLoginModal(true)} 
+            onLogout={handleLogout} 
+            onToggleSidebar={() => setIsSidebarOpen(true)} 
+            onOpenSo2Media={() => setShowSo2Media(true)}
+          />
           
           <div className="flex-1 overflow-y-auto z-10 p-4 lg:p-8">
             <Routes>
@@ -713,6 +775,12 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Official Standoff 2 Logos & Player Photos Media Library */}
+      <So2MediaLibraryModal
+        isOpen={showSo2Media}
+        onClose={() => setShowSo2Media(false)}
+      />
     </Router>
   );
 }

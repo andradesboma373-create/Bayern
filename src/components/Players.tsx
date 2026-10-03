@@ -8,8 +8,10 @@ import PlayerProfileModal from './PlayerProfileModal';
 import { safeLocalStorageSet } from '../lib/utils';
 import { getCanonicalRoomId } from './setka_tourn/storage';
 import { filterItemsForRoom } from '../lib/roomIsolation';
+import { useGameUniverse } from '../lib/gameUniverse';
 
 export default function Players({ user }: { user: any }) {
+  const [game] = useGameUniverse();
   const [players, setPlayers] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ export default function Players({ user }: { user: any }) {
     const newRatingVal = Number(editRating) || 100;
     const newVacVal = Number(editValRating) || 0;
 
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
 
     // 1. Instant update in local React state & localStorage
     const updatedGlobalPlayers = players.map((p: any) => {
@@ -129,7 +131,7 @@ export default function Players({ user }: { user: any }) {
       setLoading(false);
       return;
     }
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
     let localPlayers = JSON.parse(localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`) || '[]');
     let localTeams = JSON.parse(localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`) || '[]');
 
@@ -234,7 +236,7 @@ export default function Players({ user }: { user: any }) {
 
     const handleDbUpdated = () => {
       try {
-        const roomId = getCanonicalRoomId(user.channelId || user.uid);
+        const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
         let cachedPlayers = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
         let cachedTeams = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
 
@@ -276,7 +278,7 @@ export default function Players({ user }: { user: any }) {
     return () => {
       window.removeEventListener('db-user-updated', handleDbUpdated);
     };
-  }, [user]);
+  }, [user, game]);
 
 
   const compressImage = (base64Str: string, maxWidth = 128, maxHeight = 128): Promise<string> => {
@@ -315,11 +317,12 @@ export default function Players({ user }: { user: any }) {
   const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newPlayer.nickname.trim()) return;
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
     const playerObj = {
       id: 'p_' + Math.random().toString(36).substr(2, 9),
       channelId: roomId,
       userId: roomId,
+      discipline: game,
       nickname: newPlayer.nickname.trim(),
       role: newPlayer.role,
       rating: newPlayer.rating,
@@ -354,7 +357,7 @@ export default function Players({ user }: { user: any }) {
   };
 
   const handleDeletePlayer = async (id: string) => {
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
     const filtered = players.filter((p: any) => p.id !== id);
     setPlayers(filtered);
     safeLocalStorageSet(`players_${user.uid}`, filtered);

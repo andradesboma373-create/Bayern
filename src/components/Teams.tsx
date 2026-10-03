@@ -9,6 +9,8 @@ import { safeLocalStorageSet } from '../lib/utils';
 import { getAutoMatchedVectorLogo } from '../lib/logoMatcher';
 import { getCanonicalRoomId } from './setka_tourn/storage';
 import { filterItemsForRoom } from '../lib/roomIsolation';
+import { useGameUniverse } from '../lib/gameUniverse';
+import { SO2_TEAMS } from '../lib/so2Assets';
 
 export default function Teams({ user }: { user: any }) {
   const [teams, setTeams] = useState<any[]>([]);
@@ -28,6 +30,8 @@ export default function Teams({ user }: { user: any }) {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>(['', '', '', '', '']);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [activeGame, setActiveGame] = useGameUniverse();
+  const [disciplineFilter, setDisciplineFilter] = useState<'current' | 'all' | 'cs2' | 'so2'>('current');
   
   const [selectedTeamRoster, setSelectedTeamRoster] = useState<any | null>(null);
   const [editingValRatings, setEditingValRatings] = useState<{ [playerId: string]: number }>({});
@@ -141,7 +145,7 @@ export default function Teams({ user }: { user: any }) {
       setTeams(updatedTeams);
       setPlayers(updatedGlobalPlayers);
       
-      const roomId = getCanonicalRoomId(user.channelId || user.uid);
+      const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
       safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
       if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
       safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
@@ -166,7 +170,7 @@ export default function Teams({ user }: { user: any }) {
 
   useEffect(() => {
     if (!user) return;
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
     const loadData = () => {
       try {
         const p = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
@@ -292,7 +296,7 @@ export default function Teams({ user }: { user: any }) {
 
     window.addEventListener("db-user-updated", loadData);
     return () => window.removeEventListener("db-user-updated", loadData);
-  }, [user]);
+  }, [user, activeGame]);
 
   const compressImage = (base64Str: string, maxWidth = 128, maxHeight = 128): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -355,7 +359,7 @@ export default function Teams({ user }: { user: any }) {
     e.preventDefault();
     if (!newTeamName.trim()) return;
 
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
     const roster = selectedPlayers.map(pid => players.find(p => p.id === pid) || { id: '' });
     const autoLogo = newTeamLogo !== null ? newTeamLogo : getAutoMatchedVectorLogo(newTeamName.trim());
     
@@ -380,6 +384,7 @@ export default function Teams({ user }: { user: any }) {
         id: "t_" + Math.random().toString(36).substring(2, 9),
         channelId: roomId,
         userId: roomId,
+        discipline: activeGame,
         name: newTeamName.trim(),
         isAcademy: !!newTeamIsAcademy,
         players: roster.filter((p: any) => p && p.id),
@@ -443,7 +448,7 @@ export default function Teams({ user }: { user: any }) {
   };
 
   const handleDeleteTeam = async (id: string) => {
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
     const updated = teams.filter(t => t.id !== id);
     setTeams(updated);
     safeLocalStorageSet(`teams_${user.uid}`, updated);
@@ -500,14 +505,14 @@ export default function Teams({ user }: { user: any }) {
         }
         return p;
       });
-      const roomId = getCanonicalRoomId(user.channelId || user.uid);
+      const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
       setPlayers(updatedGlobalPlayers);
       safeLocalStorageSet(`players_${user.uid}`, updatedGlobalPlayers);
       if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, updatedGlobalPlayers);
     }
 
     // 3. Update all teams in state and localStorage
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
     const updatedTeams = teams.map(t => {
       if (t.id === teamId) {
         return { ...t, players: updatedTeamPlayers, totalValRating };
@@ -586,7 +591,7 @@ export default function Teams({ user }: { user: any }) {
     const targetTeam = teams.find(t => t.id === teamId);
     if (!targetTeam) return;
 
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
     const newPlayers = [...(targetTeam.players || [])];
     newPlayers[index] = { ...player };
     const totalValRating = newPlayers.slice(0, 5).reduce((acc: number, p: any) => acc + (p?.valRating || 0), 0);
@@ -644,7 +649,7 @@ export default function Teams({ user }: { user: any }) {
     const targetTeam = teams.find(t => t.id === teamId);
     if (!targetTeam) return;
 
-    const roomId = getCanonicalRoomId(user.channelId || user.uid);
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
     const removedPlayer = targetTeam.players?.[index];
     const newPlayers = [...(targetTeam.players || [])];
     newPlayers[index] = { id: '' };
@@ -771,27 +776,119 @@ export default function Teams({ user }: { user: any }) {
         </div>
       </div>
 
-      <div className="flex bg-black/40 p-1 rounded-xl w-full max-w-sm border border-white/5">
-        <button
-          onClick={() => { setActiveTab('regular'); setCurrentPage(1); }}
-          className={`flex-1 py-2 text-sm font-bold uppercase tracking-wider rounded-lg transition-all ${
-            activeTab === 'regular'
-              ? 'bg-blue-600 text-white shadow-lg'
-              : 'text-white/50 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          Основы
-        </button>
-        <button
-          onClick={() => { setActiveTab('academy'); setCurrentPage(1); }}
-          className={`flex-1 py-2 text-sm font-bold uppercase tracking-wider rounded-lg transition-all ${
-            activeTab === 'academy'
-              ? 'bg-indigo-600 text-white shadow-lg'
-              : 'text-white/50 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          Академии
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex bg-black/40 p-1 rounded-xl w-full max-w-sm border border-white/5 shadow-inner">
+          <button
+            onClick={() => { setActiveTab('regular'); setCurrentPage(1); }}
+            className={`flex-1 py-2 text-sm font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+              activeTab === 'regular'
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'text-white/50 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Основы
+          </button>
+          <button
+            onClick={() => { setActiveTab('academy'); setCurrentPage(1); }}
+            className={`flex-1 py-2 text-sm font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+              activeTab === 'academy'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'text-white/50 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Академии
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 text-xs shadow-inner">
+            <button
+              onClick={() => { setDisciplineFilter('current'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-black uppercase transition-all cursor-pointer ${
+                disciplineFilter === 'current'
+                  ? (activeGame === 'so2' ? 'bg-orange-500 text-white shadow-md' : 'bg-[#ff8f00] text-black shadow-md')
+                  : 'text-white/40 hover:text-white'
+              }`}
+              title="Фильтровать по активной дисциплине"
+            >
+              {activeGame === 'so2' ? 'Мир SO2' : 'Мир CS2'}
+            </button>
+            <button
+              onClick={() => { setDisciplineFilter('cs2'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-black uppercase transition-all cursor-pointer ${
+                disciplineFilter === 'cs2'
+                  ? 'bg-[#ff8f00] text-black shadow-md'
+                  : 'text-white/40 hover:text-white'
+              }`}
+            >
+              CS2
+            </button>
+            <button
+              onClick={() => { setDisciplineFilter('so2'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-black uppercase transition-all cursor-pointer ${
+                disciplineFilter === 'so2'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md'
+                  : 'text-white/40 hover:text-white'
+              }`}
+            >
+              SO2
+            </button>
+            <button
+              onClick={() => { setDisciplineFilter('all'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-black uppercase transition-all cursor-pointer ${
+                disciplineFilter === 'all'
+                  ? 'bg-white/20 text-white'
+                  : 'text-white/40 hover:text-white'
+              }`}
+            >
+              Все
+            </button>
+          </div>
+
+          {(activeGame === 'so2' || disciplineFilter === 'so2') && (
+            <button
+              onClick={() => {
+                const newTeamsList = [...teams];
+                const existingNames = new Set(newTeamsList.map(t => (t.name || '').toLowerCase()));
+                let added = false;
+                SO2_TEAMS.forEach(st => {
+                  if (!existingNames.has(st.name.toLowerCase())) {
+                    newTeamsList.push({
+                      id: st.id,
+                      channelId: user.uid,
+                      name: st.name,
+                      logoUrl: st.logoUrl,
+                      game: 'so2',
+                      isAcademy: false,
+                      players: st.players.map(p => ({
+                        id: p.id,
+                        nickname: p.nickname,
+                        role: p.role,
+                        rating: p.rating,
+                        valRating: p.valRating,
+                        photoUrl: p.photoUrl
+                      })),
+                      balance: 1500000,
+                      leader: '',
+                      createdAt: new Date().toISOString()
+                    });
+                    added = true;
+                  }
+                });
+                if (added) {
+                  setTeams(newTeamsList);
+                  const roomId = getCanonicalRoomId(user.uid, activeGame);
+                  safeLocalStorageSet(`teams_${user.uid}`, newTeamsList);
+                  if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, newTeamsList);
+                }
+              }}
+              className="px-3.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-[0_0_12px_rgba(249,115,22,0.15)]"
+              title="Загрузить 8 официальных команд Standoff 2 (SaiNts, Horizon, Revival, VP SO2...)"
+            >
+              <span>⚡ Загрузить команды SO2</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {showAddForm && (
@@ -994,11 +1091,63 @@ export default function Teams({ user }: { user: any }) {
       {loading ? (
         <div className="text-center p-8 text-white/50">Загрузка...</div>
       ) : (() => {
-        const filteredTeams = teams.filter(t => activeTab === 'academy' ? t.isAcademy === true : !t.isAcademy);
+        const effectiveGame = disciplineFilter === 'current' ? activeGame : disciplineFilter;
+        const filteredTeams = teams.filter(t => {
+          if (activeTab === 'academy' ? !t.isAcademy : t.isAcademy) return false;
+          if (effectiveGame === 'all') return true;
+          const isSo2 = t.game === 'so2' || /saints|horizon|revival|necessary|streeteight|bullsfight|forze so2|vp so2/i.test(t.name);
+          if (effectiveGame === 'so2') return isSo2;
+          if (effectiveGame === 'cs2') return !isSo2;
+          return true;
+        });
+
         if (filteredTeams.length === 0) {
           return (
-            <div className="text-center p-16 bg-[#12121a] border border-white/5 rounded-2xl text-white/30 font-bold">
-              {activeTab === 'academy' ? 'В академии пока нет команд.' : 'В этом канале пока нет обычных команд.'}
+            <div className="text-center p-16 bg-[#12121a] border border-white/5 rounded-2xl text-white/30 font-bold flex flex-col items-center gap-3">
+              <span>{activeTab === 'academy' ? 'В академии пока нет команд этой категории.' : 'В этой дисциплине пока нет команд.'}</span>
+              {(activeGame === 'so2' || disciplineFilter === 'so2') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newTeamsList = [...teams];
+                    const existingNames = new Set(newTeamsList.map(t => (t.name || '').toLowerCase()));
+                    let added = false;
+                    SO2_TEAMS.forEach(st => {
+                      if (!existingNames.has(st.name.toLowerCase())) {
+                        newTeamsList.push({
+                          id: st.id,
+                          channelId: user.uid,
+                          name: st.name,
+                          logoUrl: st.logoUrl,
+                          game: 'so2',
+                          isAcademy: false,
+                          players: st.players.map(p => ({
+                            id: p.id,
+                            nickname: p.nickname,
+                            role: p.role,
+                            rating: p.rating,
+                            valRating: p.valRating,
+                            photoUrl: p.photoUrl
+                          })),
+                          balance: 1500000,
+                          leader: '',
+                          createdAt: new Date().toISOString()
+                        });
+                        added = true;
+                      }
+                    });
+                    if (added) {
+                      setTeams(newTeamsList);
+                      const roomId = getCanonicalRoomId(user.uid, activeGame);
+                      safeLocalStorageSet(`teams_${user.uid}`, newTeamsList);
+                      if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, newTeamsList);
+                    }
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(249,115,22,0.3)] cursor-pointer"
+                >
+                  ⚡ Загрузить 8 официальных команд Standoff 2
+                </button>
+              )}
             </div>
           );
         }

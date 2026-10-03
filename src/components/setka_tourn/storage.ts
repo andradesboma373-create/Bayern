@@ -1,4 +1,4 @@
-import { Tournament } from "./types";
+import { Tournament, Team } from "./types";
 import {
   cascadeAdvancements,
   advanceDoubleElimMatch,
@@ -8,6 +8,7 @@ import {
 } from "./doubleEliminationLogic";
 import { db, deleteDoc, doc, setDoc } from "../../firebase";
 import { safeLocalStorageSet } from "../../lib/utils";
+import { SO2_TEAMS } from "../../lib/so2Assets";
 
 let memoryCache: Record<string, Tournament[]> = {};
 
@@ -79,7 +80,24 @@ export const normalizeTournament = (t: any): Tournament => {
     copy.settings.mode = 'single_stage';
   }
 
-  // 4. Normalize team objects in matches across all stages
+  // 4. Game Universe identification ('cs2' | 'so2')
+  if (!copy.game) {
+    if (copy.settings?.game) {
+      copy.game = copy.settings.game;
+    } else if (
+      (copy.name && /standoff|so2|со2|стандофф/i.test(copy.name)) ||
+      (Array.isArray(copy.teams) && copy.teams.some((tm: any) => tm?.name && /saints|horizon|revival|necessary|bulls|forze so2|vp so2|streeteight/i.test(tm.name)))
+    ) {
+      copy.game = 'so2';
+    } else {
+      copy.game = 'cs2';
+    }
+  }
+  if (!copy.settings.game) {
+    copy.settings.game = copy.game;
+  }
+
+  // 5. Normalize team objects in matches across all stages
   const normalizeTeam = (tm: any, fallbackName = 'TBD'): any => {
     if (!tm) return null;
     if (typeof tm === 'string') {
@@ -200,35 +218,61 @@ export const deserializeTournamentFromFirestore = (data: any): Tournament => {
 };
 
 // Helper: resolve canonical room ID for data isolation and sharing across devices and accounts in the same room
-export const getCanonicalRoomId = (userId?: string): string => {
+export const getCanonicalRoomId = (userId?: string, discipline?: string): string => {
+  let roomId = 'guest';
   if (userId) {
     let clean = String(userId).trim();
     if (clean.includes('@')) {
       clean = clean.split('@')[0];
     }
-    if (clean.startsWith('channel_')) return clean;
-    // Map known default accounts to room
-    if (clean === 'bamep' || clean === 'zeixst') return 'channel_bamep_cs2';
-    if (clean === 'simu') return 'channel_simu';
-    if (clean === 'airy') return 'channel_airy';
-    return clean;
-  }
-
-  try {
-    const raw = localStorage.getItem('customUser');
-    if (raw) {
-      const u = JSON.parse(raw);
-      if (u && (u.channelId || u.uid)) {
-        let ch = String(u.channelId || u.uid);
-        if (ch.includes('@')) ch = ch.split('@')[0];
-        if (ch.startsWith('channel_')) return ch;
-        if (ch === 'bamep' || ch === 'zeixst') return 'channel_bamep_cs2';
-        return ch;
+    if (clean.startsWith('channel_')) {
+      roomId = clean;
+    } else {
+      // Map known default accounts to room
+      if (clean === 'bamep' || clean === 'zeixst') {
+        roomId = 'channel_bamep_cs2';
+      } else if (clean === 'simu') {
+        roomId = 'channel_simu';
+      } else if (clean === 'airy') {
+        roomId = 'channel_airy';
+      } else {
+        roomId = clean;
       }
     }
-  } catch (e) {}
-  
-  return 'guest';
+  } else {
+    try {
+      const raw = localStorage.getItem('customUser');
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u && (u.channelId || u.uid)) {
+          let ch = String(u.channelId || u.uid);
+          if (ch.includes('@')) ch = ch.split('@')[0];
+          if (ch.startsWith('channel_')) {
+            roomId = ch;
+          } else if (ch === 'bamep' || ch === 'zeixst') {
+            roomId = 'channel_bamep_cs2';
+          } else if (ch === 'simu') {
+            roomId = 'channel_simu';
+          } else if (ch === 'airy') {
+            roomId = 'channel_airy';
+          } else {
+            roomId = ch;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Handle discipline separation if requested
+  if (discipline === 'so2') {
+    if (roomId === 'channel_bamep_cs2') return 'channel_bamep_so2';
+    if (!roomId.endsWith('_so2')) return `${roomId}_so2`;
+  } else if (discipline === 'cs2') {
+    if (roomId === 'channel_bamep_so2') return 'channel_bamep_cs2';
+    // By convention most rooms are cs2, but we can be explicit if needed
+  }
+
+  return roomId;
 };
 
 // Helper: load background image specifically saved for a tournament
@@ -398,6 +442,41 @@ export const loadTournaments = (userId: string, forceReload: boolean = false): T
         copy.settings = { ...copy.settings, bgImage: isolatedBg };
       }
       tournaments.push(normalizeTournament(copy));
+    }
+
+    // Ensure default SO2 Major tournament exists if no SO2 tournaments found
+    const hasSo2Tourney = tournaments.some(t => t.game === 'so2');
+    if (!hasSo2Tourney && !deletedIds.has('so2_major_spring_2026') && SO2_TEAMS && SO2_TEAMS.length > 0) {
+      const so2Teams: Team[] = SO2_TEAMS.map(tm => ({
+        id: tm.id,
+        name: tm.name,
+        logoUrl: tm.logoUrl,
+        game: 'so2'
+      }));
+      const bracket = generateSingleEliminationBracket(so2Teams);
+      const defaultSo2Tourney = normalizeTournament({
+        id: 'so2_major_spring_2026',
+        channelId: roomId,
+        game: 'so2',
+        name: 'Winline Standoff 2 Major 2026',
+        createdAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
+        status: 'active',
+        prizePool: '1,500,000 ₽',
+        settings: {
+          mode: 'single_stage',
+          stage1Type: 'playoff',
+          game: 'so2',
+          cardThemeColor: '#f97316',
+          btnStyle: 'cyber',
+          bgTheme: 'cyber_grid'
+        },
+        teams: so2Teams,
+        bracketRounds: bracket
+      });
+      tournaments.push(defaultSo2Tourney);
+      try {
+        safeLocalStorageSet(`tournament_item_${roomId}_${defaultSo2Tourney.id}`, JSON.stringify(defaultSo2Tourney));
+      } catch (e) {}
     }
 
     memoryCache[roomId] = tournaments;
@@ -754,6 +833,37 @@ export const deleteTournament = (userId: string, tournamentId: string) => {
       body: JSON.stringify({ userId: roomId, tournaments: filtered })
     }).catch(() => {});
   }
+};
+
+export const clearRoomTournaments = (userId: string) => {
+  const roomId = getCanonicalRoomId(userId);
+  
+  // Mark all current tournaments as deleted so they don't reappear
+  try {
+    const current = memoryCache[roomId] || [];
+    current.forEach(t => {
+      if (t && t.id) addDeletedTournamentId(roomId, t.id);
+    });
+  } catch (e) {}
+
+  memoryCache[roomId] = [];
+  if (userId && userId !== roomId) {
+    memoryCache[userId] = [];
+  }
+
+  try {
+    localStorage.removeItem(`tournaments_${roomId}`);
+    localStorage.removeItem(`tournaments_metadata_${roomId}`);
+    localStorage.removeItem(`tournaments_backup_${roomId}`);
+    if (userId && userId !== roomId) {
+      localStorage.removeItem(`tournaments_${userId}`);
+      localStorage.removeItem(`tournaments_metadata_${userId}`);
+      localStorage.removeItem(`tournaments_backup_${userId}`);
+    }
+  } catch (e) {}
+
+  saveTournamentsIndex(roomId, []);
+  window.dispatchEvent(new Event("tournaments-updated"));
 };
 
 export const saveTournaments = (userId: string, tournaments: Tournament[]) => {

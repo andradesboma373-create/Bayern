@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { TeamAutocompleteInput } from '../TeamAutocompleteInput';
 import { TournamentSettings, Team } from './types';
-import { Trash2, ChevronUp, ChevronDown, Upload, Folder, X, HelpCircle, Check, Shuffle, ArrowRightLeft, ArrowRight, Plus, Layers, Grid } from 'lucide-react';
+import { Trash2, ChevronUp, ChevronDown, Upload, Folder, X, HelpCircle, Check, Shuffle, ArrowRightLeft, ArrowRight, Plus, Layers, Grid, Sparkles } from 'lucide-react';
 import TeamLogo from '../TeamLogo';
 import MatchCard from './MatchCard';
 import { getAutoMatchedVectorLogo } from '../../lib/logoMatcher';
 import { safeLocalStorageSet } from '../../lib/utils';
 import { getCanonicalRoomId } from './storage';
+import { SO2_TEAMS } from '../../lib/so2Assets';
+import So2MediaLibraryModal from '../So2MediaLibraryModal';
 
 interface Props {
   user?: any;
@@ -15,6 +17,7 @@ interface Props {
   initialPrizePool?: string;
   initialSettings?: TournamentSettings;
   initialTeams?: Team[];
+  initialGame?: 'cs2' | 'so2';
   onSave: (name: string, settings: TournamentSettings, teams: Team[], logoUrl?: string, prizePool?: string) => void;
   submitLabel: string;
 }
@@ -27,12 +30,15 @@ export default function TournamentSettingsForm({
     initialPrizePool = "$100,000",
     initialSettings, 
     initialTeams = [], 
+    initialGame = 'cs2',
     onSave, 
     submitLabel 
 }: Props) {
   const [name, setName] = useState(initialName);
   const [logoUrl, setLogoUrl] = useState(initialLogoUrl);
   const [prizePool, setPrizePool] = useState(initialPrizePool);
+  const [game, setGame] = useState<'cs2' | 'so2'>((initialSettings?.game as any) || initialGame || 'cs2');
+  const [showSo2MediaModal, setShowSo2MediaModal] = useState(false);
   const [settings, setSettings] = useState<TournamentSettings>(initialSettings || {
     mode: 'single_stage',
     stage1Type: 'playoff',
@@ -369,14 +375,77 @@ export default function TournamentSettingsForm({
 
     const finalSettings: TournamentSettings = {
       ...settings,
+      game,
       seedingType: settings.seedingType === 'random' ? 'random' : 'manual',
       groupAssignments: isGroupFormat ? groupAssignments : undefined
     };
     onSave(name, finalSettings, finalTeams, logoUrl, prizePool);
   };
 
+  const handleLoadSo2Roster = () => {
+    if (SO2_TEAMS && SO2_TEAMS.length > 0) {
+      const formatted: Team[] = SO2_TEAMS.map(tm => ({
+        id: tm.id,
+        name: tm.name,
+        logoUrl: tm.logoUrl,
+        game: 'so2'
+      }));
+      setTeams(formatted);
+    }
+  };
+
   return (
     <div className="bg-[#12121a] p-8 rounded-2xl border border-white/5 flex flex-col gap-6">
+      {/* Game Discipline / Universe Selector */}
+      <div className="bg-black/40 p-4 rounded-2xl border border-white/10 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
+            <span>🎮 Дисциплина турнира:</span>
+            <span className={game === 'so2' ? 'text-orange-400' : 'text-[#ff8f00]'}>
+              {game === 'so2' ? 'Standoff 2 (SO2)' : 'Counter-Strike 2 (CS2)'}
+            </span>
+          </div>
+          <p className="text-[11px] text-white/40 mt-0.5">
+            {game === 'so2' 
+              ? 'Турнир сохранится в базе Standoff 2 с официальными мобильными клубами и картами'
+              : 'Турнир сохранится в базе CS2 с рейтингами HLTV и профессиональными клубами'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex bg-black/60 p-1 rounded-xl border border-white/10">
+            <button
+              type="button"
+              onClick={() => {
+                setGame('cs2');
+                if (prizePool === '1,500,000 ₽') setPrizePool('$100,000');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+                game === 'cs2'
+                  ? 'bg-[#ff8f00] text-black shadow-[0_0_10px_rgba(255,143,0,0.3)]'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <span>CS2</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGame('so2');
+                if (prizePool === '$100,000') setPrizePool('1,500,000 ₽');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+                game === 'so2'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-[0_0_10px_rgba(249,115,22,0.35)]'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <span>SO2</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
             <label className="block text-white/50 font-bold mb-2">Название турнира</label>
@@ -385,18 +454,18 @@ export default function TournamentSettingsForm({
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full bg-black/50 border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#ff8f00]/50"
-                placeholder="Stake Pulse Beat I"
+                placeholder={game === 'so2' ? "Winline Standoff 2 Major" : "Stake Pulse Beat I"}
             />
         </div>
 
         <div>
-            <label className="block text-white/50 font-bold mb-2">Призовой фонд ($)</label>
+            <label className="block text-white/50 font-bold mb-2">Призовой фонд</label>
             <input 
                 type="text" 
                 value={prizePool}
                 onChange={e => setPrizePool(e.target.value)}
                 className="w-full bg-black/50 border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#ff8f00]/50"
-                placeholder="$100,000"
+                placeholder={game === 'so2' ? "1,500,000 ₽" : "$100,000"}
             />
         </div>
       </div>
@@ -407,7 +476,7 @@ export default function TournamentSettingsForm({
           <label className="block text-[#ff8f00] font-black uppercase tracking-widest text-xs flex items-center gap-2">
             <Folder className="w-4 h-4" /> Аватарка / Логотип турнира
           </label>
-          <span className="text-white/40 text-xs">Загрузите свою или выберите из папки</span>
+          <span className="text-white/40 text-xs">Загрузите свою или выберите из каталога</span>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -471,8 +540,6 @@ export default function TournamentSettingsForm({
                 placeholder="Или вставьте прямую ссылку (https://...)"
               />
             </div>
-
-
           </div>
         </div>
       </div>
@@ -918,6 +985,25 @@ export default function TournamentSettingsForm({
               </button>
             </div>
           </div>
+
+          {/* Standoff 2 Roster Instant Preset Bar */}
+          {game === 'so2' && (
+            <div className="bg-orange-500/10 border border-orange-500/20 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-orange-400 shrink-0" />
+                <span className="text-xs text-orange-200 font-bold">
+                  Официальные клубы SO2: SaiNts, Horizon, Revival, VP SO2, Necessary, ForZe, Streeteight, Bullsfight
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleLoadSo2Roster}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_12px_rgba(249,115,22,0.3)] shrink-0 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span>⚡ Заполнить 8 командами SO2</span>
+              </button>
+            </div>
+          )}
 
           {/* Quick Add Bar */}
           <div className="bg-black/40 p-3.5 rounded-xl border border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
@@ -1625,6 +1711,16 @@ export default function TournamentSettingsForm({
           </div>
         </div>
       )}
+
+      {/* Official Standoff 2 Logos & Player Photos Media Library */}
+      <So2MediaLibraryModal
+        isOpen={showSo2MediaModal}
+        onClose={() => setShowSo2MediaModal(false)}
+        onSelect={(url) => {
+          setLogoUrl(url);
+          setShowSo2MediaModal(false);
+        }}
+      />
     </div>
   );
 }

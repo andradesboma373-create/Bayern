@@ -1,5 +1,5 @@
 import { MatchState, Player, TeamSide } from '../models';
-import { RATING_CONFIG, FormatWeightProfile, getFormatProfile } from '../config/RatingConfig';
+import { RATING_CONFIG } from '../config/RatingConfig';
 import { WEAPONS } from '../config/Weapons';
 
 /**
@@ -35,8 +35,6 @@ export interface PlayerRatingBreakdown {
   multiKillFactor: number;  // Multi-kill non-linear bonus
   clutchFactor: number;     // Clutch difficulty score
   openingFactor: number;    // Opening duel net contribution
-  swingMultiplier?: number; // Format swing weight applied
-  castMultiplier?: number;  // Format cast weight applied
 }
 
 export class RatingSystem {
@@ -166,8 +164,7 @@ export class RatingSystem {
   }
 
   /**
-   * Calculates the exact Round Swing (probability delta) caused by an action,
-   * taking into account match format weights (Bo1 high variance vs Bo3 baseline vs Bo5 marathon).
+   * Calculates the exact Round Swing (probability delta) caused by an action
    */
   static calculateActionSwing(
     pWinBefore: number,
@@ -175,8 +172,7 @@ export class RatingSystem {
     killer: Player,
     victim: Player,
     isOpening: boolean,
-    isTrade: boolean = false,
-    swingMultiplier: number = 1.0
+    isTrade: boolean = false
   ): number {
     let rawDelta = Math.max(0.04, pWinAfter - pWinBefore);
 
@@ -206,7 +202,7 @@ export class RatingSystem {
       contextMultiplier *= (RATING_CONFIG.TRADE_SWING_BONUS || 1.15);
     }
 
-    return rawDelta * contextMultiplier * (swingMultiplier || 1.0);
+    return rawDelta * contextMultiplier;
   }
 
   /**
@@ -225,25 +221,25 @@ export class RatingSystem {
     const victimWeaponWeight = this.getWeaponWeight(victim.weaponId || victim.primaryWeaponId || undefined);
     const killerWeaponWeight = this.getWeaponWeight(killer.weaponId || killer.primaryWeaponId || undefined);
 
-    let penaltyMultiplier = 0.85;
+    let penaltyMultiplier = 0.75;
 
     // Victim had AWP/Sniper and got killed by pistol/eco:
     // Blunder: threw away $4750 AWP to a pistol
     if (victimWeaponWeight > 1.2 && killerWeaponWeight < 0.6) {
-      penaltyMultiplier = 1.20;
+      penaltyMultiplier = 1.10;
     }
     // Victim had Rifle and got killed by pistol/eco:
     else if (victimWeaponWeight >= 1.0 && killerWeaponWeight < 0.6) {
-      penaltyMultiplier = 1.05;
+      penaltyMultiplier = 0.95;
     }
     // Victim had AWP/Sniper and got killed by Rifle:
     else if (victimWeaponWeight > 1.2) {
-      penaltyMultiplier = 0.95;
+      penaltyMultiplier = 0.85;
     }
     // Victim was on pure eco/pistol and died to Rifle/AWP:
     // Standard expected death on eco: smaller penalty
     else if (victimWeaponWeight < 0.6 && killerWeaponWeight >= 1.0) {
-      penaltyMultiplier = 0.50;
+      penaltyMultiplier = 0.40;
     }
 
     return Math.abs(actionSwing) * penaltyMultiplier;
@@ -326,20 +322,14 @@ export class RatingSystem {
   }
 
   /**
-   * Core rating calculation integrating all metrics deterministically,
-   * calibrated with specific match format weights for Swing and Cast (KAST).
+   * Core rating calculation integrating all metrics deterministically.
    */
-  static calculatePlayerRating(stats: any, totalRoundsInput?: number, formatProfileInput?: any): PlayerRatingBreakdown {
+  static calculatePlayerRating(stats: any, totalRoundsInput?: number): PlayerRatingBreakdown {
     const totalRounds = Math.max(1, Number(totalRoundsInput || stats?.totalRounds) || 1);
     const kills = Number(stats?.kills) || 0;
     const deaths = Number(stats?.deaths) || 0;
     const assists = Number(stats?.assists) || 0;
     const damage = Number(stats?.damage) || 0;
-
-    const profile = formatProfileInput || stats?.formatProfile;
-    const swingMult = typeof profile?.swingMultiplier === 'number' ? profile.swingMultiplier : 1.0;
-    const kastMult = typeof profile?.kastMultiplier === 'number' ? profile.kastMultiplier : 1.0;
-    const castMult = typeof profile?.castMultiplier === 'number' ? profile.castMultiplier : 1.0;
 
     const kpr = kills / totalRounds;
     const dpr = deaths / totalRounds;
@@ -396,29 +386,32 @@ export class RatingSystem {
       2.13 * kpr +
       0.42 * apr -
       0.41 +
-      (avgRoundSwing / 100) * 0.5 * swingMult +
+      (avgRoundSwing / 100) * 0.5 +
       multiKillFactor * 0.25 +
-      clutchFactor * 0.35 * swingMult +
+      clutchFactor * 0.35 +
       openingFactor * 0.40;
     const impact = Math.max(0.00, Number(rawImpact.toFixed(2)));
 
     // Final Unified Rating formula
     const w = RATING_CONFIG.RATING_WEIGHTS;
 
+    const effectiveKast = RATING_CONFIG.USE_KAST ? kast : 70.0;
+    const effectiveSwing = RATING_CONFIG.USE_SWING ? (avgRoundSwing / 100) : 0.0;
+
     let computedRating =
       w.BASE_OFFSET +
-      w.KAST_COEFFICIENT * kast * kastMult +
+      w.KAST_COEFFICIENT * effectiveKast +
       w.KPR_COEFFICIENT * kpr -
       w.DPR_PENALTY * dpr +
       w.ADR_COEFFICIENT * adr +
       0.18 * impact +
-      w.SWING_COEFFICIENT * (avgRoundSwing / 100) * swingMult +
+      w.SWING_COEFFICIENT * effectiveSwing +
       w.MULTI_KILL_COEFFICIENT * multiKillFactor +
-      w.CLUTCH_COEFFICIENT * clutchFactor * swingMult +
+      w.CLUTCH_COEFFICIENT * clutchFactor +
       w.OPENING_COEFFICIENT * openingFactor;
 
-    // Safeguards: ensure realistic limits (0.00 to 3.50)
-    computedRating = Math.max(0.00, Math.min(3.50, computedRating));
+    // Safeguards: ensure realistic limits (0.00 to 4.50)
+    computedRating = Math.max(0.00, Math.min(4.50, computedRating));
 
     return {
       rating: Number(computedRating.toFixed(2)),
@@ -432,9 +425,7 @@ export class RatingSystem {
       kd: Number(kd.toFixed(2)),
       multiKillFactor: Number(multiKillFactor.toFixed(3)),
       clutchFactor: Number(clutchFactor.toFixed(3)),
-      openingFactor: Number(openingFactor.toFixed(3)),
-      swingMultiplier: swingMult,
-      castMultiplier: castMult
+      openingFactor: Number(openingFactor.toFixed(3))
     };
   }
 }

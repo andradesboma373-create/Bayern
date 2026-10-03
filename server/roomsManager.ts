@@ -397,6 +397,30 @@ export function deleteRoom(roomIdOrUsername: string): { success: boolean; error?
   return { success: true };
 }
 
+export function deleteAllRooms(keepBamep = true): { success: boolean; deletedCount: number; error?: string } {
+  ensureStorage();
+  const initialCount = rooms.length;
+  if (keepBamep) {
+    rooms = rooms.filter(r => r.username.toLowerCase() === 'bamep' || r.id.toLowerCase() === 'room_bamep');
+  } else {
+    rooms = [];
+  }
+  const deletedCount = initialCount - rooms.length;
+  persistRooms();
+  
+  logAudit({
+    roomId: 'all',
+    username: 'bamep',
+    action: 'ALL_ROOMS_DELETED',
+    method: 'POST',
+    path: '/api/admin/rooms/delete-all',
+    ip: 'admin',
+    details: `Все комнаты кроме bamep удалены администратором (всего удалено: ${deletedCount})`
+  });
+
+  return { success: true, deletedCount };
+}
+
 export function logAudit(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) {
   const item: AuditLogEntry = {
     id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, getDocs, collection, updateDoc, query, where, writeBatch } from '../firebase';
-import { Settings as SettingsIcon, Bot, Coins, CheckCircle, AlertTriangle, Save, ShieldAlert, Sliders, UserCheck, Lock, Unlock, Key, Trash2, Plus, Star, Award, Database, CloudUpload } from 'lucide-react';
+import { Settings as SettingsIcon, Bot, Coins, CheckCircle, AlertTriangle, Save, ShieldAlert, Sliders, UserCheck, Lock, Unlock, Key, Trash2, Plus, Star, Award, Database, CloudUpload, AlertOctagon, X, Zap } from 'lucide-react';
 import { DEFAULT_ROLES_CS2, DEFAULT_ROLES_S2, setSimulationRoles } from '../lib/simulation';
 import { getAllPlayerPerks, savePlayerPerk, deletePlayerPerk, PlayerPerk } from '../lib/playerPerks';
+import { clearRoomTournaments, getCanonicalRoomId } from './setka_tourn/storage';
+import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 
 export default function Settings({ user }: { user: any }) {
   const [clubBudget, setClubBudget] = useState<number>(1000000);
@@ -13,11 +15,20 @@ export default function Settings({ user }: { user: any }) {
   const [syncing, setSyncing] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  // Rating Settings
+  const [useKast, setUseKast] = useState<boolean>(RATING_CONFIG.USE_KAST);
+  const [useSwing, setUseSwing] = useState<boolean>(RATING_CONFIG.USE_SWING);
+
   // Custom Roles
   const [customRolesCS2, setCustomRolesCS2] = useState<any[]>(DEFAULT_ROLES_CS2);
   const [customRolesS2, setCustomRolesS2] = useState<any[]>(DEFAULT_ROLES_S2);
   const [activeTab, setActiveTab] = useState<'general' | 'individual' | 'database'>('general');
   const [activeRoleGame, setActiveRoleGame] = useState<'cs2' | 's2'>('cs2');
+
+  // Apply rating settings globally immediately
+  useEffect(() => {
+    RATING_CONFIG.applyRatingSettings({ useKast, useSwing });
+  }, [useKast, useSwing]);
 
   // Bamep Room & Individual Perks State
   const BAMEP_MASTER_PASSWORD = 'bamep2026';
@@ -129,6 +140,8 @@ export default function Settings({ user }: { user: any }) {
 
           if (data.customRolesCS2) setCustomRolesCS2(cleanRoles(data.customRolesCS2));
           if (data.customRolesS2) setCustomRolesS2(cleanRoles(data.customRolesS2));
+          if (data.useKast !== undefined) setUseKast(!!data.useKast);
+          if (data.useSwing !== undefined) setUseSwing(!!data.useSwing);
           setLoading(false);
           return;
         }
@@ -140,6 +153,8 @@ export default function Settings({ user }: { user: any }) {
           const data = snap.data();
           if (data.clubBudget !== undefined) setClubBudget(Number(data.clubBudget));
           else if (data.money !== undefined) setClubBudget(Number(data.money));
+          if (data.useKast !== undefined) setUseKast(!!data.useKast);
+          if (data.useSwing !== undefined) setUseSwing(!!data.useSwing);
           
           const cleanRoles = (r: any[]) => {
             if (!Array.isArray(r)) return [];
@@ -159,6 +174,8 @@ export default function Settings({ user }: { user: any }) {
             const parsed = JSON.parse(local);
             if (parsed.clubBudget !== undefined) setClubBudget(Number(parsed.clubBudget));
             else if (parsed.money !== undefined) setClubBudget(Number(parsed.money));
+            if (parsed.useKast !== undefined) setUseKast(!!parsed.useKast);
+            if (parsed.useSwing !== undefined) setUseSwing(!!parsed.useSwing);
             
             const cleanRoles = (r: any[]) => {
               if (!Array.isArray(r)) return [];
@@ -201,7 +218,9 @@ export default function Settings({ user }: { user: any }) {
           clubBudget,
           money: clubBudget,
           customRolesCS2,
-          customRolesS2
+          customRolesS2,
+          useKast,
+          useSwing
         })
       });
 
@@ -215,7 +234,9 @@ export default function Settings({ user }: { user: any }) {
         clubBudget,
         money: clubBudget,
         customRolesCS2,
-        customRolesS2
+        customRolesS2,
+        useKast,
+        useSwing
       }));
 
       setStatusMsg({
@@ -291,6 +312,78 @@ export default function Settings({ user }: { user: any }) {
       });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const [clearingRoom, setClearingRoom] = useState(false);
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+
+  const handleClearRoom = async () => {
+    if (!user) return;
+    setClearingRoom(true);
+    setStatusMsg(null);
+    try {
+      // 1. Call server API to clear room data on backend
+      // Backend should handle clearing all aliases related to this user
+      await fetch('/api/room/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid })
+      }).catch(err => console.warn('Server room clear warning:', err));
+
+      // 2. Clear client-side tournament data
+      clearRoomTournaments(user.uid);
+
+      // 3. Clear client-side room caches for ALL disciplines
+      const baseRoomId = getCanonicalRoomId(user.channelId || user.uid);
+      const roomIds = [
+        user.uid,
+        baseRoomId,
+        baseRoomId === 'channel_bamep_cs2' ? 'channel_bamep_so2' : `${baseRoomId}_so2`
+      ];
+
+      const collectionPrefixes = [
+        'matches',
+        'teams',
+        'players',
+        'swapOffers',
+        'mapStats',
+        'tgUsers',
+        'tgVetos',
+        'tournaments',
+        'tournaments_metadata',
+        'tournaments_backup',
+        'deleted_tournaments'
+      ];
+
+      roomIds.forEach(rid => {
+        collectionPrefixes.forEach(prefix => {
+          try { localStorage.removeItem(`${prefix}_${rid}`); } catch (e) {}
+        });
+      });
+
+      // Also clear without any suffix if any exist
+      collectionPrefixes.forEach(prefix => {
+        try { localStorage.removeItem(prefix); } catch (e) {}
+      });
+
+      setStatusMsg({
+        type: 'success',
+        text: 'Комната успешно очищена! Все турниры, сетки, матчи, команды и игроки (CS2 и SO2) удалены.'
+      });
+      setShowClearConfirmModal(false);
+
+      // Notify other views
+      window.dispatchEvent(new Event('tournaments-updated'));
+      window.dispatchEvent(new Event('matches-updated'));
+      window.dispatchEvent(new Event('db-user-updated'));
+    } catch (e: any) {
+      setStatusMsg({
+        type: 'error',
+        text: `Ошибка при очистке комнаты: ${e.message || e}`
+      });
+    } finally {
+      setClearingRoom(false);
     }
   };
 
@@ -394,6 +487,60 @@ export default function Settings({ user }: { user: any }) {
                 </div>
               </div>
 
+              {/* Rating System Configuration */}
+              <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-2xl rounded-full pointer-events-none"></div>
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="p-2.5 bg-blue-500/10 text-blue-500 rounded-lg">
+                    <Sliders className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white mb-1">Система Рейтинга (HLTV Style)</h3>
+                    <p className="text-xs text-white/50 leading-relaxed">
+                      Настройте компоненты, которые влияют на расчет финального рейтинга игроков 2.0.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div 
+                    onClick={() => setUseKast(!useKast)}
+                    className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${useKast ? 'bg-blue-600/10 border-blue-500/30' : 'bg-black/20 border-white/5 opacity-60'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${useKast ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-white/20'}`}>
+                        <CheckCircle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-white">Показывать KAST</div>
+                        <div className="text-[10px] text-white/40 uppercase font-black">Колонка в статистике</div>
+                      </div>
+                    </div>
+                    <div className={`w-12 h-6 rounded-full p-1 transition-colors ${useKast ? 'bg-blue-600' : 'bg-white/10'}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full transition-transform ${useKast ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => setUseSwing(!useSwing)}
+                    className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${useSwing ? 'bg-purple-600/10 border-purple-500/30' : 'bg-black/20 border-white/5 opacity-60'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${useSwing ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-white/20'}`}>
+                        <Zap className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-white">Показывать Swing</div>
+                        <div className="text-[10px] text-white/40 uppercase font-black">Влияние на раунды</div>
+                      </div>
+                    </div>
+                    <div className={`w-12 h-6 rounded-full p-1 transition-colors ${useSwing ? 'bg-purple-600' : 'bg-white/10'}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full transition-transform ${useSwing ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <button 
                 type="submit" 
                 disabled={saving}
@@ -402,6 +549,36 @@ export default function Settings({ user }: { user: any }) {
                 <Save className="w-5 h-5" />
                 {saving ? 'СОХРАНЕНИЕ...' : 'СОХРАНИТЬ НАСТРОЙКИ'}
               </button>
+
+              {/* Danger Zone: Clear Room Section */}
+              <div className="bg-[#12121a] border border-red-500/25 rounded-2xl p-6 relative overflow-hidden mt-2">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 blur-2xl rounded-full pointer-events-none"></div>
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="p-2.5 bg-red-500/10 text-red-400 rounded-lg shrink-0 border border-red-500/20">
+                    <Trash2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white mb-1 uppercase tracking-wider flex items-center gap-2">
+                      <span>Очистить комнату</span>
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">Опасно</span>
+                    </h3>
+                    <p className="text-xs text-white/50 leading-relaxed">
+                      Полное удаление всех турниров, сеток, результатов матчей, команд и истории из текущей комнаты. Позволяет быстро очистить всё и начать с чистого листа.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowClearConfirmModal(true)}
+                    className="px-5 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/40 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(239,68,68,0.15)]"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Очистить комнату</span>
+                  </button>
+                </div>
+              </div>
             </form>
           )}
 
@@ -697,6 +874,53 @@ export default function Settings({ user }: { user: any }) {
               <span className="text-sm font-semibold">{statusMsg.text}</span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Clear Room Confirmation Modal */}
+      {showClearConfirmModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#161726] border border-red-500/30 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="p-3 bg-red-500/10 rounded-xl">
+                <AlertOctagon className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-lg font-black text-white uppercase tracking-wider">Очистить комнату?</h4>
+                <p className="text-xs text-red-400/80 font-semibold">Необратимое действие</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-white/70 leading-relaxed">
+              Вы уверены, что хотите полностью очистить эту комнату? Будут безвозвратно удалены:
+            </p>
+            <ul className="text-xs text-white/60 space-y-1 list-disc list-inside bg-black/40 p-3 rounded-xl border border-white/5">
+              <li>Все турниры и турнирные сетки</li>
+              <li>Все сохраненные матчи и статистика</li>
+              <li>Все команды и составы игроков</li>
+              <li>Логи и история симуляций</li>
+            </ul>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirmModal(false)}
+                disabled={clearingRoom}
+                className="px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleClearRoom}
+                disabled={clearingRoom}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(239,68,68,0.4)] disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{clearingRoom ? 'Очистка...' : 'Да, очистить комнату'}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

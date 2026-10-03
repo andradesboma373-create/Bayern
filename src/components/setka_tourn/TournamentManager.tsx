@@ -22,6 +22,8 @@ import MvpModal from './MvpModal';
 import { getAutoMatchedVectorLogo } from '../../lib/logoMatcher';
 import { safeLocalStorageSet } from '../../lib/utils';
 import { getCanonicalRoomId } from './storage';
+import { useGameUniverse } from '../../lib/gameUniverse';
+import So2MediaLibraryModal from '../So2MediaLibraryModal';
 
 export const BG_THEMES = {
   cyber_grid: {
@@ -92,6 +94,8 @@ export const BG_THEMES = {
 export default function TournamentManager({ user }: { user: any }) {
   const userId = user?.uid || 'guest';
   const navigate = useNavigate();
+  const [activeGame, setActiveGame, gameInfo] = useGameUniverse();
+  const [showSo2Folder, setShowSo2Folder] = useState(false);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [activeTournament, setActiveTournament] = useState<Tournament | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -377,15 +381,18 @@ export default function TournamentManager({ user }: { user: any }) {
   };
 
   const handleCreate = (name: string, settings: TournamentSettings, teams: Team[], logoUrl?: string, prizePool?: string) => { console.log("handleCreate called:", name, teams.length, settings);
-    const { initialGroups, initialBracket, initialLosersBracket, initialGrandFinal, initialSwissRounds, initialGslGroups } = generateInitialData(settings, teams);
+    const tourneyGame = settings.game || activeGame;
+    const finalSettings = { ...settings, game: tourneyGame };
+    const { initialGroups, initialBracket, initialLosersBracket, initialGrandFinal, initialSwissRounds, initialGslGroups } = generateInitialData(finalSettings, teams);
 
     const t: Tournament = {
       id: Date.now().toString(),
       name,
       logoUrl,
-      prizePool: prizePool || '$100,000',
+      game: tourneyGame,
+      prizePool: prizePool || (tourneyGame === 'so2' ? '1,500,000 ₽' : '$100,000'),
       createdAt: Date.now(),
-      settings,
+      settings: finalSettings,
       teams,
       activeStage: 1,
       completed: false,
@@ -2477,16 +2484,23 @@ export default function TournamentManager({ user }: { user: any }) {
                   user={user} 
                   onSave={handleCreate} 
                   submitLabel="Создать и Начать" 
+                  initialGame={activeGame}
                   initialName={templateForCreation ? templateForCreation.name : ""}
                   initialLogoUrl={templateForCreation ? templateForCreation.logoUrl : ""}
-                  initialPrizePool={templateForCreation ? templateForCreation.prizePool : "$100,000"}
+                  initialPrizePool={templateForCreation ? templateForCreation.prizePool : (activeGame === 'so2' ? '1,500,000 ₽' : '$100,000')}
                   initialSettings={templateForCreation ? templateForCreation.settings : undefined}
               />
           </div>
       );
   }
 
-  const filteredTournaments = tournaments.filter(t => {
+  const currentUniverseTournaments = tournaments.filter(t => {
+    const tGame = t.game || t.settings?.game || 'cs2';
+    if (activeGame === 'so2') return tGame === 'so2';
+    return tGame !== 'so2';
+  });
+
+  const filteredTournaments = currentUniverseTournaments.filter(t => {
     if (activeTabList === 'templates') return (t as any).isTemplate === true;
     if ((t as any).isTemplate === true) return false; // Hide templates from active/completed
     if (activeTabList === 'completed') return (t.completed || (t as any).status === 'completed');
@@ -2497,11 +2511,50 @@ export default function TournamentManager({ user }: { user: any }) {
     <div className="w-full">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
-          <h2 className="text-3xl font-black flex items-center gap-3 text-white">
-              <Trophy className="text-[#ff8f00] w-8 h-8" /> Турнирный Хаб
-          </h2>
+          <div className="flex items-center flex-wrap gap-3">
+            <h2 className="text-3xl font-black flex items-center gap-3 text-white">
+                <Trophy className={`w-8 h-8 ${activeGame === 'so2' ? 'text-orange-500' : 'text-[#ff8f00]'}`} /> 
+                Турнирный Хаб
+            </h2>
+            <div className="flex items-center bg-black/60 p-1 rounded-2xl border border-white/10 shadow-inner">
+              <button 
+                onClick={() => setActiveGame('cs2')}
+                className={`px-3 py-1 rounded-xl text-xs font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeGame === 'cs2'
+                    ? 'bg-[#ff8f00] text-black shadow-[0_0_12px_rgba(255,143,0,0.35)]'
+                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                }`}
+                title="Переключить на турниры Counter-Strike 2"
+              >
+                <span>CS2</span>
+              </button>
+              <button 
+                onClick={() => setActiveGame('so2')}
+                className={`px-3 py-1 rounded-xl text-xs font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeGame === 'so2'
+                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-[0_0_12px_rgba(249,115,22,0.35)]'
+                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                }`}
+                title="Переключить на турниры Standoff 2"
+              >
+                <span>SO2</span>
+              </button>
+            </div>
+            {activeGame === 'so2' && (
+              <button
+                onClick={() => setShowSo2Folder(true)}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border border-orange-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                title="Открыть библиотеку логотипов и фото игроков Standoff 2"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Медиатека SO2</span>
+              </button>
+            )}
+          </div>
           <p className="text-white/50 text-sm mt-1">
-            Текущие чемпионаты и исторический архив завершенных турниров
+            {activeGame === 'so2' 
+              ? 'Чемпионаты, кубки и официальные турниры по Standoff 2 (SO2)' 
+              : 'Текущие чемпионаты и исторический архив турниров CS2'}
           </p>
         </div>
 
@@ -2515,7 +2568,7 @@ export default function TournamentManager({ user }: { user: any }) {
                   : 'text-white/60 hover:text-white'
               }`}
             >
-              🏆 Активные ({tournaments.filter(t => !t.completed && (t as any).status !== 'completed' && !(t as any).isTemplate).length})
+              🏆 Активные ({currentUniverseTournaments.filter(t => !t.completed && (t as any).status !== 'completed' && !(t as any).isTemplate).length})
             </button>
             <button 
               onClick={() => setActiveTabList('completed')}
@@ -2525,7 +2578,7 @@ export default function TournamentManager({ user }: { user: any }) {
                   : 'text-white/60 hover:text-white'
               }`}
             >
-              📜 История ({tournaments.filter(t => (t.completed || (t as any).status === 'completed') && !(t as any).isTemplate).length})
+              📜 История ({currentUniverseTournaments.filter(t => (t.completed || (t as any).status === 'completed') && !(t as any).isTemplate).length})
             </button>
             <button 
               onClick={() => setActiveTabList('templates')}
@@ -2535,7 +2588,7 @@ export default function TournamentManager({ user }: { user: any }) {
                   : 'text-white/60 hover:text-white'
               }`}
             >
-              📑 Шаблоны ({tournaments.filter(t => (t as any).isTemplate === true).length})
+              📑 Шаблоны ({currentUniverseTournaments.filter(t => (t as any).isTemplate === true).length})
             </button>
           </div>
 
@@ -2695,6 +2748,12 @@ export default function TournamentManager({ user }: { user: any }) {
               </div>
           )}
       </div>
+
+      {/* Official Standoff 2 Media Library Modal */}
+      <So2MediaLibraryModal
+        isOpen={showSo2Folder}
+        onClose={() => setShowSo2Folder(false)}
+      />
     </div>
   );
 }

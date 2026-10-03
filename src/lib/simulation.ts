@@ -66,21 +66,21 @@ export function getSubclassObj(roleId: string, subclassId?: string): RoleSubclas
 }
 
 export const DEFAULT_ROLES_S2 = [
-    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.02, skillMultiplier: 1.00, impact: 1.02, deathMultiplier: 0.98, assistMultiplier: 1.00 },
-    { id: 'sniper', name: 'Снайпер', killMultiplier: 1.08, skillMultiplier: 1.04, impact: 1.12, deathMultiplier: 0.88, assistMultiplier: 0.85 },
-    { id: 'lurker', name: 'Люркер', killMultiplier: 1.06, skillMultiplier: 1.03, impact: 1.10, deathMultiplier: 0.86, assistMultiplier: 0.90 },
-    { id: 'opener', name: 'Опенер', killMultiplier: 1.07, skillMultiplier: 1.03, impact: 1.18, deathMultiplier: 1.05, assistMultiplier: 1.02 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 0.98, skillMultiplier: 0.99, impact: 0.98, deathMultiplier: 0.98, assistMultiplier: 1.25 },
-    { id: 'captain', name: 'Капитан', killMultiplier: 0.99, skillMultiplier: 0.99, impact: 0.99, deathMultiplier: 1.00, assistMultiplier: 1.20 }
+    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.03, skillMultiplier: 1.01, impact: 1.02, deathMultiplier: 0.99, assistMultiplier: 1.00 },
+    { id: 'sniper', name: 'Снайпер', killMultiplier: 1.15, skillMultiplier: 1.08, impact: 1.15, deathMultiplier: 0.85, assistMultiplier: 0.80 },
+    { id: 'lurker', name: 'Люркер', killMultiplier: 1.08, skillMultiplier: 1.04, impact: 1.10, deathMultiplier: 0.88, assistMultiplier: 0.90 },
+    { id: 'opener', name: 'Опенер', killMultiplier: 1.10, skillMultiplier: 1.06, impact: 1.25, deathMultiplier: 1.12, assistMultiplier: 1.05 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 0.96, skillMultiplier: 0.98, impact: 0.96, deathMultiplier: 1.00, assistMultiplier: 1.35 },
+    { id: 'captain', name: 'Капитан', killMultiplier: 0.98, skillMultiplier: 1.02, impact: 1.05, deathMultiplier: 1.02, assistMultiplier: 1.25 }
 ];
 
 export const DEFAULT_ROLES_CS2 = [
     { id: 'rifler', name: 'Рифлер', killMultiplier: 1.02, skillMultiplier: 1.00, impact: 1.02, deathMultiplier: 0.98, assistMultiplier: 1.00 },
-    { id: 'sniper', name: 'AWPer', killMultiplier: 1.08, skillMultiplier: 1.04, impact: 1.12, deathMultiplier: 0.88, assistMultiplier: 0.85 },
-    { id: 'lurker', name: 'Люркер', killMultiplier: 1.06, skillMultiplier: 1.03, impact: 1.10, deathMultiplier: 0.86, assistMultiplier: 0.90 },
-    { id: 'opener', name: 'Entry', killMultiplier: 1.07, skillMultiplier: 1.03, impact: 1.18, deathMultiplier: 1.05, assistMultiplier: 1.02 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 0.98, skillMultiplier: 0.99, impact: 0.98, deathMultiplier: 0.98, assistMultiplier: 1.25 },
-    { id: 'captain', name: 'IGL', killMultiplier: 0.99, skillMultiplier: 0.99, impact: 0.99, deathMultiplier: 1.00, assistMultiplier: 1.20 }
+    { id: 'sniper', name: 'AWPer', killMultiplier: 1.10, skillMultiplier: 1.05, impact: 1.12, deathMultiplier: 0.84, assistMultiplier: 0.80 },
+    { id: 'lurker', name: 'Люркер', killMultiplier: 1.05, skillMultiplier: 1.03, impact: 1.08, deathMultiplier: 0.86, assistMultiplier: 0.90 },
+    { id: 'opener', name: 'Entry', killMultiplier: 1.06, skillMultiplier: 1.04, impact: 1.20, deathMultiplier: 1.15, assistMultiplier: 1.02 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 0.94, skillMultiplier: 0.98, impact: 0.95, deathMultiplier: 0.98, assistMultiplier: 1.40 },
+    { id: 'captain', name: 'IGL', killMultiplier: 0.92, skillMultiplier: 1.05, impact: 1.10, deathMultiplier: 1.04, assistMultiplier: 1.30 }
 ];
 
 export const MAP_POOL_CS2 = [
@@ -329,16 +329,17 @@ function calculateTeamStrength(team: any[], isCS2: boolean, teamplay: number = 5
         
         const sub = getSubclassObj(player.role, player.subclass);
         if (normRole === 'captain') {
-            const callQuality = (relR - 1.0) / 8; 
-            iglTacticalBonus += Math.max(-0.08, callQuality);
+            const callQuality = (relR - 1.0) / 7; // Slightly better scaling for IGLs
+            iglTacticalBonus += Math.max(-0.06, callQuality);
             if (sub && sub.synergyBonus) {
-                iglTacticalBonus += (sub.synergyBonus / 100);
+                // Enhance synergy bonus (+6 -> 0.08)
+                iglTacticalBonus += (sub.synergyBonus / 75);
             }
         }
         
-        const noise = (1.0 - stability) * 0.06;
-        // Shift expected value lower so unstable players drag the team down slightly more on average
-        playerStrength *= (1.0 - (noise * 0.65) + Math.random() * noise);
+        const noise = (1.0 - stability) * 0.05; // Slightly reduced noise
+        // Bad swings rarer: shift expected value higher (random 0..1 - 0.25 -> mean 0.25 positive)
+        playerStrength *= (1.0 - (noise * 0.25) + Math.random() * noise);
         totalRatingStrength += playerStrength;
     });
     

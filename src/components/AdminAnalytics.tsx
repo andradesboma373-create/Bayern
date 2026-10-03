@@ -372,6 +372,48 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
     }
   };
 
+  const handleDeleteAllRooms = async () => {
+    const nonMasterRooms = rooms.filter(r => r.username !== 'bamep');
+    if (nonMasterRooms.length === 0) {
+      setActionFeedback("Нет комнат для удаления (кроме защищенной мастер-комнаты bamep)");
+      setTimeout(() => setActionFeedback(null), 4000);
+      return;
+    }
+
+    let confirmed = false;
+    try {
+      confirmed = window.confirm(
+        `⚠️ ВНИМАНИЕ: Вы действительно хотите удалить ВСЕ созданные комнаты (${nonMasterRooms.length} шт.)?\n\nГлавная мастер-комната "bamep" будет сохранена.`
+      );
+    } catch (e) {
+      confirmed = true;
+    }
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch('/api/admin/rooms/delete-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keepBamep: true })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка при удалении комнат');
+
+      try {
+        const existing = JSON.parse(localStorage.getItem('persistent_admin_rooms') || '[]');
+        const filtered = existing.filter((r: any) => r.username === 'bamep' || r.id === 'room_bamep');
+        localStorage.setItem('persistent_admin_rooms', JSON.stringify(filtered));
+      } catch (e) {}
+
+      setActionFeedback(`Успешно удалено комнат: ${data.deletedCount ?? nonMasterRooms.length}. Мастер-комната bamep сохранена.`);
+      setTimeout(() => setActionFeedback(null), 5000);
+      fetchData();
+    } catch (e: any) {
+      setActionFeedback(e.message || 'Ошибка пакетного удаления');
+      setTimeout(() => setActionFeedback(null), 4000);
+    }
+  };
+
   const copyCredentials = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -629,16 +671,28 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
       {isSuperAdmin && ( <>
       {/* Rooms Table */}
       <div className="bg-[#161726] border border-white/10 rounded-2xl overflow-hidden shadow-xl">
-        <div className="p-5 border-b border-white/10 flex items-center justify-between">
+        <div className="p-5 border-b border-white/10 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Users className="w-5 h-5 text-[#ff8f00]" />
             <h3 className="font-black text-white text-base uppercase tracking-wider">
               Все комнаты сервера ({rooms.length})
             </h3>
           </div>
-          <span className="text-xs text-white/40">
-            Данные хранятся только на защищенном сервере и скрыты от внешних посетителей
-          </span>
+          <div className="flex items-center gap-3">
+            {rooms.filter(r => r.username !== 'bamep').length > 0 && (
+              <button
+                onClick={handleDeleteAllRooms}
+                className="px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.15)]"
+                title="Удалить все созданные комнаты кроме главной bamep"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Удалить все ({rooms.filter(r => r.username !== 'bamep').length})</span>
+              </button>
+            )}
+            <span className="text-xs text-white/40 hidden sm:inline">
+              Данные хранятся только на защищенном сервере
+            </span>
+          </div>
         </div>
 
         <div className="overflow-x-auto">

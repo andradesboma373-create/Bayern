@@ -18,7 +18,8 @@ import {
   getQuotaStats, 
   trackRoomRequest,
   syncRooms,
-  deleteRoom
+  deleteRoom,
+  deleteAllRooms
 } from "./server/roomsManager";
 import { 
   recordFirestoreRead, 
@@ -4118,8 +4119,34 @@ app.post("/api/sync-cache", async (req, res) => {
     }
 
     // 2. Sync array collections
-    if (players) await syncCollection('players', players, 'channelId');
-    if (teams) await syncCollection('teams', teams, 'channelId');
+    if (Array.isArray(players)) {
+      loadedCollections.add('players');
+      const incomingIds = new Set(players.map(p => p.id).filter(Boolean));
+      const currentItems = fallbackDb.getAll('players').filter(item => 
+        aliases.includes(item.channelId) || aliases.includes(item.userId) || item.channelId === canonicalId
+      );
+      for (const item of currentItems) {
+        if (item && item.id && !incomingIds.has(item.id)) {
+          fallbackDb.delete('players', item.id);
+        }
+      }
+      await syncCollection('players', players, 'channelId');
+    }
+
+    if (Array.isArray(teams)) {
+      loadedCollections.add('teams');
+      const incomingIds = new Set(teams.map(t => t.id).filter(Boolean));
+      const currentItems = fallbackDb.getAll('teams').filter(item => 
+        aliases.includes(item.channelId) || aliases.includes(item.userId) || item.channelId === canonicalId
+      );
+      for (const item of currentItems) {
+        if (item && item.id && !incomingIds.has(item.id)) {
+          fallbackDb.delete('teams', item.id);
+        }
+      }
+      await syncCollection('teams', teams, 'channelId');
+    }
+
     if (swapOffers) await syncCollection('swapOffers', swapOffers, 'channelId');
     if (tournaments) await syncCollection('tournaments', tournaments, 'channelId');
     if (Array.isArray(matches)) {
@@ -4715,6 +4742,73 @@ app.post("/api/admin/rooms/delete", (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete All Rooms (Admin bamep only, keeps master bamep room)
+app.post("/api/admin/rooms/delete-all", (req, res) => {
+  try {
+    const result = deleteAllRooms(true);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error || "Не удалось удалить комнаты" });
+    }
+    res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clear entire room data endpoint (called from Settings -> "Очистить комнату")
+app.post("/api/room/clear", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+    const { canonicalId, aliases } = getRoomAliases(userId);
+
+    console.log(`[API] Clearing room data for user ${userId} (canonical: ${canonicalId}, aliases: ${aliases.join(', ')})`);
+
+    const collectionsToClear = [
+      'tournaments',
+      'matches',
+      'teams',
+      'players',
+      'swapOffers',
+      'tgUsers',
+      'tgVetos',
+      'mapStats',
+      'freeAgents'
+    ];
+
+    for (const col of collectionsToClear) {
+      for (const a of aliases) {
+        fallbackDb.deleteAllForUser(col, a);
+        // Also clear SO2 versions
+        if (a === 'channel_bamep_cs2') {
+          fallbackDb.deleteAllForUser(col, 'channel_bamep_so2');
+        } else if (!a.endsWith('_so2')) {
+          fallbackDb.deleteAllForUser(col, `${a}_so2`);
+        }
+      }
+      fallbackDb.deleteAllForUser(col, canonicalId);
+      if (canonicalId === 'channel_bamep_cs2') {
+        fallbackDb.deleteAllForUser(col, 'channel_bamep_so2');
+      } else if (!canonicalId.endsWith('_so2')) {
+        fallbackDb.deleteAllForUser(col, `${canonicalId}_so2`);
+      }
+      fallbackDb.deleteAllForUser(col, userId);
+    }
+
+    fallbackDb.flush();
+
+    res.json({
+      success: true,
+      message: `Комната ${canonicalId} успешно очищена`
+    });
+  } catch (err: any) {
+    console.error("Error in /api/room/clear:", err);
+    res.status(500).json({ error: err.message || "Failed to clear room" });
   }
 });
 
