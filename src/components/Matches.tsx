@@ -5,8 +5,11 @@ import { saveMatchesToLocalStorage } from '../lib/utils';
 import { Calendar, Trophy, Crosshair, Trash2 } from 'lucide-react';
 import MatchDetails from './MatchDetails';
 import TeamLogo from './TeamLogo';
+import { useGameUniverse } from '../lib/gameUniverse';
+import { getCanonicalRoomId } from './setka_tourn/storage';
 
 export default function Matches({ user }: { user: any }) {
+  const [game] = useGameUniverse();
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMatch, setSelectedMatch] = useState<any>(null);
@@ -18,12 +21,15 @@ export default function Matches({ user }: { user: any }) {
       setLoading(false);
       return;
     }
+
+    const roomId = getCanonicalRoomId(user.uid, game);
+
     const fetchMatches = async () => {
-      const deletedRaw = localStorage.getItem(`deleted_matches_${user.uid}`);
+      const deletedRaw = localStorage.getItem(`deleted_matches_${roomId}`) || localStorage.getItem(`deleted_matches_${user.uid}`);
       const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
 
       // 1. Load from localStorage immediately for high responsiveness
-      const rawLocalMatches = JSON.parse(localStorage.getItem(`matches_${user.uid}`) || '[]');
+      const rawLocalMatches = JSON.parse(localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${user.uid}`) || '[]');
       const localMatches = (rawLocalMatches || [])
         .filter((m: any) => m !== null && m !== undefined)
         .map((m: any, idx: number) => ({
@@ -36,7 +42,8 @@ export default function Matches({ user }: { user: any }) {
           gameMode: m.gameMode || 'cs2',
           format: m.format || (m.bo ? `BO${m.bo}` : 'BO1')
         }))
-        .filter((m: any) => !deletedSet.has(m.id));
+        .filter((m: any) => !deletedSet.has(m.id))
+        .filter((m: any) => m.gameMode === game || (game === 'cs2' && m.gameMode === 'csgo')); // filter by active world
 
       setMatches(localMatches.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setLoading(false);
@@ -45,12 +52,12 @@ export default function Matches({ user }: { user: any }) {
         if (user.isLocalDemo) {
           return;
         }
-        const q = query(collection(db, 'matches'), where('userId', '==', user.uid), orderBy('date', 'desc'), limit(150));
+        const q = query(collection(db, 'matches'), where('userId', '==', roomId), orderBy('date', 'desc'), limit(150));
         const qs = await getDocs(q);
         
         let allDocs = qs.docs;
         if (allDocs.length === 0) {
-          const qChannel = query(collection(db, 'matches'), where('channelId', '==', user.uid), orderBy('date', 'desc'), limit(150));
+          const qChannel = query(collection(db, 'matches'), where('channelId', '==', roomId), orderBy('date', 'desc'), limit(150));
           const qsChannel = await getDocs(qChannel);
           allDocs = qsChannel.docs;
         }
@@ -70,12 +77,13 @@ export default function Matches({ user }: { user: any }) {
             };
           })
           .filter((m: any) => m && m.id && !deletedSet.has(m.id))
+          .filter((m: any) => m.gameMode === game || (game === 'cs2' && m.gameMode === 'csgo')) // filter by active world
           .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         if (dbMatches.length > 0 || localMatches.length === 0) {
           setMatches(dbMatches);
           try {
-            saveMatchesToLocalStorage(user.uid, dbMatches);
+            saveMatchesToLocalStorage(roomId, dbMatches);
           } catch (e) {}
         }
       } catch (e) {
@@ -93,22 +101,23 @@ export default function Matches({ user }: { user: any }) {
     return () => {
       window.removeEventListener('db-user-updated', handleDbUpdated);
     };
-  }, [user]);
+  }, [user, game]);
 
   const handleDelete = async (matchId: string) => {
     if (!matchId) return;
+    const roomId = getCanonicalRoomId(user.uid, game);
 
     // 1. Mark in deleted_matches set immediately
-    const deletedRaw = localStorage.getItem(`deleted_matches_${user.uid}`);
+    const deletedRaw = localStorage.getItem(`deleted_matches_${roomId}`) || localStorage.getItem(`deleted_matches_${user.uid}`);
     const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
     deletedSet.add(matchId);
     try {
-      localStorage.setItem(`deleted_matches_${user.uid}`, JSON.stringify(Array.from(deletedSet)));
+      localStorage.setItem(`deleted_matches_${roomId}`, JSON.stringify(Array.from(deletedSet)));
     } catch (e) {}
 
     // 2. Filter local state and save to localStorage
     const filtered = matches.filter(m => m.id !== matchId && m._id !== matchId);
-    saveMatchesToLocalStorage(user.uid, filtered);
+    saveMatchesToLocalStorage(roomId, filtered);
     setMatches(filtered);
     setConfirmingDelete(null);
     if (selectedMatch?.id === matchId || selectedMatch?._id === matchId) {
@@ -122,7 +131,7 @@ export default function Matches({ user }: { user: any }) {
     try {
       try {
         const { migrateMatchesToMapStats } = await import('../lib/mapStats');
-        migrateMatchesToMapStats(user.uid, matches);
+        migrateMatchesToMapStats(roomId, matches);
       } catch (e) {}
 
       // Delete from Firestore / Local DB
@@ -132,14 +141,14 @@ export default function Matches({ user }: { user: any }) {
       await fetch('/api/matches/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, matchId })
+        body: JSON.stringify({ userId: roomId, matchId })
       }).catch(() => {});
 
       // Sync updated array with server
       await fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, matches: filtered })
+        body: JSON.stringify({ userId: roomId, matches: filtered })
       }).catch(() => {});
     } catch (e) {
       console.warn("Match deletion backend sync:", e);
@@ -147,19 +156,21 @@ export default function Matches({ user }: { user: any }) {
   };
 
   const handleDeleteAll = async () => {
+    const roomId = getCanonicalRoomId(user.uid, game);
+
     // 1. Mark all existing match IDs as deleted
-    const deletedRaw = localStorage.getItem(`deleted_matches_${user.uid}`);
+    const deletedRaw = localStorage.getItem(`deleted_matches_${roomId}`) || localStorage.getItem(`deleted_matches_${user.uid}`);
     const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
     matches.forEach(m => {
       if (m.id) deletedSet.add(m.id);
       if (m._id) deletedSet.add(m._id);
     });
     try {
-      localStorage.setItem(`deleted_matches_${user.uid}`, JSON.stringify(Array.from(deletedSet)));
+      localStorage.setItem(`deleted_matches_${roomId}`, JSON.stringify(Array.from(deletedSet)));
     } catch (e) {}
 
     // 2. Clear localStorage and local state immediately
-    saveMatchesToLocalStorage(user.uid, []);
+    saveMatchesToLocalStorage(roomId, []);
     setMatches([]);
     setConfirmingDeleteAll(false);
     setSelectedMatch(null);
@@ -172,18 +183,18 @@ export default function Matches({ user }: { user: any }) {
       // Migrate matches to map stats so maps winrate data is preserved separately forever
       try {
         const { migrateMatchesToMapStats } = await import('../lib/mapStats');
-        migrateMatchesToMapStats(user.uid, matches);
+        migrateMatchesToMapStats(roomId, matches);
       } catch (migrateErr) {
         console.error("Migration during delete all failed", migrateErr);
       }
 
       if (!user.isLocalDemo) {
         // Delete all matches from Firestore for this user
-        const q1 = query(collection(db, 'matches'), where('userId', '==', user.uid));
+        const q1 = query(collection(db, 'matches'), where('userId', '==', roomId));
         const qs1 = await getDocs(q1);
         const batchPromises1 = qs1.docs.map(d => deleteDoc(doc(db, 'matches', d.id)));
 
-        const q2 = query(collection(db, 'matches'), where('channelId', '==', user.uid));
+        const q2 = query(collection(db, 'matches'), where('channelId', '==', roomId));
         const qs2 = await getDocs(q2);
         const batchPromises2 = qs2.docs.map(d => deleteDoc(doc(db, 'matches', d.id)));
 
@@ -191,13 +202,13 @@ export default function Matches({ user }: { user: any }) {
       }
 
       // Clear all matches on backend server
-      await fetch(`/api/matches/clear/${user.uid}`, { method: 'POST' }).catch(() => {});
+      await fetch(`/api/matches/clear/${roomId}`, { method: 'POST' }).catch(() => {});
 
       // Sync empty array to server
       await fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, matches: [] })
+        body: JSON.stringify({ userId: roomId, matches: [] })
       }).catch(() => {});
     } catch (e) {
       console.warn("Delete all matches backend sync:", e);
@@ -224,7 +235,7 @@ export default function Matches({ user }: { user: any }) {
           <div>
             <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 uppercase tracking-widest flex items-center gap-3">
               <Calendar className="text-blue-400" />
-              История матчей
+              История матчей ({game === 'so2' ? 'SO2' : 'CS2'})
             </h1>
             <p className="text-white/60 text-sm mt-2 font-medium">Сводка по всем симулированным играм и результатам</p>
           </div>
@@ -272,7 +283,7 @@ export default function Matches({ user }: { user: any }) {
       ) : matches.length === 0 ? (
         <div className="text-white/30 p-12 text-center font-bold bg-[#12121a] rounded-2xl border border-white/5">
           <Crosshair className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          Пока нет сыгранных матчей. Перейдите в симулятор, чтобы начать!
+          Пока нет сыгранных матчей для этой дисциплины. Перейдите в симулятор, чтобы начать!
         </div>
       ) : (
         <div className="flex flex-col gap-6">
@@ -293,8 +304,8 @@ export default function Matches({ user }: { user: any }) {
                         {new Date(m.date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                          {m.gameMode === 'cs2' ? 'CS2' : 'CS:GO'}
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                          {m.gameMode === 'so2' ? 'SO2' : 'CS2'}
                         </span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/30">
                           {m.format}
@@ -329,7 +340,7 @@ export default function Matches({ user }: { user: any }) {
                       <div className={`flex-1 text-right ${t1Wins ? 'text-white font-black drop-shadow-[0_0_10px_rgba(255,143,0,0.5)]' : 'text-white/50 font-bold'}`}>
                         <div className="flex items-center justify-end gap-2.5">
                           <div className={`text-xl ${t1Wins ? 'text-[#ff8f00]' : ''}`}>{m.team1Name}</div>
-                          <TeamLogo teamName={m.team1Name} sizeClassName="w-8 h-8 text-xs" />
+                          <TeamLogo game={m.gameMode} teamName={m.team1Name} sizeClassName="w-8 h-8 text-xs" />
                         </div>
                       </div>
                       
@@ -343,7 +354,7 @@ export default function Matches({ user }: { user: any }) {
                       
                       <div className={`flex-1 text-left ${t2Wins ? 'text-white font-black drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'text-white/50 font-bold'}`}>
                         <div className="flex items-center justify-start gap-2.5">
-                          <TeamLogo teamName={m.team2Name} sizeClassName="w-8 h-8 text-xs" />
+                          <TeamLogo game={m.gameMode} teamName={m.team2Name} sizeClassName="w-8 h-8 text-xs" />
                           <div className={`text-xl ${t2Wins ? 'text-blue-400' : ''}`}>{m.team2Name}</div>
                         </div>
                       </div>

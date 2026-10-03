@@ -67,11 +67,11 @@ export function getSubclassObj(roleId: string, subclassId?: string): RoleSubclas
 
 export const DEFAULT_ROLES_S2 = [
     { id: 'rifler', name: 'Рифлер', killMultiplier: 1.03, skillMultiplier: 1.01, impact: 1.02, deathMultiplier: 0.99, assistMultiplier: 1.00 },
-    { id: 'sniper', name: 'Снайпер', killMultiplier: 1.15, skillMultiplier: 1.08, impact: 1.15, deathMultiplier: 0.85, assistMultiplier: 0.80 },
-    { id: 'lurker', name: 'Люркер', killMultiplier: 1.08, skillMultiplier: 1.04, impact: 1.10, deathMultiplier: 0.88, assistMultiplier: 0.90 },
-    { id: 'opener', name: 'Опенер', killMultiplier: 1.10, skillMultiplier: 1.06, impact: 1.25, deathMultiplier: 1.12, assistMultiplier: 1.05 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 0.96, skillMultiplier: 0.98, impact: 0.96, deathMultiplier: 1.00, assistMultiplier: 1.35 },
-    { id: 'captain', name: 'Капитан', killMultiplier: 0.98, skillMultiplier: 1.02, impact: 1.05, deathMultiplier: 1.02, assistMultiplier: 1.25 }
+    { id: 'sniper', name: 'Снайпер', killMultiplier: 1.15, skillMultiplier: 1.08, impact: 1.15, deathMultiplier: 0.85, assistMultiplier: 1.00 },
+    { id: 'lurker', name: 'Люркер', killMultiplier: 1.08, skillMultiplier: 1.04, impact: 1.10, deathMultiplier: 0.88, assistMultiplier: 1.00 },
+    { id: 'opener', name: 'Опенер', killMultiplier: 1.10, skillMultiplier: 1.06, impact: 1.25, deathMultiplier: 1.00, assistMultiplier: 1.05 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 1.00, skillMultiplier: 1.00, impact: 1.00, deathMultiplier: 1.00, assistMultiplier: 1.35 },
+    { id: 'captain', name: 'Капитан', killMultiplier: 1.00, skillMultiplier: 1.02, impact: 1.05, deathMultiplier: 1.00, assistMultiplier: 1.25 }
 ];
 
 export const DEFAULT_ROLES_CS2 = [

@@ -31,7 +31,6 @@ export default function Teams({ user }: { user: any }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [activeGame, setActiveGame] = useGameUniverse();
-  const [disciplineFilter, setDisciplineFilter] = useState<'current' | 'all' | 'cs2' | 'so2'>('current');
   
   const [selectedTeamRoster, setSelectedTeamRoster] = useState<any | null>(null);
   const [editingValRatings, setEditingValRatings] = useState<{ [playerId: string]: number }>({});
@@ -799,96 +798,6 @@ export default function Teams({ user }: { user: any }) {
             Академии
           </button>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 text-xs shadow-inner">
-            <button
-              onClick={() => { setDisciplineFilter('current'); setCurrentPage(1); }}
-              className={`px-3 py-1.5 rounded-lg font-black uppercase transition-all cursor-pointer ${
-                disciplineFilter === 'current'
-                  ? (activeGame === 'so2' ? 'bg-orange-500 text-white shadow-md' : 'bg-[#ff8f00] text-black shadow-md')
-                  : 'text-white/40 hover:text-white'
-              }`}
-              title="Фильтровать по активной дисциплине"
-            >
-              {activeGame === 'so2' ? 'Мир SO2' : 'Мир CS2'}
-            </button>
-            <button
-              onClick={() => { setDisciplineFilter('cs2'); setCurrentPage(1); }}
-              className={`px-3 py-1.5 rounded-lg font-black uppercase transition-all cursor-pointer ${
-                disciplineFilter === 'cs2'
-                  ? 'bg-[#ff8f00] text-black shadow-md'
-                  : 'text-white/40 hover:text-white'
-              }`}
-            >
-              CS2
-            </button>
-            <button
-              onClick={() => { setDisciplineFilter('so2'); setCurrentPage(1); }}
-              className={`px-3 py-1.5 rounded-lg font-black uppercase transition-all cursor-pointer ${
-                disciplineFilter === 'so2'
-                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md'
-                  : 'text-white/40 hover:text-white'
-              }`}
-            >
-              SO2
-            </button>
-            <button
-              onClick={() => { setDisciplineFilter('all'); setCurrentPage(1); }}
-              className={`px-3 py-1.5 rounded-lg font-black uppercase transition-all cursor-pointer ${
-                disciplineFilter === 'all'
-                  ? 'bg-white/20 text-white'
-                  : 'text-white/40 hover:text-white'
-              }`}
-            >
-              Все
-            </button>
-          </div>
-
-          {(activeGame === 'so2' || disciplineFilter === 'so2') && (
-            <button
-              onClick={() => {
-                const newTeamsList = [...teams];
-                const existingNames = new Set(newTeamsList.map(t => (t.name || '').toLowerCase()));
-                let added = false;
-                SO2_TEAMS.forEach(st => {
-                  if (!existingNames.has(st.name.toLowerCase())) {
-                    newTeamsList.push({
-                      id: st.id,
-                      channelId: user.uid,
-                      name: st.name,
-                      logoUrl: st.logoUrl,
-                      game: 'so2',
-                      isAcademy: false,
-                      players: st.players.map(p => ({
-                        id: p.id,
-                        nickname: p.nickname,
-                        role: p.role,
-                        rating: p.rating,
-                        valRating: p.valRating,
-                        photoUrl: p.photoUrl
-                      })),
-                      balance: 1500000,
-                      leader: '',
-                      createdAt: new Date().toISOString()
-                    });
-                    added = true;
-                  }
-                });
-                if (added) {
-                  setTeams(newTeamsList);
-                  const roomId = getCanonicalRoomId(user.uid, activeGame);
-                  safeLocalStorageSet(`teams_${user.uid}`, newTeamsList);
-                  if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, newTeamsList);
-                }
-              }}
-              className="px-3.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-[0_0_12px_rgba(249,115,22,0.15)]"
-              title="Загрузить 8 официальных команд Standoff 2 (SaiNts, Horizon, Revival, VP SO2...)"
-            >
-              <span>⚡ Загрузить команды SO2</span>
-            </button>
-          )}
-        </div>
       </div>
 
       {showAddForm && (
@@ -1091,63 +1000,17 @@ export default function Teams({ user }: { user: any }) {
       {loading ? (
         <div className="text-center p-8 text-white/50">Загрузка...</div>
       ) : (() => {
-        const effectiveGame = disciplineFilter === 'current' ? activeGame : disciplineFilter;
         const filteredTeams = teams.filter(t => {
           if (activeTab === 'academy' ? !t.isAcademy : t.isAcademy) return false;
-          if (effectiveGame === 'all') return true;
-          const isSo2 = t.game === 'so2' || /saints|horizon|revival|necessary|streeteight|bullsfight|forze so2|vp so2/i.test(t.name);
-          if (effectiveGame === 'so2') return isSo2;
-          if (effectiveGame === 'cs2') return !isSo2;
-          return true;
+          // Global world filter is already applied via roomId/fetching, but we double-check here
+          if (activeGame === 'so2') return t.discipline === 'so2' || t.game === 'so2';
+          return t.discipline !== 'so2' && t.game !== 'so2';
         });
 
         if (filteredTeams.length === 0) {
           return (
             <div className="text-center p-16 bg-[#12121a] border border-white/5 rounded-2xl text-white/30 font-bold flex flex-col items-center gap-3">
               <span>{activeTab === 'academy' ? 'В академии пока нет команд этой категории.' : 'В этой дисциплине пока нет команд.'}</span>
-              {(activeGame === 'so2' || disciplineFilter === 'so2') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const newTeamsList = [...teams];
-                    const existingNames = new Set(newTeamsList.map(t => (t.name || '').toLowerCase()));
-                    let added = false;
-                    SO2_TEAMS.forEach(st => {
-                      if (!existingNames.has(st.name.toLowerCase())) {
-                        newTeamsList.push({
-                          id: st.id,
-                          channelId: user.uid,
-                          name: st.name,
-                          logoUrl: st.logoUrl,
-                          game: 'so2',
-                          isAcademy: false,
-                          players: st.players.map(p => ({
-                            id: p.id,
-                            nickname: p.nickname,
-                            role: p.role,
-                            rating: p.rating,
-                            valRating: p.valRating,
-                            photoUrl: p.photoUrl
-                          })),
-                          balance: 1500000,
-                          leader: '',
-                          createdAt: new Date().toISOString()
-                        });
-                        added = true;
-                      }
-                    });
-                    if (added) {
-                      setTeams(newTeamsList);
-                      const roomId = getCanonicalRoomId(user.uid, activeGame);
-                      safeLocalStorageSet(`teams_${user.uid}`, newTeamsList);
-                      if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, newTeamsList);
-                    }
-                  }}
-                  className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(249,115,22,0.3)] cursor-pointer"
-                >
-                  ⚡ Загрузить 8 официальных команд Standoff 2
-                </button>
-              )}
             </div>
           );
         }

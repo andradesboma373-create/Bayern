@@ -221,25 +221,25 @@ export class RatingSystem {
     const victimWeaponWeight = this.getWeaponWeight(victim.weaponId || victim.primaryWeaponId || undefined);
     const killerWeaponWeight = this.getWeaponWeight(killer.weaponId || killer.primaryWeaponId || undefined);
 
-    let penaltyMultiplier = 0.75;
+    let penaltyMultiplier = 0.55;
 
     // Victim had AWP/Sniper and got killed by pistol/eco:
     // Blunder: threw away $4750 AWP to a pistol
     if (victimWeaponWeight > 1.2 && killerWeaponWeight < 0.6) {
-      penaltyMultiplier = 1.10;
+      penaltyMultiplier = 0.85;
     }
     // Victim had Rifle and got killed by pistol/eco:
     else if (victimWeaponWeight >= 1.0 && killerWeaponWeight < 0.6) {
-      penaltyMultiplier = 0.95;
+      penaltyMultiplier = 0.70;
     }
     // Victim had AWP/Sniper and got killed by Rifle:
     else if (victimWeaponWeight > 1.2) {
-      penaltyMultiplier = 0.85;
+      penaltyMultiplier = 0.65;
     }
     // Victim was on pure eco/pistol and died to Rifle/AWP:
     // Standard expected death on eco: smaller penalty
     else if (victimWeaponWeight < 0.6 && killerWeaponWeight >= 1.0) {
-      penaltyMultiplier = 0.40;
+      penaltyMultiplier = 0.25;
     }
 
     return Math.abs(actionSwing) * penaltyMultiplier;

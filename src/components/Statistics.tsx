@@ -5,6 +5,8 @@ import TeamLogo from './TeamLogo';
 import PlayerAvatar from './PlayerAvatar';
 import TeamProfileModal from './TeamProfileModal';
 import { Trophy, Shield, Users, ChevronLeft, ChevronRight, Award, Sparkles, Star } from 'lucide-react';
+import { useGameUniverse } from '../lib/gameUniverse';
+import { getCanonicalRoomId } from './setka_tourn/storage';
 
 interface Player {
   id: string;
@@ -12,6 +14,7 @@ interface Player {
   role: string;
   rating: number;
   valRating: number;
+  avatarUrl?: string;
 }
 
 interface Team {
@@ -22,14 +25,16 @@ interface Team {
   channelId: string;
   logoUrl?: string;
   game?: string;
+  isAcademy?: boolean;
 }
 
 export default function Statistics({ user }: { user: any }) {
+  const [game] = useGameUniverse();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTeamProfile, setSelectedTeamProfile] = useState<any | null>(null);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
 
   const fetchTeamsData = useCallback(async () => {
     if (!user) {
@@ -37,16 +42,19 @@ export default function Statistics({ user }: { user: any }) {
       return;
     }
 
+    const roomId = getCanonicalRoomId(user.uid, game);
+
     try {
       setLoading(true);
       if (user.isLocalDemo) {
         throw new Error("Local demo mode");
       }
 
-      const q = query(collection(db, 'teams'), where('channelId', '==', user.uid));
+      const q = query(collection(db, 'teams'), where('channelId', '==', roomId));
       const qs = await getDocs(q);
       const fetchedTeams = qs.docs.map(d => {
         const data = d.data();
+        if (data.isAcademy) return null;
         const players = (data.players || []) as Player[];
         const calculatedVal = players.slice(0, 5).reduce((acc, p) => acc + (p && p.id ? (p.valRating != null && String(p.valRating) !== '' ? Number(p.valRating) : 0) : 0), 0);
         
@@ -55,9 +63,11 @@ export default function Statistics({ user }: { user: any }) {
           name: data.name || 'Unknown Team',
           players: players,
           totalValRating: calculatedVal,
-          channelId: data.channelId
+          channelId: data.channelId,
+          logoUrl: data.logoUrl,
+          game: data.game
         } as Team;
-      });
+      }).filter(Boolean) as Team[];
 
       // Sort by total VAC Pts descending
       fetchedTeams.sort((a, b) => (b.totalValRating || 0) - (a.totalValRating || 0));
@@ -65,9 +75,10 @@ export default function Statistics({ user }: { user: any }) {
     } catch (e) {
       console.warn("Using localStorage fallback for teams in stats", e);
       try {
-        const localTeamsRaw = JSON.parse(localStorage.getItem(`teams_${user.uid}`) || '[]');
+        const localTeamsRaw = JSON.parse(localStorage.getItem(`teams_${roomId}`) || localStorage.getItem(`teams_${user.uid}`) || '[]');
         const fetchedTeams = localTeamsRaw.map((t: any) => {
           if (t.isAcademy) return null;
+          if (t.game && t.game !== game) return null; // Additional strict check for local storage
           const players = (t.players || []) as Player[];
           const calculatedVal = players.slice(0, 5).reduce((acc, p) => acc + (p && p.id ? (p.valRating != null && String(p.valRating) !== '' ? Number(p.valRating) : 0) : 0), 0);
           return {
@@ -75,7 +86,9 @@ export default function Statistics({ user }: { user: any }) {
             name: t.name || 'Unknown Team',
             players: players,
             totalValRating: calculatedVal,
-            channelId: t.channelId
+            channelId: t.channelId,
+            logoUrl: t.logoUrl,
+            game: t.game
           } as Team;
         }).filter(Boolean) as Team[];
         fetchedTeams.sort((a, b) => (b.totalValRating || 0) - (a.totalValRating || 0));
@@ -86,7 +99,7 @@ export default function Statistics({ user }: { user: any }) {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, game]);
 
   useEffect(() => {
     fetchTeamsData();

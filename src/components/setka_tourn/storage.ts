@@ -444,41 +444,6 @@ export const loadTournaments = (userId: string, forceReload: boolean = false): T
       tournaments.push(normalizeTournament(copy));
     }
 
-    // Ensure default SO2 Major tournament exists if no SO2 tournaments found
-    const hasSo2Tourney = tournaments.some(t => t.game === 'so2');
-    if (!hasSo2Tourney && !deletedIds.has('so2_major_spring_2026') && SO2_TEAMS && SO2_TEAMS.length > 0) {
-      const so2Teams: Team[] = SO2_TEAMS.map(tm => ({
-        id: tm.id,
-        name: tm.name,
-        logoUrl: tm.logoUrl,
-        game: 'so2'
-      }));
-      const bracket = generateSingleEliminationBracket(so2Teams);
-      const defaultSo2Tourney = normalizeTournament({
-        id: 'so2_major_spring_2026',
-        channelId: roomId,
-        game: 'so2',
-        name: 'Winline Standoff 2 Major 2026',
-        createdAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
-        status: 'active',
-        prizePool: '1,500,000 ₽',
-        settings: {
-          mode: 'single_stage',
-          stage1Type: 'playoff',
-          game: 'so2',
-          cardThemeColor: '#f97316',
-          btnStyle: 'cyber',
-          bgTheme: 'cyber_grid'
-        },
-        teams: so2Teams,
-        bracketRounds: bracket
-      });
-      tournaments.push(defaultSo2Tourney);
-      try {
-        safeLocalStorageSet(`tournament_item_${roomId}_${defaultSo2Tourney.id}`, JSON.stringify(defaultSo2Tourney));
-      } catch (e) {}
-    }
-
     memoryCache[roomId] = tournaments;
     if (userId !== roomId) {
       memoryCache[userId] = tournaments;
