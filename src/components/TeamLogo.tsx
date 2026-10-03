@@ -1,4 +1,5 @@
 import React from 'react';
+import { getAutoMatchedVectorLogo } from '../lib/logoMatcher';
 
 export interface TeamLogoProps {
   game?: 'cs2' | 's2';
@@ -39,17 +40,32 @@ export function TeamLogo({
     }
   }
 
-  if (!cleanName) {
+  const [error, setError] = React.useState(false);
+
+  if (!cleanName || error) {
     return (
       <div 
-        className={`${defaultSizeClass} flex items-center justify-center shrink-0 rounded-lg bg-black/20 border border-white/5 ${className}`}
+        className={`${defaultSizeClass} flex items-center justify-center shrink-0 rounded-lg bg-white/5 border border-white/10 ${className}`}
         style={style}
-      />
+      >
+        <span className="text-white/40 font-black text-[10px]">?</span>
+      </div>
     );
   }
 
-  let src = logoUrl || `/api/logo/${encodeURIComponent(cleanName)}?game=${game || 'cs2'}`;
-  if (logoUrl && (logoUrl.startsWith('http://') || logoUrl.startsWith('https://'))) {
+  let src = logoUrl;
+  
+  // Prioritize official auto-matched logos from /public/logos/ if no external URL or if name matches official map
+  const officialLogo = getAutoMatchedVectorLogo(cleanName);
+  if (officialLogo) {
+    src = officialLogo;
+  }
+  
+  if (!src) {
+    src = `/api/logo/${encodeURIComponent(cleanName)}?game=${game || 'cs2'}`;
+  }
+  
+  if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
     // Route external URLs through server proxy with CORS headers so canvas export won't be tainted
     src = `/api/proxy-image?url=${encodeURIComponent(logoUrl)}`;
   }
@@ -66,9 +82,7 @@ export function TeamLogo({
         crossOrigin="anonymous"
         referrerPolicy="no-referrer"
         className="max-w-full max-h-full object-contain drop-shadow-lg"
-        onError={(e) => {
-          (e.target as HTMLImageElement).style.display = 'none';
-        }}
+        onError={() => setError(true)}
       />
     </div>
   );

@@ -23,8 +23,8 @@ export const RATING_CONFIG = {
   },
 
   // Assist damage threshold: minimum damage dealt to an enemy to be credited as assist
-  ASSIST_MIN_DAMAGE: 26,
-  ASSIST_SWING_SHARE: 0.50,
+  ASSIST_MIN_DAMAGE: 50,
+  ASSIST_SWING_SHARE: 0.40,
   TRADE_SWING_BONUS: 1.45,
 
   // Objective and tactical event swing bonuses (real probability modifiers)

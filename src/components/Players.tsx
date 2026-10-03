@@ -358,23 +358,61 @@ export default function Players({ user }: { user: any }) {
 
   const handleDeletePlayer = async (id: string) => {
     const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
-    const filtered = players.filter((p: any) => p.id !== id);
-    setPlayers(filtered);
-    safeLocalStorageSet(`players_${user.uid}`, filtered);
-    if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, filtered);
+    
+    // 1. Filter out player from global players list
+    const filteredPlayers = players.filter((p: any) => p.id !== id);
+    setPlayers(filteredPlayers);
+    safeLocalStorageSet(`players_${user.uid}`, filteredPlayers);
+    if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, filteredPlayers);
 
+    // 2. Remove player from any team rosters locally
+    const teamsToUpdateDocs: string[] = [];
+    const updatedTeams = teams.map((t: any) => {
+      if (t.players && t.players.some((p: any) => p.id === id)) {
+        const newRoster = t.players.map((p: any) => p.id === id ? { id: '' } : p);
+        const totalVal = newRoster.slice(0, 5).reduce((acc: number, p: any) => acc + (p?.valRating || 0), 0);
+        if (t.id) teamsToUpdateDocs.push(t.id);
+        return { ...t, players: newRoster, totalValRating: totalVal };
+      }
+      return t;
+    });
+    
+    if (teamsToUpdateDocs.length > 0) {
+      setTeams(updatedTeams);
+      safeLocalStorageSet(`teams_${user.uid}`, updatedTeams);
+      if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
+    }
+
+    // 3. Sync to server cache
     fetch('/api/sync-cache', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: roomId, players: filtered })
+      body: JSON.stringify({ 
+        userId: roomId, 
+        players: filteredPlayers,
+        teams: updatedTeams 
+      })
     }).catch(() => {});
 
+    // 4. Update Firestore
     try {
       if (!user.isLocalDemo) {
         await deleteDoc(doc(db, 'players', id));
+        // Update teams that lost a player
+        const batch = writeBatch(db);
+        for (const tId of teamsToUpdateDocs) {
+          const tObj = updatedTeams.find(t => t.id === tId);
+          if (tObj) {
+            batch.update(doc(db, 'teams', tId), {
+              players: tObj.players,
+              totalValRating: tObj.totalValRating
+            });
+          }
+        }
+        await batch.commit();
       }
     } catch (e) {
-      console.warn("Firestore delete failed", e);
+      console.warn("Firestore delete/update failed", e);
     } finally {
       setConfirmDeleteId(null);
       window.dispatchEvent(new Event("db-user-updated"));

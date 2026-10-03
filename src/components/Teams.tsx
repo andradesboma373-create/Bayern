@@ -181,42 +181,13 @@ export default function Teams({ user }: { user: any }) {
           setTeams(currentTeams);
         }
 
-        // Also check if any tournaments exist for this room and recover any teams from them
+        // Also check if any tournaments exist for this room
         const trnRaw = localStorage.getItem(`tournaments_${user.uid}`) || localStorage.getItem(`tournaments_${roomId}`);
         if (trnRaw) {
           try {
             const trnList = JSON.parse(trnRaw);
             if (Array.isArray(trnList)) {
               setTournaments(trnList);
-              const existingNames = new Set(currentTeams.map((tm: any) => (tm.name || '').trim().toLowerCase()));
-              let addedAny = false;
-              for (const tourney of trnList) {
-                if (tourney && Array.isArray(tourney.teams)) {
-                  for (const tt of tourney.teams) {
-                    if (tt && tt.name && !existingNames.has(tt.name.trim().toLowerCase())) {
-                      const newTId = tt.id ? ('t_' + tt.id) : ('t_custom_' + Math.random().toString(36).slice(2, 8));
-                      currentTeams.push({
-                        id: newTId,
-                        name: tt.name.trim(),
-                        channelId: roomId,
-                        userId: roomId,
-                        isAcademy: false,
-                        players: [],
-                        balance: 0,
-                        leader: '',
-                        createdAt: new Date().toISOString()
-                      });
-                      existingNames.add(tt.name.trim().toLowerCase());
-                      addedAny = true;
-                    }
-                  }
-                }
-              }
-              if (addedAny) {
-                setTeams([...currentTeams]);
-                safeLocalStorageSet(`teams_${user.uid}`, currentTeams);
-                if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, currentTeams);
-              }
             }
           } catch (e) {}
         }

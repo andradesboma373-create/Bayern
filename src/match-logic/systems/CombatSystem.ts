@@ -94,13 +94,12 @@ export class CombatSystem {
     // In competitive CS2, trailing teams use timeouts and adapt tactically
     if (shooterTeam && targetTeam) {
       const scoreDiff = shooterTeam.score - targetTeam.score; // negative means shooter's team is trailing
-      const profile = state.formatProfile || { swingMultiplier: 1.0, momentumWeight: 1.0 };
       
       if (scoreDiff <= -3) {
-        // Trailing team tactical timeout & reset (amplified by format swing / comeback multiplier)
+        // Trailing team tactical timeout & reset
         const trailingAmount = Math.min(6, Math.abs(scoreDiff));
-        effectiveAim += trailingAmount * 0.5 * profile.swingMultiplier;
-        effectiveIq += trailingAmount * 0.4 * profile.swingMultiplier;
+        effectiveAim += trailingAmount * 0.5; // subtle +1.5 to +3.0 max
+        effectiveIq += trailingAmount * 0.4;
       }
       
       // Clutch moment: 1vX situation boosts high-IQ / clutch star players
@@ -108,10 +107,10 @@ export class CombatSystem {
       const targetTeamAlive = Object.values(state.players).filter(p => p.teamId === target.teamId && p.alive).length;
       if (shooterTeamAlive === 1 && targetTeamAlive >= 1) {
         if ((shooter.iq || 100) > 105) {
-          effectiveAim += 4 * profile.swingMultiplier; // Clutch gene for stars scaled with format
+          effectiveAim += 4; // Clutch gene for stars
         }
         if (shooter.perk?.clutchBonus) {
-          effectiveAim += shooter.perk.clutchBonus * 20 * profile.swingMultiplier; // Explicit individual clutch perk boost
+          effectiveAim += shooter.perk.clutchBonus * 20; // Explicit individual clutch perk boost
         }
       }
     }
@@ -120,10 +119,10 @@ export class CombatSystem {
     const targetIqRatio = Math.max(0.10, effectiveIq / 100);
     const progress = Math.min(1.0, Math.max(0.50, shooter.aimProgress || 0.75));
     
-    let hitChance = 0.46 + (aimRatio - 1.0) * 0.22 * progress;
+    let hitChance = 0.42 + (aimRatio - 1.0) * 0.20 * progress;
     if (weapon.type === 'SNIPER') {
         // High accuracy for scoped snipers holding angles or distance
-        hitChance = 0.90 + (aimRatio - 1.0) * 0.12 * Math.max(0.80, progress);
+        hitChance = 0.88 + (aimRatio - 1.0) * 0.10 * Math.max(0.80, progress);
         hitChance *= (weapon.accuracy / 100);
         if (dist < 15) {
             // Close range un-scoped penalty
@@ -138,7 +137,7 @@ export class CombatSystem {
     
     // Target defensive movement / IQ positioning: high movement and IQ help evade incoming fire
     const targetMoveRatio = Math.max(0.10, (target.movement || 100) / 100);
-    const targetEvasion = Math.max(0.75, Math.min(1.25, 1.0 - (targetIqRatio - 1.0) * 0.06 - (targetMoveRatio - 1.0) * 0.05));
+    const targetEvasion = Math.max(0.65, Math.min(1.35, 1.0 - (targetIqRatio - 1.0) * 0.10 - (targetMoveRatio - 1.0) * 0.08));
     hitChance *= targetEvasion;
     
     // Stationary / angle holding advantage
@@ -324,8 +323,7 @@ export class CombatSystem {
 
         // Round Swing calculation
         const pWinAfterKiller = RatingSystem.calculateWinProbability(state, shooter.teamId);
-        const formatSwingMult = state.formatProfile?.swingMultiplier || 1.0;
-        const actionSwing = RatingSystem.calculateActionSwing(pWinBeforeKiller, pWinAfterKiller, shooter, target, isOpeningKill, isTrade, formatSwingMult);
+        const actionSwing = RatingSystem.calculateActionSwing(pWinBeforeKiller, pWinAfterKiller, shooter, target, isOpeningKill, isTrade);
 
         // Track potential clutch situation after this death
         const targetTeamAlive = Object.values(state.players).filter(p => p && p.alive && p.teamId === target.teamId);

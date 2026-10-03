@@ -853,8 +853,8 @@ app.get('/api/logo/:name', (req, res) => {
     res.sendFile(foundPath);
   } else {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-      <rect width="100" height="100" rx="20" ry="20" fill="rgba(0,0,0,0.2)" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>
-      <text x="50" y="50" dominant-baseline="central" text-anchor="middle" font-family="sans-serif" font-size="45" font-weight="900" fill="#ffffff">?</text>
+      <rect width="100" height="100" rx="20" ry="20" fill="rgba(20,20,25,0.8)" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+      <text x="50" y="50" dominant-baseline="central" text-anchor="middle" font-family="sans-serif" font-size="40" font-weight="900" fill="rgba(255,255,255,0.4)">?</text>
     </svg>`;
     res.setHeader('Content-Type', 'image/svg+xml');
     res.send(svg);
@@ -4128,6 +4128,10 @@ app.post("/api/sync-cache", async (req, res) => {
       for (const item of currentItems) {
         if (item && item.id && !incomingIds.has(item.id)) {
           fallbackDb.delete('players', item.id);
+          // Also delete from Firestore to keep it in sync!
+          try {
+            deleteDoc(doc(db, 'players', item.id)).catch(() => {});
+          } catch (e) {}
         }
       }
       await syncCollection('players', players, 'channelId');
@@ -4142,6 +4146,10 @@ app.post("/api/sync-cache", async (req, res) => {
       for (const item of currentItems) {
         if (item && item.id && !incomingIds.has(item.id)) {
           fallbackDb.delete('teams', item.id);
+          // Also delete from Firestore
+          try {
+            deleteDoc(doc(db, 'teams', item.id)).catch(() => {});
+          } catch (e) {}
         }
       }
       await syncCollection('teams', teams, 'channelId');
@@ -4159,8 +4167,12 @@ app.post("/api/sync-cache", async (req, res) => {
         const incomingIds = new Set(matches.map(m => m.id || m._id).filter(Boolean));
         const currentMatches = fallbackDb.getAll('matches').filter(item => aliases.includes(item.channelId) || aliases.includes(item.userId));
         for (const m of currentMatches) {
-          if (m && (m.id || m._id) && !incomingIds.has(m.id || m._id)) {
-            fallbackDb.delete('matches', m.id || m._id);
+          const mId = m.id || m._id;
+          if (m && mId && !incomingIds.has(mId)) {
+            fallbackDb.delete('matches', mId);
+            try {
+              deleteDoc(doc(db, 'matches', mId)).catch(() => {});
+            } catch (e) {}
           }
         }
         await syncCollection('matches', matches, 'channelId');
@@ -4336,8 +4348,8 @@ app.get("/api/backup-data/:userId", async (req, res) => {
     let players = fallbackDb.getAll('players').filter(isRoomMatch);
     let teams = fallbackDb.getAll('teams').filter(isRoomMatch);
 
-    // Resilient Auto-recovery: If room teams or players are empty, seed or rehydrate so no room is ever empty!
-    if (teams.length === 0) {
+    // Auto-recovery: If room teams or players are empty, ONLY seed if it's really initialized for the first time
+    if (teams.length === 0 && !loadedCollections.has('teams')) {
       console.log(`Initializing default teams and players for room: ${canonicalId}`);
       const initial = getInitialRosterForRoom(canonicalId);
       teams = initial.teams;
@@ -4382,45 +4394,9 @@ app.get("/api/backup-data/:userId", async (req, res) => {
       players.forEach(p => fallbackDb.set('players', p.id, p));
     }
 
-    // Ensure all room Free Agents and Academy prospects are preserved and never disappear
-    const initialRoster = getInitialRosterForRoom(canonicalId);
-    for (const fa of initialRoster.freeAgents) {
-      const existsInPlayers = players.some(p => p && (p.id === fa.id || (p.nickname && p.nickname.toLowerCase() === fa.nickname.toLowerCase())));
-      const existsInTeams = teams.some(t => t && t.players && t.players.some((p: any) => p && (p.id === fa.id || (p.nickname && p.nickname.toLowerCase() === fa.nickname.toLowerCase()))));
-      if (!existsInPlayers && !existsInTeams) {
-        players.push(fa);
-        fallbackDb.set('players', fa.id, fa);
-      }
-    }
-
     const swapOffers = fallbackDb.getAll('swapOffers').filter(isRoomMatch);
     const tournaments = fallbackDb.getAll('tournaments').filter(isRoomMatch);
 
-    // Resilient Auto-recovery: ensure all teams created in tournaments for this room exist in teams pool
-    const existingTeamNames = new Set(teams.map(t => (t.name || '').trim().toLowerCase()));
-    for (const tourney of tournaments) {
-      if (tourney && Array.isArray(tourney.teams)) {
-        for (const tt of tourney.teams) {
-          if (tt && tt.name && !existingTeamNames.has(tt.name.trim().toLowerCase())) {
-            const newTId = tt.id ? ('t_' + tt.id) : ('t_custom_' + Math.random().toString(36).slice(2, 8));
-            const restoredTeam = {
-              id: newTId,
-              name: tt.name.trim(),
-              channelId: canonicalId,
-              userId: canonicalId,
-              isAcademy: false,
-              players: [],
-              balance: 0,
-              leader: '',
-              createdAt: new Date().toISOString()
-            };
-            teams.push(restoredTeam);
-            fallbackDb.set('teams', newTId, restoredTeam);
-            existingTeamNames.add(tt.name.trim().toLowerCase());
-          }
-        }
-      }
-    }
     const matches = fallbackDb.getAll('matches').filter(isRoomMatch);
     const tgUsers = fallbackDb.getAll('tgUsers').filter(isRoomMatch);
     const tgVetos = fallbackDb.getAll('tgVetos').filter(isRoomMatch);

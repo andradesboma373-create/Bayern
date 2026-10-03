@@ -1951,6 +1951,17 @@ export default function TournamentManager({ user }: { user: any }) {
                       zoom: isExporting ? '100%' : `${activeTournament.settings.bracketScale || 100}%`
                   }}
               >
+                  {/* Hidden preloader for background image to ensure correct isBgLoaded state */}
+                  {bgImage && (
+                    <img 
+                      src={bgImage} 
+                      className="hidden" 
+                      onLoad={() => setIsBgLoaded(true)} 
+                      onError={() => setIsBgLoaded(true)} // Still show theme/overlay if image fails
+                      alt="" 
+                    />
+                  )}
+
                   {/* Background Layer (Custom Image or Theme) with Zero Delay & Smooth Transition */}
                   {bgImage ? (
                       <>
@@ -1967,7 +1978,7 @@ export default function TournamentManager({ user }: { user: any }) {
                               style={{ 
                                   backgroundImage: `url(${bgImage})`,
                                   filter: activeTournament.settings.bgBlur ? `blur(${activeTournament.settings.bgBlur}px)` : undefined,
-                                  opacity: isBgLoaded ? 1 : 0
+                                  opacity: (isBgLoaded || isExporting) ? 1 : 0
                               }} 
                           />
                       </>
