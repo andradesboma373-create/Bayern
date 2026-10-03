@@ -38,7 +38,15 @@ export class CombatSystem {
           ? Math.min(3, Math.floor((state.round - regMax) / 6) + 1)
           : 0;
 
-        if (state.tick < (p.reactionTimer + otFatigueReactionDelay)) {
+        // Overconfidence / Confidence delay: if a team is significantly ahead in alive players (e.g. 5v1), 
+        // they might be slightly slower to react than someone fighting for survival.
+        const shooterTeamAlive = Object.values(state.players).filter(pl => pl.teamId === p.teamId && pl.alive).length;
+        const otherTeamAlive = Object.values(state.players).filter(pl => pl.teamId !== p.teamId && pl.alive).length;
+        let confidenceDelay = 0;
+        if (shooterTeamAlive >= 4 && otherTeamAlive === 1) confidenceDelay = 2;
+        else if (shooterTeamAlive >= 3 && otherTeamAlive === 1) confidenceDelay = 1;
+
+        if (state.tick < (p.reactionTimer + otFatigueReactionDelay + confidenceDelay)) {
            continue; 
         }
 
@@ -102,10 +110,15 @@ export class CombatSystem {
         effectiveIq += trailingAmount * 0.4;
       }
       
-      // Clutch moment: 1vX situation boosts high-IQ / clutch star players
+      // Clutch / Desperation moment: 1vX situation boosts star players or desperation for anyone alone
       const shooterTeamAlive = Object.values(state.players).filter(p => p.teamId === shooter.teamId && p.alive).length;
       const targetTeamAlive = Object.values(state.players).filter(p => p.teamId === target.teamId && p.alive).length;
+      
       if (shooterTeamAlive === 1 && targetTeamAlive >= 1) {
+        // Desperation boost for the last survivor
+        effectiveAim += (targetTeamAlive * 1.5); // +1.5 to +7.5 boost
+        effectiveIq += (targetTeamAlive * 1.2);
+        
         if ((shooter.iq || 100) > 105) {
           effectiveAim += 4; // Clutch gene for stars
         }
@@ -115,14 +128,30 @@ export class CombatSystem {
       }
     }
     
-    const aimRatio = Math.max(0.10, effectiveAim / 100);
-    const targetIqRatio = Math.max(0.10, effectiveIq / 100);
+    // Rating Compression: dramatically reduce the impact of high/low ratings to keep stats "static"
+    // as requested by the user. Everyone should perform closer to the average.
+    const baseAimRatio = Math.max(0.10, effectiveAim / 100);
+    const aimRatio = 1.0 + (baseAimRatio - 1.0) * 0.30; 
+    
+    const baseIqRatio = Math.max(0.10, effectiveIq / 100);
+    const targetIqRatio = 1.0 + (baseIqRatio - 1.0) * 0.25;
+
     const progress = Math.min(1.0, Math.max(0.50, shooter.aimProgress || 0.75));
     
-    let hitChance = 0.42 + (aimRatio - 1.0) * 0.20 * progress;
+    // Higher baseline hit chance to ensure more deaths per round
+    let hitChance = 0.55 + (aimRatio - 1.0) * 0.15 * progress;
+    if (state.game === 'so2') hitChance += 0.05;
+
+    // Kill Saturation / Participation Limiter:
+    // If a player has already killed multiple enemies this round, give them a slight 
+    // fatigue/recoil penalty to allow teammates to participate in the round.
+    const roundKills = (shooter as any).roundKills || 0;
+    if (roundKills >= 1) {
+      hitChance *= (1.0 - (Math.min(3, roundKills) * 0.15)); // -15% for 1st kill, -30% for 2nd kill etc.
+    }
     if (weapon.type === 'SNIPER') {
         // High accuracy for scoped snipers holding angles or distance
-        hitChance = 0.88 + (aimRatio - 1.0) * 0.10 * Math.max(0.80, progress);
+        hitChance = 0.92 + (aimRatio - 1.0) * 0.15 * Math.max(0.80, progress);
         hitChance *= (weapon.accuracy / 100);
         if (dist < 15) {
             // Close range un-scoped penalty
@@ -137,7 +166,7 @@ export class CombatSystem {
     
     // Target defensive movement / IQ positioning: high movement and IQ help evade incoming fire
     const targetMoveRatio = Math.max(0.10, (target.movement || 100) / 100);
-    const targetEvasion = Math.max(0.65, Math.min(1.35, 1.0 - (targetIqRatio - 1.0) * 0.10 - (targetMoveRatio - 1.0) * 0.08));
+    const targetEvasion = Math.max(0.75, Math.min(1.25, 1.0 - (targetIqRatio - 1.0) * 0.06 - (targetMoveRatio - 1.0) * 0.04));
     hitChance *= targetEvasion;
     
     // Stationary / angle holding advantage
@@ -192,7 +221,7 @@ export class CombatSystem {
         const utilityMult = Math.max(0.6, (shooter.utility || 100) / 100);
         const nadeHitChance = Math.min(0.60, 0.35 * utilityMult);
         if (this.random() < nadeHitChance) {
-            const nadeDamage = Math.floor((12 + this.random() * 16) * utilityMult);
+            const nadeDamage = Math.floor((25 + this.random() * 25) * utilityMult);
             const actualNade = Math.min(target.hp - 1, nadeDamage);
             if (actualNade > 0) {
                 target.hp -= actualNade;
@@ -242,19 +271,39 @@ export class CombatSystem {
       });
       
       if (target.hp <= 0 && target.alive) {
-        // Mutual spray / return duel damage: Only in close/medium spray duels when target was actively aiming
-        if (target.state === 'ENGAGING' && shooter.hp > 15 && weapon.type !== 'SNIPER' && dist < 1400 && (target.aimProgress || 0) > 0.70) {
+        // Mutual spray / return duel damage: Higher chance to trade or at least deal damage back
+        if (target.state === 'ENGAGING' && shooter.hp > 5 && (target.aimProgress || 0) > 0.50) {
           const targetWeapon = WEAPONS[target.weaponId] || WEAPONS['glock'];
-          if (targetWeapon.type !== 'KNIFE' && targetWeapon.type !== 'SNIPER') {
-            const returnHitChance = 0.38 * (targetWeapon.accuracy / 100);
+          if (targetWeapon.type !== 'KNIFE') {
+            const returnHitChance = 0.65 * (targetWeapon.accuracy / 100);
             if (this.random() < returnHitChance) {
-              const returnDmg = Math.floor(Math.min(shooter.hp - 1, (targetWeapon.damage * 0.65) + this.random() * 8));
+              const isHs = this.random() < 0.20;
+              const returnDmg = isHs 
+                ? Math.floor(Math.min(shooter.hp, targetWeapon.damage * 3))
+                : Math.floor(Math.min(shooter.hp, (targetWeapon.damage * 0.85) + this.random() * 20));
+              
               if (returnDmg > 0) {
                 shooter.hp -= returnDmg;
                 target.statistics.damage += returnDmg;
                 (target as any).roundDamageDealt = ((target as any).roundDamageDealt || 0) + returnDmg;
                 if (!shooter.damageTaken) shooter.damageTaken = new Map();
                 shooter.damageTaken.set(target.id, (shooter.damageTaken.get(target.id) || 0) + returnDmg);
+
+                if (shooter.hp <= 0 && shooter.alive) {
+                  shooter.alive = false;
+                  shooter.state = 'DEAD';
+                  shooter.hp = 0;
+                  target.statistics.kills++;
+                  (target as any).roundKills = ((target as any).roundKills || 0) + 1;
+                  shooter.statistics.deaths++;
+                  if (isHs) target.statistics.headshots++;
+                  
+                  state.events.push({
+                    type: 'PLAYER_KILLED',
+                    tick: state.tick,
+                    data: { killerId: target.id, victimId: shooter.id, isHeadshot: isHs }
+                  });
+                }
               }
             }
           }

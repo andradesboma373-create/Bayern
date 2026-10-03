@@ -202,7 +202,8 @@ export class RatingSystem {
       contextMultiplier *= (RATING_CONFIG.TRADE_SWING_BONUS || 1.15);
     }
 
-    return rawDelta * contextMultiplier;
+    // Cap the action swing at 8% (0.08) as requested by the user
+    return Math.min(0.08, rawDelta * contextMultiplier);
   }
 
   /**
@@ -242,7 +243,9 @@ export class RatingSystem {
       penaltyMultiplier = 0.25;
     }
 
-    return Math.abs(actionSwing) * penaltyMultiplier;
+    const penalty = Math.abs(actionSwing) * penaltyMultiplier;
+    // Cap the victim penalty at 8% (0.08) as requested
+    return Math.min(0.08, penalty);
   }
 
   /**
@@ -404,18 +407,26 @@ export class RatingSystem {
       w.KPR_COEFFICIENT * kpr -
       w.DPR_PENALTY * dpr +
       w.ADR_COEFFICIENT * adr +
-      0.18 * impact +
+      0.15 * impact +
       w.SWING_COEFFICIENT * effectiveSwing +
       w.MULTI_KILL_COEFFICIENT * multiKillFactor +
       w.CLUTCH_COEFFICIENT * clutchFactor +
       w.OPENING_COEFFICIENT * openingFactor;
 
-    // Safeguards: ensure realistic limits (0.00 to 4.50)
-    computedRating = Math.max(0.00, Math.min(4.50, computedRating));
+    // Static Stats Dampening: reduce the variance of the final rating
+    // This keeps most ratings in the 0.70 - 1.40 range even with high KPR
+    if (computedRating > 1.20) {
+      computedRating = 1.20 + (computedRating - 1.20) * 0.40;
+    } else if (computedRating < 0.80) {
+      computedRating = 0.80 - (0.80 - computedRating) * 0.40;
+    }
+
+    // Safeguards: ensure realistic limits (0.10 to 2.50)
+    computedRating = Math.max(0.10, Math.min(2.50, computedRating));
 
     return {
       rating: Number(computedRating.toFixed(2)),
-      impact,
+      impact: Number(Math.min(2.0, impact).toFixed(2)),
       roundSwing: Number(avgRoundSwing.toFixed(2)),
       totalSwing: Number(finalSwingNum.toFixed(4)),
       kast: Number(kast.toFixed(1)),

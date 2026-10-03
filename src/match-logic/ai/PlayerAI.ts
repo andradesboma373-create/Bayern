@@ -272,10 +272,10 @@ export class PlayerAI {
             const bombNode = state.bomb.nodeId || 'a_site';
             if (p.currentNodeId === bombNode) {
                 p.state = 'HOLDING';
-                p.actionTimer = state.tick + 60;
+                p.actionTimer = state.tick + 45;
             } else if (MapSystem.hasLineOfSight(p.currentNodeId, bombNode)) {
                 p.state = 'HOLDING';
-                p.actionTimer = state.tick + 60;
+                p.actionTimer = state.tick + 45;
             } else {
                 this.routeTo(p, bombNode);
             }
@@ -316,7 +316,7 @@ export class PlayerAI {
                 const lurkHoldNode = (team.strategy === 'EXECUTE_B' || team.strategy === 'MID_SPLIT_B') ? 'a_main' : 'b_apps';
                 if (p.currentNodeId === lurkHoldNode) {
                     p.state = 'HOLDING';
-                    p.actionTimer = state.tick + 25;
+                    p.actionTimer = state.tick + 20;
                 } else {
                     this.routeTo(p, lurkHoldNode);
                 }
@@ -341,7 +341,7 @@ export class PlayerAI {
 
             if (p.currentNodeId === sniperTarget) {
                 p.state = 'HOLDING';
-                p.actionTimer = state.tick + 35;
+                p.actionTimer = state.tick + 30;
             } else {
                 this.routeTo(p, sniperTarget);
             }
@@ -384,7 +384,7 @@ export class PlayerAI {
 
             if (p.currentNodeId === defaultSpot) {
                 p.state = 'HOLDING';
-                p.actionTimer = state.tick + 30;
+                p.actionTimer = state.tick + 25;
             } else {
                 this.routeTo(p, defaultSpot);
             }
@@ -466,7 +466,7 @@ export class PlayerAI {
         // CT Defense positions based on team strategy (Stacking, Mid control, or Balanced default)
         if (p.currentNodeId === 'a_site' || p.currentNodeId === 'b_site' || p.currentNodeId === 'window' || p.currentNodeId === 'jungle' || p.currentNodeId === 'short' || p.currentNodeId === 'connector') {
             p.state = 'HOLDING';
-            p.actionTimer = state.tick + 40;
+            p.actionTimer = state.tick + 30;
         } else {
             let siteToHold = 'a_site';
             if (team.strategy === 'STACK_A') {

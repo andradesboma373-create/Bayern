@@ -647,8 +647,8 @@ function getWeightedRandomIndex(stats: any[], teamData: any[], isCS2: boolean, r
         
         const relR = rVal / avg;
         
-        // Exponent 1.75 on relative rating ensures top-tier star players in any room scale top-frag
-        let w = Math.pow(relR, 1.75);
+        // Exponent 1.5 on relative rating ensures star players lead without extreme outliers (reduced from 1.75)
+        let w = Math.pow(relR, 1.5);
         
         // Use the defined kill multiplier for each role
         const km = getRoleKillMultiplier(teamData[i]?.role, isCS2, teamData[i]?.nickname, teamData[i]?.subclass);
@@ -810,6 +810,7 @@ export function simulateMap(
             pickedByTeam
         }
     );
+    state.game = isCS2 ? 'cs2' : 'so2';
     
     // Run simulation
     const result = MatchEngine.simulateEntireMatch(state);

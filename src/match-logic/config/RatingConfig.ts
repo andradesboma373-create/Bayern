@@ -29,20 +29,20 @@ export const RATING_CONFIG = {
 
   // Objective and tactical event swing bonuses (real probability modifiers)
   EVENT_SWING: {
-    BOMB_PLANT: 0.25,
-    BOMB_DEFUSE: 0.35,
+    BOMB_PLANT: 0.05,
+    BOMB_DEFUSE: 0.07,
     CLUTCH: {
-      '1v1': 0.40,
-      '1v2': 0.65,
-      '1v3': 0.90,
-      '1v4': 1.20,
-      '1v5': 1.60
+      '1v1': 0.02,
+      '1v2': 0.04,
+      '1v3': 0.05,
+      '1v4': 0.07,
+      '1v5': 0.08
     },
     MULTI_KILL: {
-      k2: 0.15,
-      k3: 0.35,
-      k4: 0.65,
-      k5: 1.10
+      k2: 0.02,
+      k3: 0.04,
+      k4: 0.06,
+      k5: 0.08
     }
   },
 
@@ -102,14 +102,14 @@ export const RATING_CONFIG = {
 
   // Base Rating formulation parameters (normalized to ~1.00 baseline)
   RATING_WEIGHTS: {
-    KPR_COEFFICIENT: 0.40,
-    DPR_PENALTY: 0.48,
-    ADR_COEFFICIENT: 0.0035,
-    KAST_COEFFICIENT: 0.0075,
-    SWING_COEFFICIENT: 1.8,        // Weight for average round swing contribution (HLTV 3.0 scale)
-    MULTI_KILL_COEFFICIENT: 0.08,  // Bonus for non-linear multi-kills
-    CLUTCH_COEFFICIENT: 0.12,      // Bonus for clutches won
-    OPENING_COEFFICIENT: 0.09,     // Net opening impact
-    BASE_OFFSET: 0.16              // Anchor constant
+    KPR_COEFFICIENT: 0.28,
+    DPR_PENALTY: 0.35,
+    ADR_COEFFICIENT: 0.0025,
+    KAST_COEFFICIENT: 0.0050,
+    SWING_COEFFICIENT: 1.1,        // Reduced weight for round swing
+    MULTI_KILL_COEFFICIENT: 0.05,  // Reduced bonus
+    CLUTCH_COEFFICIENT: 0.08,      // Reduced bonus
+    OPENING_COEFFICIENT: 0.06,     // Reduced bonus
+    BASE_OFFSET: 0.28              // Increased anchor to keep average near 1.0
   }
 };

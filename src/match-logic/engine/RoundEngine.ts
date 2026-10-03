@@ -225,14 +225,19 @@ export class RoundEngine {
   }
   
   static checkRoundEnd(state: MatchState) {
-    const tTeam = state.teams['t1']?.side === 'T' ? state.teams['t1'] : state.teams['t2'];
-    const ctTeam = state.teams['t1']?.side === 'CT' ? state.teams['t1'] : state.teams['t2'];
+    const teams = Object.values(state.teams);
+    if (teams.length < 2) return;
+
+    const tTeam = teams.find(t => t.side === 'T');
+    const ctTeam = teams.find(t => t.side === 'CT');
     if (!tTeam || !ctTeam) return;
     
     let tAlive = 0;
     let ctAlive = 0;
-    for (const id in state.players) {
-      const p = state.players[id];
+    const players = Object.values(state.players);
+    if (players.length === 0) return; // No players, no round end logic
+
+    for (const p of players) {
       if (p && p.alive) {
         if (p.teamId === tTeam.id) tAlive++;
         else if (p.teamId === ctTeam.id) ctAlive++;
@@ -248,11 +253,13 @@ export class RoundEngine {
         return;
     }
     
-    if (tAlive === 0 && state.bomb.state !== 'PLANTED' && state.bomb.state !== 'PLANTING' && state.bomb.state !== 'DEFUSING') {
+    // Only end by elimination if at least one team was actually present
+    const tTotal = players.filter(p => p.teamId === tTeam.id).length;
+    const ctTotal = players.filter(p => p.teamId === ctTeam.id).length;
+
+    if (tTotal > 0 && tAlive === 0 && state.bomb.state !== 'PLANTED' && state.bomb.state !== 'PLANTING' && state.bomb.state !== 'DEFUSING') {
       this.endRound(state, 'ELIMINATION');
-    } else if (ctAlive === 0) {
-      // If bomb planted, wait for explosion or defuse (but defuse is impossible with 0 CTs, so wait for explode or time)
-      // Actually if CT is 0 and bomb is planted, T wins
+    } else if (ctTotal > 0 && ctAlive === 0) {
       this.endRound(state, 'ELIMINATION');
     }
   }
@@ -329,6 +336,66 @@ export class RoundEngine {
           clutchCloser.statistics.roundSwing = (clutchCloser.statistics.roundSwing || 0) + clutchBonus;
           (clutchCloser as any).roundClutchWon = true;
           (clutchCloser as any).contributedObjectiveInRound = true;
+        }
+      }
+    }
+
+    // Exit Kills / Hunt Simulation: In winning rounds, some players of the losing team might 
+    // get a kill before dying or the winning team might lose players to bomb/hunt.
+    if (reason === 'EXPLOSION' || reason === 'DEFUSE' || reason === 'TIME') {
+      const losingTeamId = winnerId === tTeam?.id ? ctTeam?.id : tTeam?.id;
+      const winners = Object.values(state.players).filter(p => p && p.alive && p.teamId === winnerId);
+      const losers = Object.values(state.players).filter(p => p && p.alive && p.teamId === losingTeamId);
+      
+      // Bomb explosion mortality for anyone near site
+      if (reason === 'EXPLOSION') {
+        for (const p of winners) {
+          const distToBomb = MapSystem.getDistance(MapSystem.getNode(p.currentNodeId), MapSystem.getNode(state.bomb.nodeId || ''));
+          if (distToBomb < 60 && CombatSystem.random() < 0.45) {
+            p.alive = false;
+            p.hp = 0;
+            p.statistics.deaths++;
+          }
+        }
+      }
+
+      // Exit kills: surviving losers try to take someone with them
+      for (const loser of losers) {
+        if (winners.length > 0 && CombatSystem.random() < 0.35) {
+          const target = winners[Math.floor(CombatSystem.random() * winners.length)];
+          if (target && target.alive) {
+            target.alive = false;
+            target.hp = 0;
+            target.statistics.deaths++;
+            loser.statistics.kills++;
+            (loser as any).roundKills = ((loser as any).roundKills || 0) + 1;
+            
+            state.events.push({
+              type: 'PLAYER_KILLED',
+              tick: state.tick,
+              data: { killerId: loser.id, victimId: target.id, isHeadshot: CombatSystem.random() < 0.2 }
+            });
+          }
+        }
+      }
+
+      // Hunt simulation: Winners hunt the saving losers
+      for (const loser of losers) {
+        if (winners.length >= 3 && loser.alive && CombatSystem.random() < 0.30) {
+          loser.alive = false;
+          loser.hp = 0;
+          loser.statistics.deaths++;
+          const killer = winners[Math.floor(CombatSystem.random() * winners.length)];
+          if (killer) {
+            killer.statistics.kills++;
+            (killer as any).roundKills = ((killer as any).roundKills || 0) + 1;
+            
+            state.events.push({
+              type: 'PLAYER_KILLED',
+              tick: state.tick,
+              data: { killerId: killer.id, victimId: loser.id, isHeadshot: CombatSystem.random() < 0.25 }
+            });
+          }
         }
       }
     }

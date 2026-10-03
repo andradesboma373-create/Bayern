@@ -56,6 +56,7 @@ export class MapSystem {
   }
   
   static getDistance(n1: MapNode, n2: MapNode): number {
+    if (!n1 || !n2) return 999; // Far away if invalid
     return Math.hypot(n1.x - n2.x, n1.y - n2.y);
   }
   
