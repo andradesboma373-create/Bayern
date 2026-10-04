@@ -5,6 +5,7 @@ import TeamLogo from '../TeamLogo';
 import PlayerAvatar from '../PlayerAvatar';
 import { loadTournaments, saveTournament } from './storage';
 import { RatingSystem } from '../../match-logic/systems/RatingSystem';
+import { getKdColorClass } from '../../lib/utils';
 
 interface Props {
   user: any;
@@ -399,7 +400,7 @@ export default function MvpModal({ user, tournamentId, onClose }: Props) {
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-white/40 uppercase">K/D</div>
-                      <div className="text-lg font-black text-white">{mvpPlayer.kd.toFixed(2)}</div>
+                      <div className={`text-lg font-black ${getKdColorClass(mvpPlayer.kd)}`}>{mvpPlayer.kd.toFixed(2)}</div>
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-white/40 uppercase">ADR</div>
@@ -458,7 +459,7 @@ export default function MvpModal({ user, tournamentId, onClose }: Props) {
                             </div>
                             <div>
                               <div className="text-white/40">K/D</div>
-                              <div className="font-bold text-white">{evpPlayer.kd.toFixed(2)}</div>
+                              <div className={`font-bold ${getKdColorClass(evpPlayer.kd)}`}>{evpPlayer.kd.toFixed(2)}</div>
                             </div>
                             <div>
                               <div className="text-white/40">ADR</div>

@@ -223,3 +223,39 @@ export function saveMatchesToLocalStorage(userId: string, matchesArray: any[]) {
     }
   }
 }
+
+/**
+ * Color styling for K/D ratio:
+ * - > 1.10: green (text-emerald-400 font-bold)
+ * - < 0.95: red (text-red-400 font-bold)
+ * - 0.95 - 1.10: gray (text-white/60 font-medium)
+ */
+export function getKdColorClass(kd: number | string | undefined | null): string {
+  if (kd === undefined || kd === null || kd === '' || kd === '-') return 'text-white/50 font-mono text-xs';
+  const val = typeof kd === 'number' ? kd : parseFloat(String(kd));
+  if (isNaN(val)) return 'text-white/50 font-mono text-xs';
+  if (val > 1.10) return 'text-emerald-400 font-bold';
+  if (val < 0.95) return 'text-red-400 font-bold';
+  return 'text-white/60 font-medium';
+}
+
+/**
+ * Color styling for Round Swing:
+ * - > 1.0% (больше единицы): green (text-emerald-400 font-bold)
+ * - < -1.0% (меньше минус единицы): red (text-red-400 font-bold)
+ * - в пределах единицы (-1.0% .. 1.0% / "единичка"): gray (text-white/50 font-medium)
+ */
+export function getSwingColorClass(swing: number | string | undefined | null): string {
+  if (swing === undefined || swing === null || swing === '' || swing === '-') return 'text-white/50 font-mono text-xs';
+  let val: number;
+  if (typeof swing === 'number') {
+    val = swing;
+  } else {
+    const cleaned = String(swing).replace(/%/g, '').replace(/\+/g, '').trim();
+    val = parseFloat(cleaned);
+  }
+  if (isNaN(val)) return 'text-white/50 font-mono text-xs';
+  if (val > 1.0) return 'text-emerald-400 font-bold';
+  if (val < -1.0) return 'text-red-400 font-bold';
+  return 'text-white/50 font-medium';
+}

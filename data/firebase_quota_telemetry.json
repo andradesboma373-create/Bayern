@@ -1,17 +1,17 @@
 {
   "date": "2026-10-04",
-  "readsToday": 4812,
-  "writesToday": 3320,
+  "readsToday": 5432,
+  "writesToday": 3576,
   "maxReads": 50000,
   "maxWrites": 20000,
-  "remainingReads": 45188,
-  "remainingWrites": 16680,
-  "percentReads": 9.62,
-  "percentWrites": 16.6,
-  "percentReadsFormatted": "9.62%",
-  "percentWritesFormatted": "16.60%",
-  "lastUpdated": "2026-10-04T10:55:42.690Z",
-  "lastSyncWithFirestore": "2026-10-04T10:55:42.690Z",
+  "remainingReads": 44568,
+  "remainingWrites": 16424,
+  "percentReads": 10.86,
+  "percentWrites": 17.88,
+  "percentReadsFormatted": "10.86%",
+  "percentWritesFormatted": "17.88%",
+  "lastUpdated": "2026-10-04T12:35:18.973Z",
+  "lastSyncWithFirestore": "2026-10-04T12:35:19.025Z",
   "firestoreConnected": true,
   "firestoreDatabaseId": "ai-studio-matchsimulator-cf882484-249e-4726-9c8b-046071d33a59",
   "projectId": "conductive-state-tf6jr",
@@ -25,28 +25,28 @@
   },
   "roomActivity": {
     "channel_bamep_cs2": {
-      "writes": 1147,
-      "lastActive": "2026-10-04T10:55:37.182Z",
-      "reads": 2892
+      "reads": 3309,
+      "lastActive": "2026-10-04T12:35:16.971Z",
+      "writes": 1163
     },
     "channel_airy": {
-      "reads": 0,
       "writes": 0,
-      "lastActive": "2026-10-04T03:31:03.460Z"
+      "lastActive": "2026-10-04T03:31:03.460Z",
+      "reads": 0
     },
     "channel_simu": {
-      "reads": 0,
       "lastActive": "2026-10-04T03:31:03.460Z",
-      "writes": 0
+      "writes": 0,
+      "reads": 0
     },
     "channel_bamep_so2": {
-      "reads": 9,
       "lastActive": "2026-10-04T07:54:39.508Z",
-      "writes": 0
+      "writes": 0,
+      "reads": 9
     },
     "channel_bam": {
-      "writes": 1245,
       "lastActive": "2026-10-03T10:14:13.399Z",
+      "writes": 1245,
       "reads": 63
     }
   }

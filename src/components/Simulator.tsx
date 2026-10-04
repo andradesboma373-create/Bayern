@@ -10,7 +10,7 @@ import { simulateMatchSeries, MAP_POOL_CS2, MAP_POOL_S2 } from '../lib/simulatio
 import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { simulationPerf } from '../lib/simulationPerformance';
 import VetoModal from "./VetoModal";
-import { saveMatchesToLocalStorage, safeLocalStorageSet } from '../lib/utils';
+import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass } from '../lib/utils';
 import { updateBetaTournamentMatchResult, loadTournaments, saveTournament } from './setka_tourn/storage';
 
 const DEFAULT_TEAM_T = [
@@ -1594,9 +1594,9 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
                   </td>
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{p.adr || '-'}</td>
                   {RATING_CONFIG.USE_KAST && <td className="py-2 text-center text-white/50 font-mono text-xs">{p.kast || '-'}</td>}
-                  {RATING_CONFIG.USE_SWING && <td className={`py-2 text-center font-mono text-xs ${p?.roundSwingNum > 0 || (typeof p?.roundSwing === 'string' && p.roundSwing.startsWith('+')) ? 'text-emerald-400' : (typeof p?.roundSwing === 'string' && p.roundSwing.startsWith('-')) ? 'text-red-400' : 'text-white/50'}`}>{p?.roundSwing || '-'}</td>}
+                  {RATING_CONFIG.USE_SWING && <td className={`py-2 text-center font-mono text-xs ${getSwingColorClass(p?.roundSwingNum ?? p?.roundSwing)}`}>{p?.roundSwing || '-'}</td>}
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{p.impact || '-'}</td>
-                  <td className="py-2 text-center text-white/50 font-mono text-xs">{p.kd || '-'}</td>
+                  <td className={`py-2 text-center font-mono text-xs ${getKdColorClass(p.kd)}`}>{p.kd || '-'}</td>
                   <td className="py-2 text-right font-bold text-yellow-500/80 font-mono text-sm">{p.hltvRating || '-'}</td>
                 </tr>
               );

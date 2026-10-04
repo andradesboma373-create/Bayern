@@ -110,6 +110,6 @@ export const RATING_CONFIG = {
     MULTI_KILL_COEFFICIENT: 0.05,  // Reduced bonus
     CLUTCH_COEFFICIENT: 0.08,      // Reduced bonus
     OPENING_COEFFICIENT: 0.06,     // Reduced bonus
-    BASE_OFFSET: 0.28              // Increased anchor to keep average near 1.0
+    BASE_OFFSET: 0.33              // Normalized anchor keeping average rating at exactly 1.00
   }
 };

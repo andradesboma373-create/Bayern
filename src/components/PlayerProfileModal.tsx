@@ -260,14 +260,16 @@ export default function PlayerProfileModal({
             ? (m.score2 ?? m.team2Score ?? 0)
             : (m.score1 ?? m.team1Score ?? 0);
 
-          const mKd = seriesD > 0 ? seriesK / seriesD : seriesK;
-          const mAdr = seriesR > 0 ? seriesDmg / seriesR : 0;
-          const mImpact =
-            0.8 +
-            mKd * 0.3 +
-            mAdr * 0.003 +
-            (seriesA / Math.max(seriesR, 1)) * 0.1;
-          const mRating = 0.5 + mKd * 0.35 + mAdr * 0.004 + mImpact * 0.15;
+          const mRounds = Math.max(seriesR, 1);
+          const breakdown = RatingSystem.calculatePlayerRating({
+            kills: seriesK,
+            deaths: seriesD,
+            assists: seriesA,
+            damage: seriesDmg,
+            totalRounds: mRounds
+          }, mRounds);
+          const mAdr = breakdown.adr;
+          const mRating = breakdown.rating;
 
           matchesList.push({
             id: m.id || Math.random().toString(),
@@ -337,16 +339,25 @@ export default function PlayerProfileModal({
             ? (m.score2 ?? m.team2Score ?? 0)
             : (m.score1 ?? m.team1Score ?? 0);
 
-          const mKd = seriesD > 0 ? seriesK / seriesD : seriesK;
-          const mAdr = seriesR > 0 ? seriesDmg / seriesR : 0;
-          const mImpact =
-            0.8 +
-            mKd * 0.3 +
-            mAdr * 0.003 +
-            (seriesA / Math.max(seriesR, 1)) * 0.1;
-          const mRating =
-            parseFloat(st.hltvRating) ||
-            0.5 + mKd * 0.35 + mAdr * 0.004 + mImpact * 0.15;
+          const mRounds = Math.max(seriesR, 1);
+          const breakdown = RatingSystem.calculatePlayerRating({
+            kills: seriesK,
+            deaths: seriesD,
+            assists: seriesA,
+            damage: seriesDmg,
+            totalRounds: mRounds,
+            kastRounds: st?.kastRounds,
+            roundSwing: st?.roundSwing,
+            k1: st?.k1,
+            k2: st?.k2,
+            k3: st?.k3,
+            k4: st?.k4,
+            k5: st?.k5,
+            openingKills: st?.fk || st?.openingKills,
+            openingDeaths: st?.fd || st?.openingDeaths,
+          }, mRounds);
+          const mAdr = breakdown.adr;
+          const mRating = parseFloat(st.hltvRating) || breakdown.rating;
 
           matchesList.push({
             id: m.id || Math.random().toString(),
@@ -1031,11 +1042,29 @@ export default function PlayerProfileModal({
               <div className="bg-[#161726] border border-white/10 rounded-2xl p-6 relative overflow-hidden flex flex-col items-center justify-center">
                 {/* K/D Circular Display */}
                 <div className="flex flex-col items-center justify-center relative py-2">
-                  <div className="w-36 h-36 rounded-full border-4 border-blue-500 bg-[#0c0d14] flex flex-col items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.25)] relative mb-4">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-0.5">
+                  <div className={`w-36 h-36 rounded-full border-4 ${
+                    playerStats.kd > 1.10
+                      ? 'border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.25)]'
+                      : playerStats.kd < 0.95
+                      ? 'border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.25)]'
+                      : 'border-slate-500 shadow-[0_0_30px_rgba(148,163,184,0.15)]'
+                  } bg-[#0c0d14] flex flex-col items-center justify-center relative mb-4`}>
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${
+                      playerStats.kd > 1.10
+                        ? 'text-emerald-400'
+                        : playerStats.kd < 0.95
+                        ? 'text-red-400'
+                        : 'text-slate-400'
+                    } mb-0.5`}>
                       K/D RATIO
                     </span>
-                    <span className="text-4xl font-black text-white font-mono">
+                    <span className={`text-4xl font-black ${
+                      playerStats.kd > 1.10
+                        ? 'text-emerald-400'
+                        : playerStats.kd < 0.95
+                        ? 'text-red-400'
+                        : 'text-white'
+                    } font-mono`}>
                       {playerStats.kd.toFixed(2)}
                     </span>
                   </div>
@@ -1069,19 +1098,25 @@ export default function PlayerProfileModal({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div className="bg-[#161726] border border-white/5 rounded-xl p-3.5 flex flex-col">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm font-black text-white font-mono">
+                      <span className={`text-sm font-black font-mono ${
+                        Number(playerStats.roundSwing) > 1.0
+                          ? 'text-emerald-400'
+                          : Number(playerStats.roundSwing) < -1.0
+                          ? 'text-red-400'
+                          : 'text-slate-300'
+                      }`}>
                         {Number(playerStats.roundSwing) > 0
                           ? `+${playerStats.roundSwing}%`
                           : `${playerStats.roundSwing}%`}
                       </span>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                        Number(playerStats.roundSwing) >= 2.0
+                        Number(playerStats.roundSwing) > 1.0
                           ? 'text-emerald-400 bg-emerald-500/10'
-                          : Number(playerStats.roundSwing) >= 0
-                          ? 'text-blue-400 bg-blue-500/10'
-                          : 'text-red-400 bg-red-500/10'
+                          : Number(playerStats.roundSwing) < -1.0
+                          ? 'text-red-400 bg-red-500/10'
+                          : 'text-slate-400 bg-white/5'
                       }`}>
-                        {Number(playerStats.roundSwing) >= 2.0 ? 'EXCELLENT' : Number(playerStats.roundSwing) >= 0 ? 'GOOD' : 'LOW'}
+                        {Number(playerStats.roundSwing) > 1.0 ? 'EXCELLENT' : Number(playerStats.roundSwing) < -1.0 ? 'LOW' : 'NEUTRAL'}
                       </span>
                     </div>
                     <span className="text-[10px] font-bold text-white/40 uppercase">
@@ -1089,7 +1124,7 @@ export default function PlayerProfileModal({
                     </span>
                     <div className="w-full bg-white/5 h-1.5 rounded-full mt-2 overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${Number(playerStats.roundSwing) >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
+                        className={`h-full rounded-full ${Number(playerStats.roundSwing) > 1.0 ? 'bg-emerald-500' : Number(playerStats.roundSwing) < -1.0 ? 'bg-red-500' : 'bg-slate-400'}`}
                         style={{
                           width: `${Math.min(100, Math.max(10, 50 + Number(playerStats.roundSwing) * 7))}%`,
                         }}

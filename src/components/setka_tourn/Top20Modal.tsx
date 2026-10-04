@@ -8,7 +8,9 @@ import MvpModal from './MvpModal';
 import PlayerProfileModal from '../PlayerProfileModal';
 import { loadTournaments } from './storage';
 import { db, doc, deleteDoc } from '../../firebase';
-import { saveMatchesToLocalStorage } from '../../lib/utils';
+import { saveMatchesToLocalStorage, getKdColorClass, getSwingColorClass } from '../../lib/utils';
+import { RatingSystem } from '../../match-logic/systems/RatingSystem';
+import { RATING_CONFIG } from '../../match-logic/config/RatingConfig';
 
 interface Props {
   user: any;
@@ -148,6 +150,22 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
               damage: 0,
               rounds: 0,
               mvps: 0,
+              k1: 0,
+              k2: 0,
+              k3: 0,
+              k4: 0,
+              k5: 0,
+              fk: 0,
+              fd: 0,
+              kastRounds: 0,
+              roundSwing: 0,
+              clutchesWon1v1: 0,
+              clutchesWon1v2: 0,
+              clutchesWon1v3: 0,
+              clutchesWon1v4: 0,
+              clutchesWon1v5: 0,
+              openingKillsTraded: 0,
+              openingKillsConverted: 0,
               matchIds: new Set<string>()
             });
           }
@@ -157,6 +175,30 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
           curr.deaths += (ps.deaths || ps.d || 0);
           curr.damage += (ps.damage || 0);
           curr.rounds += (ps.totalRounds || 0);
+          curr.k1 += (ps.k1 || 0);
+          curr.k2 += (ps.k2 || 0);
+          curr.k3 += (ps.k3 || 0);
+          curr.k4 += (ps.k4 || 0);
+          curr.k5 += (ps.k5 || 0);
+          curr.fk += (ps.fk || ps.openingKills || 0);
+          curr.fd += (ps.fd || ps.openingDeaths || 0);
+          curr.kastRounds += (ps.kastRounds || 0);
+          const psRounds = ps.totalRounds || 1;
+          const psSwing = typeof ps.rawRoundSwing === 'number'
+            ? ps.rawRoundSwing
+            : (typeof ps.roundSwingNum === 'number'
+              ? (ps.roundSwingNum / 100) * psRounds
+              : (typeof ps.roundSwing === 'number'
+                ? ps.roundSwing
+                : (parseFloat(String(ps.roundSwing || '0').replace(/[%+]/g, '')) / 100) * psRounds || 0));
+          curr.roundSwing += psSwing;
+          curr.clutchesWon1v1 += (ps.clutchesWon1v1 || 0);
+          curr.clutchesWon1v2 += (ps.clutchesWon1v2 || 0);
+          curr.clutchesWon1v3 += (ps.clutchesWon1v3 || 0);
+          curr.clutchesWon1v4 += (ps.clutchesWon1v4 || 0);
+          curr.clutchesWon1v5 += (ps.clutchesWon1v5 || 0);
+          curr.openingKillsTraded += (ps.openingKillsTraded || 0);
+          curr.openingKillsConverted += (ps.openingKillsConverted || 0);
           curr.matchIds.add(matchId);
         });
       };
@@ -183,20 +225,40 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
     });
     
     const arr = Array.from(playerStatsMap.values()).map(p => {
-      const kd = p.deaths === 0 ? p.kills : p.kills / p.deaths;
-      const diff = p.kills - p.deaths;
-      const adr = p.rounds > 0 ? (p.damage / p.rounds) : 0;
-      const impact = 0.8 + (kd * 0.3) + (adr * 0.003) + (p.assists / (p.rounds || 1)) * 0.1;
-      const rating = 0.5 + (kd * 0.35) + (adr * 0.004) + (impact * 0.15);
+      const rounds = Math.max(1, p.rounds);
+      const breakdown = RatingSystem.calculatePlayerRating({
+        kills: p.kills,
+        deaths: p.deaths,
+        assists: p.assists,
+        damage: p.damage,
+        totalRounds: rounds,
+        k1: p.k1,
+        k2: p.k2,
+        k3: p.k3,
+        k4: p.k4,
+        k5: p.k5,
+        openingKills: p.fk,
+        openingDeaths: p.fd,
+        openingKillsTraded: p.openingKillsTraded,
+        openingKillsConverted: p.openingKillsConverted,
+        clutchesWon1v1: p.clutchesWon1v1,
+        clutchesWon1v2: p.clutchesWon1v2,
+        clutchesWon1v3: p.clutchesWon1v3,
+        clutchesWon1v4: p.clutchesWon1v4,
+        clutchesWon1v5: p.clutchesWon1v5,
+        kastRounds: p.kastRounds > 0 ? p.kastRounds : Math.round(rounds * 0.70),
+        roundSwing: p.roundSwing
+      }, rounds);
 
       return {
         ...p,
         matchesCount: p.matchIds.size,
-        kd,
-        diff,
-        adr,
-        impact,
-        rating
+        kd: breakdown.kd,
+        diff: p.kills - p.deaths,
+        adr: breakdown.adr,
+        impact: breakdown.impact,
+        roundSwing: breakdown.roundSwing,
+        rating: breakdown.rating
       };
     });
     
@@ -346,7 +408,7 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
                     ) : (
                         <div className="flex flex-col rounded-lg overflow-hidden border border-[#2a2b3d]">
                     {/* Table Header */}
-                    <div className="grid grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem] gap-2 p-3 text-[11px] font-bold text-[#6b7280] uppercase tracking-wider bg-[#202130] items-center text-center">
+                    <div className={`grid ${RATING_CONFIG.USE_SWING ? 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem]' : 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem]'} gap-2 p-3 text-[11px] font-bold text-[#6b7280] uppercase tracking-wider bg-[#202130] items-center text-center`}>
                         <div>#</div>
                         <div className="text-left pl-2">Игрок</div>
                         <div className="text-left">Команда</div>
@@ -357,6 +419,7 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
                         <div>±</div>
                         <div>K/D</div>
                         <div>ADR</div>
+                        {RATING_CONFIG.USE_SWING && <div>Swing</div>}
                         <div>Imp</div>
                         <div className="text-[#ff8f00]">Rating</div>
                         <div>MVP</div>
@@ -368,7 +431,7 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
                             <div 
                               key={p.id} 
                               onClick={() => setSelectedProfilePlayer(p)}
-                              className={`grid grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem] gap-2 p-3 items-center border-t border-[#2a2b3d] transition-colors text-sm font-semibold text-center text-white/90 cursor-pointer ${
+                              className={`grid ${RATING_CONFIG.USE_SWING ? 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem]' : 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem]'} gap-2 p-3 items-center border-t border-[#2a2b3d] transition-colors text-sm font-semibold text-center text-white/90 cursor-pointer ${
                                 idx === 0 ? 'bg-[#ff8f00]/10 hover:bg-[#ff8f00]/20 border-l-4 border-l-[#ff8f00]' :
                                 idx === 1 ? 'bg-white/5 hover:bg-white/10 border-l-4 border-l-slate-300' :
                                 idx === 2 ? 'bg-[#cd7f32]/10 hover:bg-[#cd7f32]/20 border-l-4 border-l-[#cd7f32]' :
@@ -397,8 +460,13 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
                                 <div className={p.diff > 0 ? "text-[#34d399] font-bold" : p.diff < 0 ? "text-[#f87171]" : ""}>
                                     {p.diff > 0 ? `+${p.diff}` : p.diff}
                                 </div>
-                                <div className="text-white font-bold">{p.kd.toFixed(2)}</div>
+                                <div className={getKdColorClass(p.kd)}>{p.kd.toFixed(2)}</div>
                                 <div>{Math.round(p.adr)}</div>
+                                {RATING_CONFIG.USE_SWING && (
+                                    <div className={getSwingColorClass(p.roundSwing)}>
+                                        {p.roundSwing > 0 ? `+${p.roundSwing.toFixed(1)}%` : `${p.roundSwing.toFixed(1)}%`}
+                                    </div>
+                                )}
                                 <div>{p.impact.toFixed(2)}</div>
                                 <div className="text-[#ff8f00] font-black">{p.rating.toFixed(2)}</div>
                                 <div className="text-[#e8c07d]">{p.mvps > 0 ? p.mvps : 0}</div>

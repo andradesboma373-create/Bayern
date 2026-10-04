@@ -392,14 +392,16 @@ export class RatingSystem {
     avgRoundSwing = Math.max(-8.0, Math.min(8.0, avgRoundSwing));
 
     // HLTV Impact Rating enhanced with context swing, clutches, and multi-kills
+    // Calibrated so that an average professional player (KPR ~0.67, APR ~0.14) has an Impact Rating of ~1.00
+    // and below-average performances realistically drop below 1.10 and below 1.00.
     const rawImpact =
       2.13 * kpr +
       0.42 * apr -
-      0.41 +
-      (avgRoundSwing / 100) * 0.5 +
-      multiKillFactor * 0.25 +
-      clutchFactor * 0.35 +
-      openingFactor * 0.40;
+      0.58 +
+      (avgRoundSwing / 100) * 0.40 +
+      multiKillFactor * 0.20 +
+      clutchFactor * 0.30 +
+      openingFactor * 0.35;
     const impact = Math.max(0.00, Number(rawImpact.toFixed(2)));
 
     // Final Unified Rating formula
