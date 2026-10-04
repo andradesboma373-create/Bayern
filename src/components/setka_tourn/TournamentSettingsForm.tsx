@@ -9,6 +9,24 @@ import { safeLocalStorageSet } from '../../lib/utils';
 import { getCanonicalRoomId } from './storage';
 import So2MediaLibraryModal from '../So2MediaLibraryModal';
 
+const PRESET_TOURNAMENT_LOGOS = [
+  { id: 'blast', name: 'BLAST', url: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150&auto=format&fit=crop&q=80' },
+  { id: 'iem', name: 'IEM', url: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=150&auto=format&fit=crop&q=80' },
+  { id: 'major', name: 'Major', url: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=150&auto=format&fit=crop&q=80' },
+  { id: 'esl', name: 'ESL', url: 'https://images.unsplash.com/photo-1560253023-3ec5d502959f?w=150&auto=format&fit=crop&q=80' },
+  { id: 'starladder', name: 'StarLadder', url: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?w=150&auto=format&fit=crop&q=80' },
+  { id: 'pgl', name: 'PGL', url: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=150&auto=format&fit=crop&q=80' },
+];
+
+const CS2_MAP_BACKGROUNDS = [
+  { id: 'cs2_mirage', name: 'Mirage', url: '/maps/mirage.jpg' },
+  { id: 'cs2_dust2', name: 'Dust II', url: '/maps/dust2.jpg' },
+  { id: 'cs2_inferno', name: 'Inferno', url: '/maps/inferno.jpg' },
+  { id: 'cs2_nuke', name: 'Nuke', url: '/maps/nuke.jpg' },
+  { id: 'cs2_ancient', name: 'Ancient', url: '/maps/ancient.jpg' },
+  { id: 'cs2_anubis', name: 'Anubis', url: '/maps/anubis.jpg' },
+];
+
 interface Props {
   user?: any;
   initialName?: string;
@@ -36,6 +54,8 @@ export default function TournamentSettingsForm({
   const [logoUrl, setLogoUrl] = useState(initialLogoUrl);
   const [prizePool, setPrizePool] = useState(initialPrizePool);
   const game = (initialSettings?.game as any) || initialGame || 'cs2';
+  const [bgImage, setBgImage] = useState<string>(initialSettings?.bgImage || '');
+  const [bgTheme, setBgTheme] = useState<string>(initialSettings?.bgTheme || (game === 'cs2' ? 'cs2_mirage' : 'cyber_grid'));
   const [showSo2MediaModal, setShowSo2MediaModal] = useState(false);
   const [settings, setSettings] = useState<TournamentSettings>(initialSettings || {
     mode: 'single_stage',
@@ -374,6 +394,8 @@ export default function TournamentSettingsForm({
     const finalSettings: TournamentSettings = {
       ...settings,
       game,
+      bgImage: bgImage || undefined,
+      bgTheme: bgTheme || (game === 'cs2' ? 'cs2_mirage' : 'cyber_grid'),
       seedingType: settings.seedingType === 'random' ? 'random' : 'manual',
       groupAssignments: isGroupFormat ? groupAssignments : undefined
     };
@@ -459,10 +481,24 @@ export default function TournamentSettingsForm({
                       const formData = new FormData();
                       formData.append('file', file);
                       try {
-                        fetch('/api/upload', { method: 'POST', body: formData })
-                          .then(r => r.json())
-                          .then(d => { if (d.url) setLogoUrl(d.url); });
-                      } catch(e) {}
+                        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                        if (res.ok) {
+                          const d = await res.json();
+                          if (d && d.url) {
+                            setLogoUrl(d.url);
+                            return;
+                          }
+                        }
+                      } catch (err) {
+                        console.warn("Server upload failed, using local reader fallback", err);
+                      }
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        if (evt.target?.result) {
+                          setLogoUrl(evt.target.result as string);
+                        }
+                      };
+                      reader.readAsDataURL(file);
                     }
                   }}
                   className="hidden" 
@@ -476,6 +512,138 @@ export default function TournamentSettingsForm({
                 className="flex-1 bg-black/50 border border-white/10 px-4 py-2.5 rounded-xl text-white text-xs outline-none focus:border-[#ff8f00]/50"
                 placeholder="Или вставьте прямую ссылку (https://...)"
               />
+            </div>
+
+            {/* Quick Presets for Logos */}
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-[10px] text-white/40 uppercase font-bold">Пресеты лого:</span>
+              {PRESET_TOURNAMENT_LOGOS.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setLogoUrl(p.url)}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all border ${
+                    logoUrl === p.url ? 'bg-[#ff8f00] text-black border-[#ff8f00]' : 'bg-black/40 text-white/60 border-white/10 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tournament Background Section */}
+      <div className="bg-black/40 p-5 rounded-2xl border border-white/10 space-y-4">
+        <div className="flex items-center justify-between">
+          <label className="block text-[#ff8f00] font-black uppercase tracking-widest text-xs flex items-center gap-2">
+            <Sparkles className="w-4 h-4" /> Фон турнира (CS2 Карты / Свой фон)
+          </label>
+          <span className="text-white/40 text-xs">Выберите карту CS2 или загрузите своё фото</span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="relative shrink-0 w-24 h-16 rounded-xl overflow-hidden border border-white/20 bg-black/60 shadow-md">
+            {bgImage ? (
+              <div 
+                className="w-full h-full bg-cover bg-center" 
+                style={{ backgroundImage: `url(${bgImage})` }}
+              />
+            ) : (
+              <div 
+                className="w-full h-full bg-cover bg-center" 
+                style={{ backgroundImage: bgTheme.startsWith('cs2_') ? `url('/maps/${bgTheme.replace('cs2_', '')}.jpg')` : undefined }}
+              >
+                {!bgTheme.startsWith('cs2_') && (
+                  <div className="w-full h-full flex items-center justify-center text-[10px] text-white/40 font-bold uppercase">
+                    Кибер-сетка
+                  </div>
+                )}
+              </div>
+            )}
+            {bgImage && (
+              <button
+                type="button"
+                onClick={() => setBgImage('')}
+                className="absolute top-1 right-1 bg-red-600 hover:bg-red-500 text-white p-0.5 rounded-full text-[10px] shadow"
+                title="Сбросить свой фон"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 w-full space-y-3">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label className="bg-[#ff8f00]/20 hover:bg-[#ff8f00]/30 border border-[#ff8f00]/50 text-[#ff8f00] font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shrink-0">
+                <Upload className="w-4 h-4" />
+                <span>Загрузить фон</span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      try {
+                        const res = await fetch('/api/upload?type=background', { method: 'POST', body: formData });
+                        if (res.ok) {
+                          const d = await res.json();
+                          if (d && d.url) {
+                            setBgImage(d.url);
+                            setBgTheme('custom');
+                            return;
+                          }
+                        }
+                      } catch (err) {}
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        if (evt.target?.result) {
+                          setBgImage(evt.target.result as string);
+                          setBgTheme('custom');
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="hidden" 
+                />
+              </label>
+
+              <input 
+                type="text" 
+                value={bgImage} 
+                onChange={e => {
+                  setBgImage(e.target.value);
+                  if (e.target.value) setBgTheme('custom');
+                }}
+                className="flex-1 bg-black/50 border border-white/10 px-4 py-2.5 rounded-xl text-white text-xs outline-none focus:border-[#ff8f00]/50"
+                placeholder="Или вставьте ссылку на фон (https://...)"
+              />
+            </div>
+
+            {/* CS2 Map Presets */}
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-[10px] text-white/40 uppercase font-bold">Карты CS2:</span>
+              {CS2_MAP_BACKGROUNDS.map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setBgImage(m.url);
+                    setBgTheme(m.id);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all border cursor-pointer ${
+                    (bgImage === m.url || (!bgImage && bgTheme === m.id))
+                      ? 'bg-[#ff8f00] text-black border-[#ff8f00] shadow-[0_0_10px_rgba(255,143,0,0.3)]'
+                      : 'bg-black/40 text-white/70 border-white/10 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {m.name}
+                </button>
+              ))}
             </div>
           </div>
         </div>

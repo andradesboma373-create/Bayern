@@ -208,39 +208,44 @@ export class RatingSystem {
 
   /**
    * Calculates the negative Round Swing penalty for the victim.
-   * If victim died with an expensive high-powered weapon (AWP / Sniper / Rifle)
-   * to a low-tier weapon (pistol / eco), that is a blunder / threw away gun,
-   * so penalty is magnified.
-   * If victim was on pure eco/pistol and died to full rifle/AWP, that is standard,
-   * so penalty is reduced.
+   * In HLTV 3.0 win-probability theory, eliminating an opponent gains probability (+swing),
+   * while losing a teammate forfeits that probability (-swing).
+   * Blunders (losing AWP to pistol) or getting eliminated first (opening death 4v5)
+   * severely damage team win probability.
    */
   static calculateVictimSwingPenalty(
     actionSwing: number,
     killer: Player,
-    victim: Player
+    victim: Player,
+    isOpening: boolean = false
   ): number {
     const victimWeaponWeight = this.getWeaponWeight(victim.weaponId || victim.primaryWeaponId || undefined);
     const killerWeaponWeight = this.getWeaponWeight(killer.weaponId || killer.primaryWeaponId || undefined);
 
-    let penaltyMultiplier = 0.55;
+    let penaltyMultiplier = 1.0; // Base symmetric swing penalty
 
     // Victim had AWP/Sniper and got killed by pistol/eco:
     // Blunder: threw away $4750 AWP to a pistol
     if (victimWeaponWeight > 1.2 && killerWeaponWeight < 0.6) {
-      penaltyMultiplier = 0.85;
+      penaltyMultiplier = 1.35;
     }
     // Victim had Rifle and got killed by pistol/eco:
     else if (victimWeaponWeight >= 1.0 && killerWeaponWeight < 0.6) {
-      penaltyMultiplier = 0.70;
+      penaltyMultiplier = 1.20;
     }
     // Victim had AWP/Sniper and got killed by Rifle:
     else if (victimWeaponWeight > 1.2) {
-      penaltyMultiplier = 0.65;
+      penaltyMultiplier = 1.10;
     }
     // Victim was on pure eco/pistol and died to Rifle/AWP:
-    // Standard expected death on eco: smaller penalty
+    // Standard expected death on eco: slightly smaller penalty
     else if (victimWeaponWeight < 0.6 && killerWeaponWeight >= 1.0) {
-      penaltyMultiplier = 0.25;
+      penaltyMultiplier = 0.80;
+    }
+
+    // Opening death penalty: getting eliminated first creates an immediate 4v5 deficit
+    if (isOpening) {
+      penaltyMultiplier *= 1.30;
     }
 
     const penalty = Math.abs(actionSwing) * penaltyMultiplier;
@@ -382,7 +387,9 @@ export class RatingSystem {
     }
 
     const finalSwingNum = Number(totalSwing) || 0;
-    const avgRoundSwing = (finalSwingNum / totalRounds) * 100; // in percent
+    let avgRoundSwing = (finalSwingNum / totalRounds) * 100; // in percent
+    // Enforce limits: maximum +8.0%, minimum -8.0% as specified
+    avgRoundSwing = Math.max(-8.0, Math.min(8.0, avgRoundSwing));
 
     // HLTV Impact Rating enhanced with context swing, clutches, and multi-kills
     const rawImpact =

@@ -335,6 +335,29 @@ export const setTournamentBgImage = (tournamentId: string, bgUrl: string | null)
   }
 };
 
+// Helper: load photo/logo specifically saved for a tournament
+export const getTournamentLogoUrl = (tournamentId: string): string | null => {
+  try {
+    const logo = localStorage.getItem(`tournament_logo_${tournamentId}`);
+    return (logo && logo !== 'null' && logo !== 'undefined' && logo.trim() !== '') ? logo : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+// Helper: save photo/logo specifically for a tournament to prevent loss
+export const setTournamentLogoUrl = (tournamentId: string, logoUrl: string | null | undefined) => {
+  try {
+    if (logoUrl && logoUrl !== 'null' && logoUrl !== 'undefined' && logoUrl.trim() !== '') {
+      localStorage.setItem(`tournament_logo_${tournamentId}`, logoUrl);
+    } else if (logoUrl === null || logoUrl === '') {
+      localStorage.removeItem(`tournament_logo_${tournamentId}`);
+    }
+  } catch (e) {
+    console.warn("Could not save logo for tournament " + tournamentId, e);
+  }
+};
+
 export const loadTournaments = (userId: string, forceReload: boolean = false): Tournament[] => {
   const roomId = getCanonicalRoomId(userId);
 
@@ -432,7 +455,7 @@ export const loadTournaments = (userId: string, forceReload: boolean = false): T
       }
     } catch (e) {}
 
-    // 3. Attach background images for each tournament if stored separately
+    // 3. Attach background images and logos for each tournament if stored separately
     const tournaments: Tournament[] = [];
     for (const [id, t] of mergedMap.entries()) {
       if (deletedIds.has(id)) continue;
@@ -440,6 +463,10 @@ export const loadTournaments = (userId: string, forceReload: boolean = false): T
       const isolatedBg = getTournamentBgImage(id);
       if (isolatedBg) {
         copy.settings = { ...copy.settings, bgImage: isolatedBg };
+      }
+      const isolatedLogo = getTournamentLogoUrl(id);
+      if (isolatedLogo && (!copy.logoUrl || copy.logoUrl.trim() === '')) {
+        copy.logoUrl = isolatedLogo;
       }
       tournaments.push(normalizeTournament(copy));
     }
@@ -684,6 +711,12 @@ export const saveTournament = (userId: string, tournament: Tournament) => {
   if (tournament.id) {
     removeDeletedTournamentId(roomId, tournament.id);
   }
+  if (tournament.logoUrl) {
+    setTournamentLogoUrl(tournament.id, tournament.logoUrl);
+  }
+  if (tournament.settings?.bgImage) {
+    setTournamentBgImage(tournament.id, tournament.settings.bgImage);
+  }
   const all = loadTournaments(roomId);
   const index = all.findIndex((t) => t.id === tournament.id);
   const tourneyToSave = { ...tournament, channelId: roomId, userId: roomId };
@@ -838,6 +871,12 @@ export const saveTournaments = (userId: string, tournaments: Tournament[]) => {
     memoryCache[userId] = [...tournaments];
   }
   for (const t of tournaments) {
+    if (t.settings?.bgImage) {
+      setTournamentBgImage(t.id, t.settings.bgImage);
+    }
+    if (t.logoUrl) {
+      setTournamentLogoUrl(t.id, t.logoUrl);
+    }
     saveSingleTournamentIsolated(roomId, t);
   }
   saveTournamentsIndex(roomId, tournaments);

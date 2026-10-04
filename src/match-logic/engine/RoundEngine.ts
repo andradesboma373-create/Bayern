@@ -318,19 +318,19 @@ export class RoundEngine {
           let clutchBonus = 0;
           if (opponentsFaced === 1) {
             clutchCloser.statistics.clutchesWon1v1 = (clutchCloser.statistics.clutchesWon1v1 || 0) + 1;
-            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v1'] || 0.04;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v1'] || 0.03;
           } else if (opponentsFaced === 2) {
             clutchCloser.statistics.clutchesWon1v2 = (clutchCloser.statistics.clutchesWon1v2 || 0) + 1;
-            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v2'] || 0.08;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v2'] || 0.05;
           } else if (opponentsFaced === 3) {
             clutchCloser.statistics.clutchesWon1v3 = (clutchCloser.statistics.clutchesWon1v3 || 0) + 1;
-            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v3'] || 0.12;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v3'] || 0.06;
           } else if (opponentsFaced === 4) {
             clutchCloser.statistics.clutchesWon1v4 = (clutchCloser.statistics.clutchesWon1v4 || 0) + 1;
-            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v4'] || 0.16;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v4'] || 0.07;
           } else if (opponentsFaced >= 5) {
             clutchCloser.statistics.clutchesWon1v5 = (clutchCloser.statistics.clutchesWon1v5 || 0) + 1;
-            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v5'] || 0.20;
+            clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v5'] || 0.08;
           }
           clutchCloser.statistics.clutches = (clutchCloser.statistics.clutches || 0) + 1;
           clutchCloser.statistics.roundSwing = (clutchCloser.statistics.roundSwing || 0) + clutchBonus;
@@ -435,6 +435,12 @@ export class RoundEngine {
 
       if (hasKill || hasAssist || hasSurvived || hasBeenTraded) {
         p.statistics.kastRounds = (p.statistics.kastRounds || 0) + 1;
+      } else {
+        // Zero-contribution round: died without kill, assist, survival or trade in a lost round
+        // Player negatively impacted team's chances in this round
+        if (!p.alive && p.teamId !== winnerId) {
+          p.statistics.roundSwing = (p.statistics.roundSwing || 0) - 0.025;
+        }
       }
     }
     

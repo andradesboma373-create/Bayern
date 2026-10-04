@@ -128,36 +128,34 @@ export class CombatSystem {
       }
     }
     
-    // Rating Compression: dramatically reduce the impact of high/low ratings to keep stats "static"
-    // as requested by the user. Everyone should perform closer to the average.
+    // Rating Scaling: ensure higher rated players (110+) naturally outperform lower rated players (80)
+    // while keeping team contribution and trading healthy
     const baseAimRatio = Math.max(0.10, effectiveAim / 100);
-    const aimRatio = 1.0 + (baseAimRatio - 1.0) * 0.30; 
+    const aimRatio = 1.0 + (baseAimRatio - 1.0) * 0.65; 
     
     const baseIqRatio = Math.max(0.10, effectiveIq / 100);
-    const targetIqRatio = 1.0 + (baseIqRatio - 1.0) * 0.25;
+    const targetIqRatio = 1.0 + (baseIqRatio - 1.0) * 0.40;
 
     const progress = Math.min(1.0, Math.max(0.50, shooter.aimProgress || 0.75));
     
-    // Higher baseline hit chance to ensure more deaths per round
-    let hitChance = 0.55 + (aimRatio - 1.0) * 0.15 * progress;
+    // Baseline hit chance scaling
+    let hitChance = 0.54 + (aimRatio - 1.0) * 0.35 * progress;
     if (state.game === 'so2') hitChance += 0.05;
 
-    // Kill Saturation / Participation Limiter:
-    // If a player has already killed multiple enemies this round, give them a slight 
-    // fatigue/recoil penalty to allow teammates to participate in the round.
+    // Soft multi-kill fatigue (only after 2 kills in the round, does not handicap first or second duel)
     const roundKills = (shooter as any).roundKills || 0;
-    if (roundKills >= 1) {
-      hitChance *= (1.0 - (Math.min(3, roundKills) * 0.15)); // -15% for 1st kill, -30% for 2nd kill etc.
+    if (roundKills >= 2) {
+      hitChance *= (1.0 - (Math.min(2, roundKills - 1) * 0.08));
     }
     if (weapon.type === 'SNIPER') {
-        // High accuracy for scoped snipers holding angles or distance
-        hitChance = 0.92 + (aimRatio - 1.0) * 0.15 * Math.max(0.80, progress);
+        // High-rated snipers (110+) are sharp, while low-rated snipers (80) miss shots and can be punished
+        hitChance = 0.70 + (aimRatio - 1.0) * 0.45 * Math.max(0.75, progress);
         hitChance *= (weapon.accuracy / 100);
         if (dist < 15) {
             // Close range un-scoped penalty
-            hitChance *= 0.65;
+            hitChance *= 0.55;
         } else {
-            hitChance *= Math.max(0.94, 1 - (dist / (weapon.range * 5)));
+            hitChance *= Math.max(0.85, 1 - (dist / (weapon.range * 4)));
         }
     } else {
         hitChance *= (weapon.accuracy / 100);
@@ -184,10 +182,12 @@ export class CombatSystem {
         hitChance *= 0.88;
     }
 
-    // Sniper cover mechanic: if target is a sniper currently cycling bolt, they are ducked behind cover
+    // Sniper cover mechanic: mild cover advantage only if holding stationary behind site cover
     const targetWeapon = WEAPONS[target.weaponId] || WEAPONS['glock'];
     if (targetWeapon.type === 'SNIPER' && state.tick < (target.shootTimer || 0)) {
-        hitChance *= 0.15; // Major cover protection while cycling bolt
+        if (target.state === 'HOLDING') {
+            hitChance *= 0.90;
+        }
     }
     
     // Movement penalties
@@ -235,7 +235,7 @@ export class CombatSystem {
     
     if (roll < hitChance) {
       shooter.statistics.hits++;
-      let baseHsChance = Math.min(0.40, Math.max(0.12, 0.22 + (aimRatio - 1.0) * 0.16));
+      let baseHsChance = Math.min(0.50, Math.max(0.12, 0.24 + (aimRatio - 1.0) * 0.35));
       if (shooter.perk?.hsMultiplier) {
         baseHsChance = Math.min(0.65, baseHsChance * shooter.perk.hsMultiplier);
       }
@@ -410,7 +410,7 @@ export class CombatSystem {
         const killerSwing = Math.max(0.02, actionSwing - assistSwing);
         shooter.statistics.roundSwing = (shooter.statistics.roundSwing || 0) + killerSwing;
 
-        const victimPenalty = RatingSystem.calculateVictimSwingPenalty(actionSwing, shooter, target);
+        const victimPenalty = RatingSystem.calculateVictimSwingPenalty(actionSwing, shooter, target, isOpeningKill);
         target.statistics.roundSwing = (target.statistics.roundSwing || 0) - victimPenalty;
 
         // Killer recoil recovery and re-aiming delay

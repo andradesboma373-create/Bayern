@@ -29,19 +29,19 @@ export const RATING_CONFIG = {
 
   // Objective and tactical event swing bonuses (real probability modifiers)
   EVENT_SWING: {
-    BOMB_PLANT: 0.05,
-    BOMB_DEFUSE: 0.07,
+    BOMB_PLANT: 0.03,
+    BOMB_DEFUSE: 0.04,
     CLUTCH: {
-      '1v1': 0.02,
-      '1v2': 0.04,
-      '1v3': 0.05,
+      '1v1': 0.03,
+      '1v2': 0.05,
+      '1v3': 0.06,
       '1v4': 0.07,
       '1v5': 0.08
     },
     MULTI_KILL: {
-      k2: 0.02,
-      k3: 0.04,
-      k4: 0.06,
+      k2: 0.015,
+      k3: 0.03,
+      k4: 0.05,
       k5: 0.08
     }
   },

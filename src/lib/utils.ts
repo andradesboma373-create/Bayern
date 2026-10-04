@@ -15,20 +15,14 @@ export function cleanupLocalStorage(aggressive = false) {
       const key = localStorage.key(i);
       if (!key) continue;
 
-      // 1. Transient / temporary / legacy / preview keys
+      // 1. Transient / temporary / legacy / preview keys (NEVER delete user assets like tournament_bg_ or player_avatar_)
       if (
-        key.startsWith('player_avatar_') ||
         key.startsWith('cached_db_user_') ||
         key.startsWith('temp_') ||
         key.startsWith('preview_') ||
-        key.startsWith('backup_')
+        key.startsWith('backup_') ||
+        key.includes('@matchsimulator.com')
       ) {
-        keysToRemove.push(key);
-        continue;
-      }
-
-      // 2. Tournament background images (which are heavy base64 data URLs)
-      if (key.startsWith('tournament_bg_')) {
         keysToRemove.push(key);
         continue;
       }
@@ -71,7 +65,6 @@ export function cleanupLocalStorage(aggressive = false) {
 export function sanitizeStoragePayload(data: any): any {
   if (!data) return data;
   if (typeof data === 'string') {
-    if (data.startsWith('data:image/') && data.length > 500) return null;
     return data;
   }
   if (Array.isArray(data)) {
@@ -83,7 +76,10 @@ export function sanitizeStoragePayload(data: any): any {
       // Exclude heavy roundLogs from stored objects
       if (key === 'roundLogs') continue;
       const val = data[key];
-      if (typeof val === 'string' && val.startsWith('data:image/') && val.length > 500) {
+      // NEVER destroy user avatar, logo, or tournament background images
+      if (key === 'avatarUrl' || key === 'logoUrl' || key === 'bgImage' || key === 'photo') {
+        cleaned[key] = val;
+      } else if (typeof val === 'string' && val.startsWith('data:image/') && val.length > 500000) {
         cleaned[key] = null;
       } else {
         cleaned[key] = sanitizeStoragePayload(val);

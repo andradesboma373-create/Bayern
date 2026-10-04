@@ -149,6 +149,7 @@ export interface MatchState {
   isCS2: boolean;
   game?: 'cs2' | 'so2';
   format: string; // MR12, MR15
+  formatProfile?: any;
   
   phase: 'FREEZE' | 'BUY' | 'LIVE' | 'ROUND_END' | 'MATCH_END';
   round: number;

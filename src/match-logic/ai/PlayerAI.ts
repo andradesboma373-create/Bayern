@@ -168,12 +168,16 @@ export class PlayerAI {
        p.path = [];
        p.targetNodeId = null;
        
-       // Pro-level crosshair placement and reaction readiness across all roles
-       p.aimProgress = wasHolding ? (isSniper ? 0.98 : 0.90) : 0.86;
+       // Dynamic crosshair placement and reaction readiness based on individual player skill
+       const playerAimRatio = ((p.aim || 100) - 100) * 0.002;
+       p.aimProgress = wasHolding 
+         ? Math.min(0.96, Math.max(0.82, 0.90 + playerAimRatio)) 
+         : Math.min(0.92, Math.max(0.75, 0.85 + playerAimRatio));
        
        // Dynamic reaction delay based on holding vs peeking and individual reaction stat
-       let delay = 1.0 - (p.reaction / 180);
-       if (wasHolding) delay -= isSniper ? 0.40 : 0.25;
+       // High reaction players (110+) react significantly faster than low reaction players (80)
+       let delay = 1.0 - ((p.reaction || 100) / 160);
+       if (wasHolding) delay -= 0.25;
        
        p.reactionTimer = state.tick + Math.max(0, Math.round(delay));
        return;

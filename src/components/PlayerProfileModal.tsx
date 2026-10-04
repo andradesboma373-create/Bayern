@@ -665,14 +665,18 @@ export default function PlayerProfileModal({
       },
     };
 
-    // Save avatar to localStorage for instant persistence (only if not a massive base64 image)
-    if (editAvatarUrl.trim() && !editAvatarUrl.startsWith('data:')) {
-      safeLocalStorageSet(
-        `player_avatar_${editNickname.trim().toLowerCase()}`,
-        editAvatarUrl.trim(),
-      );
+    // Save avatar to localStorage for instant persistence
+    const cleanNick = editNickname.trim().toLowerCase();
+    if (editAvatarUrl.trim()) {
+      try {
+        if (!editAvatarUrl.startsWith('data:') || editAvatarUrl.length < 250000) {
+          localStorage.setItem(`player_avatar_${cleanNick}`, editAvatarUrl.trim());
+        }
+      } catch (e) {}
     } else {
-      localStorage.removeItem(`player_avatar_${editNickname.trim().toLowerCase()}`);
+      try {
+        localStorage.removeItem(`player_avatar_${cleanNick}`);
+      } catch (e) {}
     }
 
     // 1. Instant update in localStorage
@@ -1480,15 +1484,47 @@ export default function PlayerProfileModal({
 
                 <div>
                   <label className="text-xs font-bold text-white/50 uppercase block mb-1">
-                    Ссылка на фото / Аватар (URL)
+                    Фото / Аватарка игрока
                   </label>
-                  <input
-                    type="url"
-                    value={editAvatarUrl}
-                    onChange={(e) => setEditAvatarUrl(e.target.value)}
-                    placeholder="https://i.imgur.com/example.png"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-blue-500 focus:outline-none"
-                  />
+                  <div className="flex gap-2">
+                    <label className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/50 text-blue-400 font-bold px-3 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Загрузить фото</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const formData = new FormData();
+                          formData.append('file', file);
+                          try {
+                            const res = await fetch('/api/upload?type=avatar', { method: 'POST', body: formData });
+                            if (res.ok) {
+                              const d = await res.json();
+                              if (d && d.url) {
+                                setEditAvatarUrl(d.url);
+                                return;
+                              }
+                            }
+                          } catch (err) {}
+                          const reader = new FileReader();
+                          reader.onload = (evt) => {
+                            if (evt.target?.result) setEditAvatarUrl(evt.target.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    <input
+                      type="text"
+                      value={editAvatarUrl}
+                      onChange={(e) => setEditAvatarUrl(e.target.value)}
+                      placeholder="Или вставьте прямую ссылку (https://...)"
+                      className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 

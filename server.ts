@@ -775,6 +775,54 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve uploaded tournament photos and backgrounds statically with explicit MIME types and CORS
+const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+const distUploadsDir = path.join(process.cwd(), 'dist', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const MIME_MAP: Record<string, string> = {
+  '.webp': 'image/webp',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.gif': 'image/gif'
+};
+
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res, filePath) => {
+    const ext = path.extname(filePath).toLowerCase();
+    if (MIME_MAP[ext]) res.setHeader('Content-Type', MIME_MAP[ext]);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+}));
+
+if (fs.existsSync(distUploadsDir)) {
+  app.use('/uploads', express.static(distUploadsDir, {
+    setHeaders: (res, filePath) => {
+      const ext = path.extname(filePath).toLowerCase();
+      if (MIME_MAP[ext]) res.setHeader('Content-Type', MIME_MAP[ext]);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+  }));
+}
+
+app.get('/uploads/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const p1 = path.join(uploadsDir, filename);
+  const p2 = path.join(distUploadsDir, filename);
+  const target = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+  if (target) {
+    const ext = path.extname(filename).toLowerCase();
+    if (MIME_MAP[ext]) {
+      res.setHeader('Content-Type', MIME_MAP[ext]);
+    }
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.sendFile(target);
+  }
+  res.status(404).send('Not found');
+});
+
 
 // Resolvers for images to avoid client 404 spam
 app.get('/api/avatar/:name', (req, res) => {
@@ -915,7 +963,6 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
     
-    const filename = Date.now() + '-' + Math.round(Math.random() * 1E9) + '.webp';
     const uploadDir = path.join(process.cwd(), 'public', 'uploads');
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
     
@@ -929,10 +976,20 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     const height = isBg ? 1080 : (isAvatar ? 256 : 512);
     const quality = isBg ? 85 : (isAvatar ? 70 : 80);
 
-    const buf = await sharp(req.file.buffer)
-      .resize({ width, height, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality })
-      .toBuffer();
+    let buf: Buffer;
+    let ext = '.webp';
+    try {
+      buf = await sharp(req.file.buffer)
+        .resize({ width, height, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality })
+        .toBuffer();
+    } catch (sharpErr) {
+      console.warn("Sharp processing failed, falling back to original buffer:", sharpErr);
+      buf = req.file.buffer;
+      ext = path.extname(req.file.originalname) || '.png';
+    }
+
+    const filename = Date.now() + '-' + Math.round(Math.random() * 1E9) + ext;
       
     fs.writeFileSync(path.join(uploadDir, filename), buf);
     if (hasDist) fs.writeFileSync(path.join(distDir, filename), buf);

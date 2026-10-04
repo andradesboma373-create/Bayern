@@ -239,53 +239,53 @@ export class MatchEngine {
       const isCaptain = roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader';
 
       if (isSniper) {
-          aim = skillVal * 1.08;
-          iq = skillVal * 1.05;
+          aim = skillVal * 1.01;
+          iq = skillVal * 1.01;
           movement = skillVal * 1.00;
           utility = skillVal * 0.95;
-          focus = 1.15;
-          aggression = 0.90;
-          impact = 1.12;
-          reaction = skillVal * 1.06;
+          focus = 1.05;
+          aggression = 0.88;
+          impact = 1.02;
+          reaction = skillVal * 1.01;
           speedBonus = 0.00;
       } else if (isEntry) {
-          aim = skillVal * 1.07;
-          iq = skillVal * 1.00;
-          movement = skillVal * 1.08;
-          utility = skillVal * 0.90;
-          focus = 0.95;
-          aggression = 1.15;
-          impact = 1.18;
-          reaction = skillVal * 1.06;
-          speedBonus = 0.03;
-      } else if (isLurker) {
-          aim = skillVal * 1.06;
-          iq = skillVal * 1.10;
-          movement = skillVal * 1.05;
-          utility = skillVal * 0.90;
-          focus = 1.05;
-          aggression = 0.85;
-          impact = 1.10;
+          aim = skillVal * 1.03;
+          iq = skillVal * 0.99;
+          movement = skillVal * 1.04;
+          utility = skillVal * 0.92;
+          focus = 0.98;
+          aggression = 1.07;
+          impact = 1.05;
           reaction = skillVal * 1.03;
+          speedBonus = 0.02;
+      } else if (isLurker) {
+          aim = skillVal * 1.02;
+          iq = skillVal * 1.04;
+          movement = skillVal * 1.02;
+          utility = skillVal * 0.92;
+          focus = 1.03;
+          aggression = 0.90;
+          impact = 1.03;
+          reaction = skillVal * 1.02;
           speedBonus = 0.01;
       } else if (isSupport) {
-          aim = skillVal * 1.00;
-          iq = skillVal * 1.05;
-          movement = skillVal * 0.95;
-          utility = skillVal * 1.20;
-          focus = 0.95;
-          aggression = 0.85;
+          aim = skillVal * 0.99;
+          iq = skillVal * 1.03;
+          movement = skillVal * 0.98;
+          utility = skillVal * 1.15;
+          focus = 0.98;
+          aggression = 0.88;
           impact = 0.98;
-          reaction = skillVal * 0.98;
+          reaction = skillVal * 0.99;
           speedBonus = -0.01;
       } else if (isCaptain) {
-          aim = skillVal * 0.99;
-          iq = skillVal * 1.20;
+          aim = skillVal * 0.97;
+          iq = skillVal * 1.18;
           movement = skillVal * 0.96;
-          utility = skillVal * 1.15;
+          utility = skillVal * 1.12;
           focus = 1.00;
-          aggression = 0.82;
-          impact = 0.99;
+          aggression = 0.84;
+          impact = 0.97;
           reaction = skillVal * 0.97;
           speedBonus = -0.01;
       } else {
@@ -293,48 +293,46 @@ export class MatchEngine {
           if (isAdaptedRole) {
             const origLower = (originalRole || '').toLowerCase();
             if (origLower.includes('sniper') || origLower.includes('awp') || origLower.includes('снайпер')) {
-              // Adapted sniper playing as rifler: slightly weaker rifling than a dedicated rifler
-              aim = skillVal * 0.98;
-              iq = skillVal * 1.02;
+              aim = skillVal * 0.99;
+              iq = skillVal * 1.01;
               movement = skillVal * 1.00;
-              utility = skillVal * 0.95;
-              focus = 1.05;
+              utility = skillVal * 0.96;
+              focus = 1.02;
               aggression = 0.96;
-              impact = 1.01;
-              reaction = skillVal * 1.02;
-              speedBonus = 0.01;
+              impact = 1.00;
+              reaction = skillVal * 1.01;
+              speedBonus = 0.00;
             } else if (origLower.includes('captain') || origLower.includes('igl') || origLower.includes('капитан')) {
-              // Adapted captain playing as rifler: slightly weaker gunplay, high IQ
-              aim = skillVal * 0.98;
+              aim = skillVal * 0.97;
               iq = skillVal * 1.15;
               movement = skillVal * 0.98;
               utility = skillVal * 1.10;
               focus = 1.00;
-              aggression = 0.92;
-              impact = 0.99;
-              reaction = skillVal * 0.99;
+              aggression = 0.90;
+              impact = 0.98;
+              reaction = skillVal * 0.98;
               speedBonus = 0.00;
             } else {
-              aim = skillVal * 1.00;
-              iq = skillVal * 1.00;
-              movement = skillVal * 1.00;
-              utility = skillVal * 0.95;
-              focus = 1.00;
+              aim = skillVal * 1.02;
+              iq = skillVal * 1.01;
+              movement = skillVal * 1.02;
+              utility = skillVal * 0.98;
+              focus = 1.01;
               aggression = 1.00;
-              impact = 1.00;
-              reaction = skillVal * 1.00;
-              speedBonus = 0.00;
+              impact = 1.02;
+              reaction = skillVal * 1.02;
+              speedBonus = 0.01;
             }
           } else {
             // Dedicated native Rifler
-            aim = skillVal * 1.02;
-            iq = skillVal * 1.00;
+            aim = skillVal * 1.03;
+            iq = skillVal * 1.01;
             movement = skillVal * 1.02;
-            utility = skillVal * 0.95;
-            focus = 1.00;
+            utility = skillVal * 0.98;
+            focus = 1.01;
             aggression = 1.00;
-            impact = 1.02;
-            reaction = skillVal * 1.02;
+            impact = 1.03;
+            reaction = skillVal * 1.03;
             speedBonus = 0.01;
           }
       }

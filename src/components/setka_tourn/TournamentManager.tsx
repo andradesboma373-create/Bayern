@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2 } from 'lucide-react';
 import { Tournament, TournamentSettings, Team, Match, Group } from './types';
-import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage, syncTournamentsWithServer, normalizeTournament } from './storage';
+import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage, setTournamentBgImage, setTournamentLogoUrl, syncTournamentsWithServer, normalizeTournament } from './storage';
 import SingleEliminationStage from './SingleEliminationStage';
 import GroupStage from './GroupStage';
 import SwissStage from './SwissStage';
@@ -26,6 +26,78 @@ import { useGameUniverse } from '../../lib/gameUniverse';
 import So2MediaLibraryModal from '../So2MediaLibraryModal';
 
 export const BG_THEMES = {
+  cs2_mirage: {
+    id: 'cs2_mirage',
+    name: '🏰 Mirage (CS2)',
+    className: 'bg-[#0a0a0f]',
+    style: {
+      backgroundImage: `url('/maps/mirage.jpg')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    },
+    overlay: null,
+    watermark: 'MIRAGE'
+  },
+  cs2_dust2: {
+    id: 'cs2_dust2',
+    name: '🏜️ Dust II (CS2)',
+    className: 'bg-[#0f0c08]',
+    style: {
+      backgroundImage: `url('/maps/dust2.jpg')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    },
+    overlay: null,
+    watermark: 'DUST II'
+  },
+  cs2_inferno: {
+    id: 'cs2_inferno',
+    name: '🔥 Inferno (CS2)',
+    className: 'bg-[#0c0807]',
+    style: {
+      backgroundImage: `url('/maps/inferno.jpg')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    },
+    overlay: null,
+    watermark: 'INFERNO'
+  },
+  cs2_nuke: {
+    id: 'cs2_nuke',
+    name: '☢️ Nuke (CS2)',
+    className: 'bg-[#070b0c]',
+    style: {
+      backgroundImage: `url('/maps/nuke.jpg')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    },
+    overlay: null,
+    watermark: 'NUKE'
+  },
+  cs2_ancient: {
+    id: 'cs2_ancient',
+    name: '🌿 Ancient (CS2)',
+    className: 'bg-[#070d08]',
+    style: {
+      backgroundImage: `url('/maps/ancient.jpg')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    },
+    overlay: null,
+    watermark: 'ANCIENT'
+  },
+  cs2_anubis: {
+    id: 'cs2_anubis',
+    name: '🏛️ Anubis (CS2)',
+    className: 'bg-[#0e0c08]',
+    style: {
+      backgroundImage: `url('/maps/anubis.jpg')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    },
+    overlay: null,
+    watermark: 'ANUBIS'
+  },
   cyber_grid: {
     id: 'cyber_grid',
     name: '👾 Кибер-Сетка',
@@ -109,8 +181,9 @@ export default function TournamentManager({ user }: { user: any }) {
   const isolatedBg = activeTournament ? getTournamentBgImage(activeTournament.id) : null;
   const rawBg = isolatedBg || activeTournament?.settings?.bgImage;
   const bgImage = (rawBg && rawBg !== 'null' && rawBg !== 'undefined' && String(rawBg).trim() !== '') ? rawBg : null;
-  const bgTheme = activeTournament?.settings?.bgTheme || 'cyber_grid';
-  const [isBgLoaded, setIsBgLoaded] = useState<boolean>(() => isImagePreloaded(bgImage));
+  const defaultTheme = (activeTournament?.game || activeTournament?.settings?.game || 'cs2') === 'cs2' ? 'cs2_mirage' : 'cyber_grid';
+  const bgTheme = activeTournament?.settings?.bgTheme || (bgImage ? 'custom' : defaultTheme);
+  const [isBgLoaded, setIsBgLoaded] = useState<boolean>(true);
   const [isExporting, setIsExporting] = useState(false);
   const [isSwapMode, setIsSwapMode] = useState(false);
   const [showTop20, setShowTop20] = useState(false);
@@ -1532,11 +1605,17 @@ export default function TournamentManager({ user }: { user: any }) {
               formData.append('file', file);
               
               fetch('/api/upload?type=background', { method: 'POST', body: formData })
-                .then(r => r.json())
+                .then(r => {
+                   if (!r.ok) throw new Error("Upload response not OK");
+                   return r.json();
+                })
                 .then(d => {
-                   if (d.url) {
+                   if (d && d.url) {
+                      setTournamentBgImage(activeTournament.id, d.url);
                       const newT = { ...activeTournament, settings: { ...activeTournament.settings, bgImage: d.url, bgTheme: 'custom' } };
                       handleUpdateActive(newT);
+                   } else {
+                      throw new Error("No URL returned from upload");
                    }
                 })
                 .catch(() => {
@@ -1544,6 +1623,7 @@ export default function TournamentManager({ user }: { user: any }) {
                    reader.onload = (evt) => {
                       if (evt.target?.result) {
                          const url = evt.target.result as string;
+                         setTournamentBgImage(activeTournament.id, url);
                          const newT = { ...activeTournament, settings: { ...activeTournament.settings, bgImage: url, bgTheme: 'custom' } };
                          handleUpdateActive(newT);
                       }
@@ -1555,6 +1635,7 @@ export default function TournamentManager({ user }: { user: any }) {
 
       const handleThemeSelect = (themeId: string) => {
           if (activeTournament) {
+              setTournamentBgImage(activeTournament.id, null);
               const newSettings = { ...activeTournament.settings, bgTheme: themeId, bgImage: undefined };
               handleUpdateActive({ ...activeTournament, settings: newSettings });
           }
@@ -1969,7 +2050,7 @@ export default function TournamentManager({ user }: { user: any }) {
                       <>
                           {/* Crisp base theme layer preventing any blank void while loading */}
                           <div 
-                              className={`absolute inset-0 z-0 transition-all ${activeTheme.className}`}
+                              className={`absolute inset-0 z-0 transition-all ${activeTheme.className} bg-cover bg-center`}
                               style={{
                                   ...activeTheme.style,
                                   filter: activeTournament.settings.bgBlur ? `blur(${activeTournament.settings.bgBlur}px)` : undefined
@@ -1980,13 +2061,13 @@ export default function TournamentManager({ user }: { user: any }) {
                               style={{ 
                                   backgroundImage: `url(${bgImage})`,
                                   filter: activeTournament.settings.bgBlur ? `blur(${activeTournament.settings.bgBlur}px)` : undefined,
-                                  opacity: (isBgLoaded || isExporting) ? 1 : 0
+                                  opacity: 1
                               }} 
                           />
                       </>
                   ) : (
                       <div 
-                          className={`absolute inset-0 z-0 transition-all ${activeTheme.className}`}
+                          className={`absolute inset-0 z-0 transition-all ${activeTheme.className} bg-cover bg-center`}
                           style={{
                               ...activeTheme.style,
                               filter: activeTournament.settings.bgBlur ? `blur(${activeTournament.settings.bgBlur}px)` : undefined
@@ -2616,10 +2697,12 @@ export default function TournamentManager({ user }: { user: any }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredTournaments.map(t => {
-              const rawTBg = t.settings?.bgImage;
+              const rawTBg = t.settings?.bgImage || getTournamentBgImage(t.id);
               const cardBgImg = (rawTBg && rawTBg !== 'null' && rawTBg !== 'undefined' && String(rawTBg).trim() !== '') ? rawTBg : null;
-              const cardThemeKey = t.settings?.bgTheme || 'cyber_grid';
-              const cardTheme = BG_THEMES[cardThemeKey as keyof typeof BG_THEMES] || BG_THEMES.cyber_grid;
+              const isCS2 = (t.game || t.settings?.game || 'cs2') === 'cs2';
+              const defaultCardTheme = isCS2 ? 'cs2_mirage' : 'cyber_grid';
+              const cardThemeKey = t.settings?.bgTheme || (cardBgImg ? 'custom' : defaultCardTheme);
+              const cardTheme = BG_THEMES[cardThemeKey as keyof typeof BG_THEMES] || BG_THEMES.cs2_mirage || BG_THEMES.cyber_grid;
 
               return (
               <div 
