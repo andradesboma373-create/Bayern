@@ -198,6 +198,7 @@ export default function TournamentManager({ user }: { user: any }) {
   const [isBgLoaded, setIsBgLoaded] = useState<boolean>(true);
   const [isExporting, setIsExporting] = useState(false);
   const [isSwapMode, setIsSwapMode] = useState(false);
+  const [mapsUpdateTrigger, setMapsUpdateTrigger] = useState(0);
   const [showTop20, setShowTop20] = useState(false);
   const [showFinalists, setShowFinalists] = useState(false);
     const [showMvpModal, setShowMvpModal] = useState(false);
@@ -227,8 +228,10 @@ export default function TournamentManager({ user }: { user: any }) {
     fetch('/api/maps/list')
       .then(res => res.ok ? res.json() : null)
       .then(data => {
+        console.log("[Client] Maps list data received:", data);
         if (data && data.cs2 && data.s2) {
           refreshMapPools(data.cs2, data.s2);
+          setMapsUpdateTrigger(prev => prev + 1);
         }
       })
       .catch(err => console.warn("Failed to load maps list from server:", err));

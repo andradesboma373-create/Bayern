@@ -31,6 +31,8 @@ const VetoModal: React.FC<VetoModalProps> = ({
   const [actions, setActions] = useState<VetoAction[]>([]);
   const [isFinished, setIsFinished] = useState(false);
   const [availableMaps, setAvailableMaps] = useState<{id: string, name: string}[]>([]);
+  const [cs2Pool, setCs2Pool] = useState(MAP_POOL_CS2);
+  const [s2Pool, setS2Pool] = useState(MAP_POOL_S2);
   
   const captain1 = team1.find(p => p.role === 'captain' || p.role === 'igl') || team1[0];
   const captain2 = team2.find(p => p.role === 'captain' || p.role === 'igl') || team2[0];
@@ -54,7 +56,25 @@ const VetoModal: React.FC<VetoModalProps> = ({
       setPhaseIndex(0);
       setActions([]);
       setIsFinished(false);
-      setAvailableMaps(game === 'cs2' ? MAP_POOL_CS2.map(m => ({id: m.id, name: m.name})) : MAP_POOL_S2.map(m => ({id: m.id, name: m.name})));
+      
+      // Fetch fresh maps just in case
+      fetch('/api/maps/list')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+           if (data && data.cs2 && data.s2) {
+             setCs2Pool(data.cs2);
+             setS2Pool(data.s2);
+             const currentPool = game === 'cs2' ? data.cs2 : data.s2;
+             setAvailableMaps(currentPool.map((m: any) => ({id: m.id, name: m.name})));
+           } else {
+             const currentPool = game === 'cs2' ? MAP_POOL_CS2 : MAP_POOL_S2;
+             setAvailableMaps(currentPool.map(m => ({id: m.id, name: m.name})));
+           }
+        })
+        .catch(() => {
+          const currentPool = game === 'cs2' ? MAP_POOL_CS2 : MAP_POOL_S2;
+          setAvailableMaps(currentPool.map(m => ({id: m.id, name: m.name})));
+        });
     }
   }, [isOpen, game, format]);
 
@@ -188,7 +208,7 @@ const VetoModal: React.FC<VetoModalProps> = ({
           {/* Actions Log */}
           <div className="w-full max-w-4xl grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mt-4">
             <AnimatePresence>
-              {(game === 'cs2' ? MAP_POOL_CS2 : MAP_POOL_S2).map((m, idx) => {
+              {(game === 'cs2' ? cs2Pool : s2Pool).map((m, idx) => {
                 const action = actions.find(a => a.mapId === m.id);
                 return (
                   <motion.div
@@ -204,7 +224,7 @@ const VetoModal: React.FC<VetoModalProps> = ({
                   >
                     <div 
                       className={`absolute inset-0 bg-cover bg-center ${action?.type === 'BAN' ? 'grayscale opacity-30' : ''}`} 
-                      style={{ backgroundImage: `url('/maps/${m.name.toLowerCase()}.jpg')` }}
+                      style={{ backgroundImage: `url('/maps/${m.id}')` }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-3">
                       <div className="text-center font-bold text-white text-sm mb-1">{m.name}</div>

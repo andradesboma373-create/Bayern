@@ -175,13 +175,18 @@ export default function Simulator({ user }: { user: any }) {
   const [showChannelLoad, setShowChannelLoad] = useState<1 | 2 | null>(null);
   const [teamSearch, setTeamSearch] = useState("");
   const [notifyingManagers, setNotifyingManagers] = useState(false);
+  const [cs2MapPool, setCs2MapPool] = useState(MAP_POOL_CS2);
+  const [s2MapPool, setS2MapPool] = useState(MAP_POOL_S2);
 
   useEffect(() => {
     fetch('/api/maps/list')
       .then(res => res.ok ? res.json() : null)
       .then(data => {
+        console.log("[Client Simulator] Maps list data received:", data);
         if (data && data.cs2 && data.s2) {
           refreshMapPools(data.cs2, data.s2);
+          setCs2MapPool([...MAP_POOL_CS2]);
+          setS2MapPool([...MAP_POOL_S2]);
         }
       })
       .catch(err => console.warn("Failed to load maps list from server:", err));
@@ -197,7 +202,7 @@ export default function Simulator({ user }: { user: any }) {
         
         let pickedMaps = state.selectedMaps || [];
         if (pickedMaps.length < bo) {
-          const mapPool = (isCS2 ? MAP_POOL_CS2 : MAP_POOL_S2).map(m => m.name);
+          const mapPool = (isCS2 ? cs2MapPool : s2MapPool).map(m => m.name);
           const availableMaps = mapPool.filter(m => !pickedMaps.includes(m));
           const needed = bo - pickedMaps.length;
           const randomPicks = [...availableMaps].sort(() => Math.random() - 0.5).slice(0, needed);
@@ -551,7 +556,7 @@ export default function Simulator({ user }: { user: any }) {
       
       let pickedMaps = selectedMaps;
       if (pickedMaps.length < bo) {
-        const mapPool = (isCS2 ? MAP_POOL_CS2 : MAP_POOL_S2).map(m => m.name);
+        const mapPool = (isCS2 ? cs2MapPool : s2MapPool).map(m => m.name);
         const availableMaps = mapPool.filter(m => !pickedMaps.includes(m));
         const needed = bo - pickedMaps.length;
         const randomPicks = [...availableMaps].sort(() => Math.random() - 0.5).slice(0, needed);
@@ -1172,7 +1177,7 @@ export default function Simulator({ user }: { user: any }) {
               <button onClick={() => {
                 const bo = parseInt(format.replace('BO', ''));
                 if (selectedMaps.length < bo) {
-                  const mapPool = (game === 'cs2' ? MAP_POOL_CS2 : MAP_POOL_S2).map(m => m.name);
+                  const mapPool = (game === 'cs2' ? cs2MapPool : s2MapPool).map(m => m.name);
                   const availableMaps = mapPool.filter(m => !selectedMaps.includes(m));
                   const needed = bo - selectedMaps.length;
                   const randomPicks = [...availableMaps].sort(() => Math.random() - 0.5).slice(0, needed);
@@ -1183,7 +1188,7 @@ export default function Simulator({ user }: { user: any }) {
             </div>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-3">
-            {(game === 'cs2' ? MAP_POOL_CS2 : MAP_POOL_S2).map(m => {
+            {(game === 'cs2' ? cs2MapPool : s2MapPool).map(m => {
               const isSelected = selectedMaps.includes(m.name);
               const canSelect = isSelected || selectedMaps.length < parseInt(format.replace('BO', ''));
               return (
@@ -1197,7 +1202,7 @@ export default function Simulator({ user }: { user: any }) {
                     }
                   }}
                   disabled={!canSelect && !isSelected}
-                  style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('/maps/${m.name.toLowerCase()}.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }} className={`relative aspect-[4/3] rounded-xl font-bold text-xs transition-all flex flex-col items-center justify-center gap-1 overflow-hidden group ${isSelected ? 'text-[#ff8f00] border-2 border-[#ff8f00] shadow-[0_0_15px_rgba(255,143,0,0.4)] scale-[1.03] z-10' : canSelect ? 'text-white/80 hover:text-white hover:border-white/30 border-2 border-white/10' : 'text-white/30 opacity-40 border-2 border-white/5 cursor-not-allowed'}`}
+                  style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('/maps/${m.id}')`, backgroundSize: 'cover', backgroundPosition: 'center', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }} className={`relative aspect-[4/3] rounded-xl font-bold text-xs transition-all flex flex-col items-center justify-center gap-1 overflow-hidden group ${isSelected ? 'text-[#ff8f00] border-2 border-[#ff8f00] shadow-[0_0_15px_rgba(255,143,0,0.4)] scale-[1.03] z-10' : canSelect ? 'text-white/80 hover:text-white hover:border-white/30 border-2 border-white/10' : 'text-white/30 opacity-40 border-2 border-white/5 cursor-not-allowed'}`}
                 >
                   <span className="truncate w-full text-center">{m.name}</span>
                   <div className="flex gap-2 text-[10px] opacity-70">

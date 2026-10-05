@@ -4126,8 +4126,10 @@ async function loadAllBots() {
 // --- Auto-inject custom maps from public/maps ---
 let customMapsCS2: string[] = [];
 let customMapsS2: string[] = [];
+let allAvailableMapFiles = new Set<string>();
 
 const scanMapsDir = () => {
+    console.log("[Maps] Scanning maps directory...");
     try {
         const publicMapsDir = path.join(process.cwd(), 'public', 'maps');
         const cs2Dir = path.join(publicMapsDir, 'cs2');
@@ -4135,6 +4137,26 @@ const scanMapsDir = () => {
         
         customMapsCS2 = [];
         customMapsS2 = [];
+        allAvailableMapFiles.clear();
+
+        const addToFileSet = (dir: string, label: string) => {
+            if (fs.existsSync(dir)) {
+                const files = fs.readdirSync(dir);
+                console.log(`[Maps] Found ${files.length} files in ${label} (${dir})`);
+                files.forEach(f => {
+                    if (f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png')) {
+                        const pure = f.replace(/\.(jpg|jpeg|png)$/i, '').toLowerCase();
+                        allAvailableMapFiles.add(pure);
+                    }
+                });
+            } else {
+                console.log(`[Maps] Directory ${label} does not exist: ${dir}`);
+            }
+        };
+
+        addToFileSet(publicMapsDir, "root");
+        addToFileSet(cs2Dir, "cs2");
+        addToFileSet(so2Dir, "so2");
 
         if (fs.existsSync(cs2Dir)) {
           customMapsCS2 = fs.readdirSync(cs2Dir)
@@ -4155,26 +4177,41 @@ const scanMapsDir = () => {
         rootFiles.forEach(f => {
             const lowF = f.toLowerCase();
             if (CS2_MAP_IDS.has(lowF)) {
-                if (!customMapsCS2.includes(f)) customMapsCS2.push(f);
+                if (!customMapsCS2.some(x => x.toLowerCase() === lowF)) customMapsCS2.push(f);
             } else if (S2_MAP_IDS.has(lowF)) {
-                if (!customMapsS2.includes(f)) customMapsS2.push(f);
+                if (!customMapsS2.some(x => x.toLowerCase() === lowF)) customMapsS2.push(f);
             } else {
-                // If truly unknown and in root, we don't know where it belongs
-                // User should use subfolders for separation
-                // For now, let's not add it to either to force separation
+                if (!customMapsS2.some(x => x.toLowerCase() === lowF)) customMapsS2.push(f);
             }
         });
-    } catch(e) {}
+        console.log(`[Maps] Total unique map files detected: ${allAvailableMapFiles.size}`);
+    } catch(e: any) {
+        console.error("[Maps] Error scanning maps dir:", e.message);
+    }
 };
+
 scanMapsDir();
 
 const getCombinedMapPool = () => {
     const cs2Base = [...MAP_POOL_CS2];
     const s2Base = [...MAP_POOL_S2];
     
-    // Strict separation: remove maps from the wrong pool to honor "only CS in CS world, only SO2 in SO2 world"
-    const cs2Final = cs2Base.filter(m => !S2_MAP_IDS.has(m.id.toLowerCase()));
-    const s2Final = s2Base.filter(m => !CS2_MAP_IDS.has(m.id.toLowerCase()));
+    console.log(`[Maps] Base pools: CS2=${cs2Base.length}, S2=${s2Base.length}`);
+    
+    const cs2Final = cs2Base.filter(m => {
+        const id = m.id.toLowerCase();
+        const exists = allAvailableMapFiles.has(id);
+        const isS2 = S2_MAP_IDS.has(id);
+        return !isS2 && exists;
+    });
+    const s2Final = s2Base.filter(m => {
+        const id = m.id.toLowerCase();
+        const exists = allAvailableMapFiles.has(id);
+        const isCS2 = CS2_MAP_IDS.has(id);
+        return !isCS2 && exists;
+    });
+
+    console.log(`[Maps] After filtering: CS2=${cs2Final.length}, S2=${s2Final.length}`);
 
     const existingCS2 = new Set(cs2Final.map(m => m.id.toLowerCase()));
     const existingS2 = new Set(s2Final.map(m => m.id.toLowerCase()));
@@ -4195,11 +4232,13 @@ const getCombinedMapPool = () => {
         }
     });
 
+    console.log(`[Maps] Final pools: CS2=${cs2Final.length}, S2=${s2Final.length}`);
     return { cs2: cs2Final, s2: s2Final };
 };
 // ------------------------------------------------
 
 app.get("/api/maps/list", (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     scanMapsDir();
     res.json(getCombinedMapPool());
 });
