@@ -1,7 +1,35 @@
 import fs from 'fs';
 import path from 'path';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, setLogLevel } from 'firebase/firestore';
+
+try {
+  setLogLevel('silent');
+} catch (e) {}
+
+export let isCloudQuotaExhausted = false;
+let quotaCooldownUntil = 0;
+
+export function markQuotaExhausted() {
+  if (!isCloudQuotaExhausted) {
+    console.warn('[QuotaTracker] Cloud Firestore write quota reached. Switching seamlessly to resilient local database mode.');
+  }
+  isCloudQuotaExhausted = true;
+  // 1 hour cooldown before attempting Cloud write sync again
+  quotaCooldownUntil = Date.now() + 60 * 60 * 1000;
+  currentTelemetry.remainingWrites = 0;
+  currentTelemetry.writesToday = currentTelemetry.maxWrites;
+  recalculateDerivedValues();
+  persistLocalTelemetry();
+}
+
+export function isQuotaExhausted(): boolean {
+  if (isCloudQuotaExhausted && Date.now() > quotaCooldownUntil) {
+    // Cooldown elapsed, allow retry
+    isCloudQuotaExhausted = false;
+  }
+  return isCloudQuotaExhausted;
+}
 
 export interface QuotaTelemetry {
   date: string;
@@ -148,6 +176,7 @@ function persistLocalTelemetry() {
 
 let syncTimeout: NodeJS.Timeout | null = null;
 function scheduleFirestoreSync() {
+  if (isQuotaExhausted()) return;
   if (syncTimeout) return;
   syncTimeout = setTimeout(async () => {
     syncTimeout = null;
@@ -156,7 +185,7 @@ function scheduleFirestoreSync() {
 }
 
 export async function syncToFirestore(): Promise<boolean> {
-  if (!firestoreInstance) return false;
+  if (!firestoreInstance || isQuotaExhausted()) return false;
   try {
     recalculateDerivedValues();
     const metricsRef = doc(firestoreInstance, 'system_metrics', 'firestore_quota');
@@ -182,14 +211,24 @@ export async function syncToFirestore(): Promise<boolean> {
     persistLocalTelemetry();
     return true;
   } catch (e: any) {
-    console.warn('[QuotaTracker] Firestore telemetry sync warning:', e.message);
+    if (
+      e?.code === 'resource-exhausted' ||
+      (typeof e?.message === 'string' && (
+        e.message.includes('RESOURCE_EXHAUSTED') ||
+        e.message.includes('Quota limit exceeded') ||
+        e.message.includes('Free daily write units per project')
+      ))
+    ) {
+      markQuotaExhausted();
+      return false;
+    }
     return false;
   }
 }
 
 export async function fetchLiveQuotaFromFirestore(): Promise<QuotaTelemetry> {
   recalculateDerivedValues();
-  if (!firestoreInstance) {
+  if (!firestoreInstance || isQuotaExhausted()) {
     return { ...currentTelemetry };
   }
 
@@ -212,7 +251,15 @@ export async function fetchLiveQuotaFromFirestore(): Promise<QuotaTelemetry> {
       }
     }
   } catch (err: any) {
-    console.warn('[QuotaTracker] Failed to read live telemetry from Firestore:', err.message);
+    if (
+      err?.code === 'resource-exhausted' ||
+      (typeof err?.message === 'string' && (
+        err.message.includes('RESOURCE_EXHAUSTED') ||
+        err.message.includes('Quota limit exceeded')
+      ))
+    ) {
+      markQuotaExhausted();
+    }
   }
 
   recalculateDerivedValues();

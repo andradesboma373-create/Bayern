@@ -404,10 +404,20 @@ export class MatchEngine {
     if (s1 === regTarget && s2 < regTie) return true;
     if (s2 === regTarget && s1 < regTie) return true;
     
-    // 2. Overtime logic (MR3 format: 6 rounds per OT set)
-    // No artificial round caps. Overtime continues until a team secures a 2-round lead!
+    // 2. Overtime logic
     if (s1 >= regTie && s2 >= regTie) {
-      // Both CS2 and SO2 use identical competitive MR12/MR3 rules (regulation to 13, 3 rounds per OT half)
+      if (!isCS2) {
+        // Standoff 2 (SO2) Overtime Rules:
+        // Regulation tie at 12:12. Matches go up to at least 15.
+        // Victory condition: Must win with a 3-round lead (отрыв в 3 раунда):
+        // 15:12, 16:13, 17:14, 18:15, 19:16, etc.
+        const minOtTarget = regTie + 3; // 15 in MR12
+        if (s1 >= minOtTarget && (s1 - s2) >= 3) return true;
+        if (s2 >= minOtTarget && (s2 - s1) >= 3) return true;
+        return false;
+      }
+
+      // CS2: MR3 format (6 rounds per OT set, win by 2 rounds, e.g. 16:12, 16:13, 16:14, 19:15, etc.)
       const totalRounds = s1 + s2;
       const otRounds = Math.max(1, totalRounds - (regTie * 2));
       const otNumber = Math.floor((otRounds - 1) / 6);

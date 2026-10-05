@@ -97,9 +97,9 @@ export const SO2_MAPS: So2MapPreset[] = [
     ctSideBias: 0.52
   },
   {
-    id: 'sakura',
-    name: 'Sakura',
-    displayName: 'Sakura',
+    id: 'hanami',
+    name: 'Hanami',
+    displayName: 'Hanami',
     imageUrl: 'https://images.unsplash.com/photo-1528164344705-475426879c0d?auto=format&fit=crop&w=800&q=80',
     description: 'Традиционный японский храм, цветущие сакуры и длинные снайперские коридоры.',
     tSideBias: 0.47,

@@ -26,10 +26,16 @@ import {
   recordFirestoreWrite, 
   fetchLiveQuotaFromFirestore, 
   getTelemetrySnapshot,
-  syncToFirestore
+  syncToFirestore,
+  isQuotaExhausted,
+  markQuotaExhausted
 } from "./server/firebaseQuotaTracker";
 import { initializeApp as initFirebaseApp } from 'firebase/app';
-import { getFirestore, doc as fsDoc, setDoc as fsSetDoc, deleteDoc as fsDeleteDoc } from 'firebase/firestore';
+import { getFirestore, doc as fsDoc, setDoc as fsSetDoc, deleteDoc as fsDeleteDoc, setLogLevel } from 'firebase/firestore';
+
+try {
+  setLogLevel('silent');
+} catch (e) {}
 
 let firestoreCloudDb: any = null;
 try {
@@ -111,29 +117,62 @@ const originalLog = console.log;
 const originalError = console.error;
 const originalWarn = console.warn;
 
+function isBenignFirestoreMessage(args: any[]): boolean {
+  return args.some(arg => {
+    if (!arg) return false;
+    const str = typeof arg === 'string' ? arg : (arg.message || arg.stack || String(arg) || '');
+    return (
+      str.includes("CANCELLED: Disconnecting idle stream") ||
+      str.includes("RESOURCE_EXHAUSTED") ||
+      str.includes("resource-exhausted") ||
+      str.includes("Quota limit exceeded") ||
+      str.includes("Free daily write units per project") ||
+      str.includes("GrpcConnection RPC 'Write' stream") ||
+      str.includes("GrpcConnection RPC")
+    );
+  });
+}
+
 console.log = (...args: any[]) => {
   originalLog(...args);
   appendToLogFile("INFO", args);
 };
+
 console.error = (...args: any[]) => {
+  if (isBenignFirestoreMessage(args)) {
+    markQuotaExhausted();
+    return;
+  }
   originalError(...args);
   appendToLogFile("ERROR", args);
 };
+
 console.warn = (...args: any[]) => {
+  if (isBenignFirestoreMessage(args)) {
+    markQuotaExhausted();
+    return;
+  }
   originalWarn(...args);
   appendToLogFile("WARN", args);
 };
+
+process.on('unhandledRejection', (reason: any) => {
+  const str = String(reason?.message || reason?.stack || reason || '');
+  if (
+    str.includes("RESOURCE_EXHAUSTED") ||
+    str.includes("resource-exhausted") ||
+    str.includes("Quota limit exceeded") ||
+    str.includes("CANCELLED: Disconnecting idle stream") ||
+    str.includes("GrpcConnection RPC")
+  ) {
+    markQuotaExhausted();
+    return;
+  }
+  originalError("Unhandled Rejection:", reason);
+});
 // ==========================================
 
 import { MAP_POOL_CS2, MAP_POOL_S2, simulateMatchSeries } from "./src/lib/simulation";
-// Suppress benign Firebase idle stream warnings
-const originalConsoleError = console.error;
-console.error = (...args) => {
-  if (typeof args[0] === 'string' && args[0].includes("GrpcConnection RPC") && args[0].includes("CANCELLED: Disconnecting idle stream")) {
-    return; // Ignore benign timeout warnings
-  }
-  originalConsoleError(...args);
-};
 
 
 const db = "localdb";
@@ -549,11 +588,33 @@ async function setDoc(docRef: any, data: any, options?: any): Promise<any> {
   }
 
   // Cloud Firestore asynchronous sync
-  if (firestoreCloudDb) {
+  if (firestoreCloudDb && !isQuotaExhausted()) {
     try {
       const finalDocData = options && options.merge ? { ...existing, ...newData } : newData;
-      fsSetDoc(fsDoc(firestoreCloudDb, collectionName, id), sanitizeForFirestore(finalDocData), { merge: !!(options && options.merge) }).catch(() => {});
-    } catch (e) {}
+      fsSetDoc(fsDoc(firestoreCloudDb, collectionName, id), sanitizeForFirestore(finalDocData), { merge: !!(options && options.merge) })
+        .catch((err: any) => {
+          if (
+            err?.code === 'resource-exhausted' ||
+            (typeof err?.message === 'string' && (
+              err.message.includes('RESOURCE_EXHAUSTED') ||
+              err.message.includes('Quota limit exceeded') ||
+              err.message.includes('Free daily write units per project')
+            ))
+          ) {
+            markQuotaExhausted();
+          }
+        });
+    } catch (e: any) {
+      if (
+        e?.code === 'resource-exhausted' ||
+        (typeof e?.message === 'string' && (
+          e.message.includes('RESOURCE_EXHAUSTED') ||
+          e.message.includes('Quota limit exceeded')
+        ))
+      ) {
+        markQuotaExhausted();
+      }
+    }
   }
 
   return { success: true };
@@ -577,10 +638,32 @@ async function updateDoc(docRef: any, data: any): Promise<any> {
   fallbackDb.set(collectionName, id, finalDocData);
 
   // Cloud Firestore asynchronous sync
-  if (firestoreCloudDb) {
+  if (firestoreCloudDb && !isQuotaExhausted()) {
     try {
-      fsSetDoc(fsDoc(firestoreCloudDb, collectionName, id), sanitizeForFirestore(finalDocData), { merge: true }).catch(() => {});
-    } catch (e) {}
+      fsSetDoc(fsDoc(firestoreCloudDb, collectionName, id), sanitizeForFirestore(finalDocData), { merge: true })
+        .catch((err: any) => {
+          if (
+            err?.code === 'resource-exhausted' ||
+            (typeof err?.message === 'string' && (
+              err.message.includes('RESOURCE_EXHAUSTED') ||
+              err.message.includes('Quota limit exceeded') ||
+              err.message.includes('Free daily write units per project')
+            ))
+          ) {
+            markQuotaExhausted();
+          }
+        });
+    } catch (e: any) {
+      if (
+        e?.code === 'resource-exhausted' ||
+        (typeof e?.message === 'string' && (
+          e.message.includes('RESOURCE_EXHAUSTED') ||
+          e.message.includes('Quota limit exceeded')
+        ))
+      ) {
+        markQuotaExhausted();
+      }
+    }
   }
 
   return { success: true };
@@ -593,10 +676,32 @@ async function deleteDoc(docRef: any): Promise<any> {
   fallbackDb.delete(collectionName, id);
 
   // Cloud Firestore asynchronous sync
-  if (firestoreCloudDb) {
+  if (firestoreCloudDb && !isQuotaExhausted()) {
     try {
-      fsDeleteDoc(fsDoc(firestoreCloudDb, collectionName, id)).catch(() => {});
-    } catch (e) {}
+      fsDeleteDoc(fsDoc(firestoreCloudDb, collectionName, id))
+        .catch((err: any) => {
+          if (
+            err?.code === 'resource-exhausted' ||
+            (typeof err?.message === 'string' && (
+              err.message.includes('RESOURCE_EXHAUSTED') ||
+              err.message.includes('Quota limit exceeded') ||
+              err.message.includes('Free daily write units per project')
+            ))
+          ) {
+            markQuotaExhausted();
+          }
+        });
+    } catch (e: any) {
+      if (
+        e?.code === 'resource-exhausted' ||
+        (typeof e?.message === 'string' && (
+          e.message.includes('RESOURCE_EXHAUSTED') ||
+          e.message.includes('Quota limit exceeded')
+        ))
+      ) {
+        markQuotaExhausted();
+      }
+    }
   }
 
   return { success: true };

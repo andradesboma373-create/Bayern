@@ -99,7 +99,7 @@ export const MAP_POOL_S2 = [
     { id: 'province', name: 'Province', tSideBias: 0.53, ctSideBias: 0.47 },
     { id: 'sandstone', name: 'Sandstone', tSideBias: 0.50, ctSideBias: 0.50 },
     { id: 'dune', name: 'Dune', tSideBias: 0.51, ctSideBias: 0.49 },
-    { id: 'sakura', name: 'Sakura', tSideBias: 0.46, ctSideBias: 0.54 },
+    { id: 'hanami', name: 'Hanami', tSideBias: 0.47, ctSideBias: 0.53 },
     { id: 'prison', name: 'Prison', tSideBias: 0.49, ctSideBias: 0.51 },
 ];
 // --- Auto-inject custom maps from public/maps ---

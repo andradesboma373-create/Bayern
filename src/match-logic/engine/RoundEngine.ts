@@ -73,7 +73,9 @@ export class RoundEngine {
       }
     } else if (state.round > regulationMax) {
       const otRound = state.round - regulationMax;
-      const roundsPerHalf = 3;
+      // In CS2: MR3 format (3 rounds per half, side switch every 3 rounds)
+      // In SO2 (Standoff 2): side switch every 2 rounds (смена сторон каждые 2 раунда)
+      const roundsPerHalf = state.isCS2 ? 3 : 2;
       const roundsPerOT = roundsPerHalf * 2;
       if (otRound === 1 || (otRound - 1) % roundsPerOT === 0) {
         if (teamIds[0] && state.teams[teamIds[0]]) state.teams[teamIds[0]].side = t1Orig;
@@ -82,6 +84,12 @@ export class RoundEngine {
           if (p) {
             p.side = state.teams[p.teamId]?.side || 'T';
             p.money = 10000;
+            p.primaryWeaponId = null;
+            p.secondaryWeaponId = p.side === 'T' ? 'glock' : 'usp';
+            p.weaponId = p.secondaryWeaponId;
+            p.armor = 0;
+            p.hasDefuseKit = false;
+            p.grenades = [];
           }
         }
       } else if ((otRound - 1) % roundsPerHalf === 0) {
@@ -91,6 +99,12 @@ export class RoundEngine {
           if (p) {
             p.side = state.teams[p.teamId]?.side || 'T';
             p.money = 10000;
+            p.primaryWeaponId = null;
+            p.secondaryWeaponId = p.side === 'T' ? 'glock' : 'usp';
+            p.weaponId = p.secondaryWeaponId;
+            p.armor = 0;
+            p.hasDefuseKit = false;
+            p.grenades = [];
           }
         }
       }
