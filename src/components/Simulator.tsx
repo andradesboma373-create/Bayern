@@ -6,7 +6,7 @@ import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs, updateD
 import TeamLogo from './TeamLogo';
 import PlayerAvatar from './PlayerAvatar';
 
-import { simulateMatchSeries, MAP_POOL_CS2, MAP_POOL_S2 } from '../lib/simulation';
+import { simulateMatchSeries, MAP_POOL_CS2, MAP_POOL_S2, refreshMapPools } from '../lib/simulation';
 import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { simulationPerf } from '../lib/simulationPerformance';
 import VetoModal from "./VetoModal";
@@ -175,6 +175,17 @@ export default function Simulator({ user }: { user: any }) {
   const [showChannelLoad, setShowChannelLoad] = useState<1 | 2 | null>(null);
   const [teamSearch, setTeamSearch] = useState("");
   const [notifyingManagers, setNotifyingManagers] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/maps/list')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.cs2 && data.s2) {
+          refreshMapPools(data.cs2, data.s2);
+        }
+      })
+      .catch(err => console.warn("Failed to load maps list from server:", err));
+  }, []);
 
   useEffect(() => {
     if (location.state) {
@@ -881,7 +892,7 @@ export default function Simulator({ user }: { user: any }) {
         <div ref={resultContainerRef} className="flex flex-col gap-6 bg-[#0a0a0f] p-6 rounded-3xl border border-white/5">
           <div className="bg-gradient-to-br from-[#12121a] to-[#1a1a24] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden"
                style={(currentSelectedMap || bo1Map) ? {
-                 backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.85), rgba(26,26,36,0.95)), url('/maps/${activeBgMapName}.jpg')`,
+                 backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.85), rgba(26,26,36,0.95)), url('/maps/${activeBgMapName}')`,
                  backgroundSize: 'cover',
                  backgroundPosition: 'center'
                } : {}}>
@@ -957,7 +968,7 @@ export default function Simulator({ user }: { user: any }) {
                       >
                         <div 
                           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('/maps/${mImg}.jpg')` }}
+                          style={{ backgroundImage: `url('/maps/${mImg}')` }}
                           title={mTitle}
                         />
                         <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">

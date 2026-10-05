@@ -417,7 +417,7 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
                                     key={m.id}
                                     onClick={() => vetoStage <= steps.length && !isBanned && !isPicked && handleVetoAction(m.id)}
                                     style={{
-                                      backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('/maps/${m.name.toLowerCase()}.jpg')`,
+                                      backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('/maps/${m.name.toLowerCase()}')`,
                                       backgroundSize: 'cover',
                                       backgroundPosition: 'center'
                                     }}

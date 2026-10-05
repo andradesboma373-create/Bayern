@@ -25,6 +25,7 @@ import { getCanonicalRoomId } from './storage';
 import { useGameUniverse } from '../../lib/gameUniverse';
 import So2MediaLibraryModal from '../So2MediaLibraryModal';
 import { syncAndBackfillTournamentMatches } from '../../lib/tournamentMatchRecorder';
+import { refreshMapPools } from '../../lib/simulation';
 
 export const BG_THEMES = {
   cyber_grid: {
@@ -220,6 +221,18 @@ export default function TournamentManager({ user }: { user: any }) {
     window.addEventListener('tournaments-updated', handleSync);
     return () => window.removeEventListener('tournaments-updated', handleSync);
   }, [userId]);
+
+  // Load and inject custom maps from server
+  useEffect(() => {
+    fetch('/api/maps/list')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.cs2 && data.s2) {
+          refreshMapPools(data.cs2, data.s2);
+        }
+      })
+      .catch(err => console.warn("Failed to load maps list from server:", err));
+  }, []);
 
   useEffect(() => {
     if (!activeTournament?.id) {

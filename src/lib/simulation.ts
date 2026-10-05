@@ -102,7 +102,21 @@ export const MAP_POOL_S2 = [
     { id: 'hanami', name: 'Hanami', tSideBias: 0.47, ctSideBias: 0.53 },
     { id: 'prison', name: 'Prison', tSideBias: 0.49, ctSideBias: 0.51 },
 ];
-// --- Auto-inject custom maps from public/maps ---
+// ------------------------------------------------
+export function refreshMapPools(customCS2: any[], customS2: any[]) {
+    if (Array.isArray(customCS2) && customCS2.length > 0) {
+        MAP_POOL_CS2.length = 0;
+        MAP_POOL_CS2.push(...customCS2);
+    }
+    if (Array.isArray(customS2) && customS2.length > 0) {
+        MAP_POOL_S2.length = 0;
+        MAP_POOL_S2.push(...customS2);
+    }
+}
+
+export const CS2_MAP_IDS = new Set(['mirage', 'inferno', 'dust2', 'nuke', 'ancient', 'anubis', 'cache', 'vertigo', 'overpass', 'train', 'viaduct']);
+export const S2_MAP_IDS = new Set(['breeze', 'rust', 'province', 'sandstone', 'dune', 'hanami', 'prison', 'sakura', 'zone9', 'village', 'lakeside']);
+
 try {
     const existingCS2 = new Set(MAP_POOL_CS2.map(m => m.id.toLowerCase()));
     const existingS2 = new Set(MAP_POOL_S2.map(m => m.id.toLowerCase()));
@@ -112,10 +126,18 @@ try {
         const formattedName = mapName.charAt(0).toUpperCase() + mapName.slice(1);
         const mapObj = { id, name: formattedName, tSideBias: 0.50, ctSideBias: 0.50 };
         
-        // If the map isn't natively known in either CS2 or S2, add to BOTH as custom map
-        if (!existingCS2.has(id) && !existingS2.has(id)) {
-            MAP_POOL_CS2.push(mapObj);
-            MAP_POOL_S2.push(mapObj);
+        // Logic: if it's explicitly in S2 list, add only to S2. Otherwise, check CS2.
+        // If unknown, add to BOTH (safe default for truly new custom maps), 
+        // but the server list API will handle the definitive separation.
+        if (S2_MAP_IDS.has(id)) {
+            if (!existingS2.has(id)) MAP_POOL_S2.push(mapObj);
+        } else if (CS2_MAP_IDS.has(id)) {
+            if (!existingCS2.has(id)) MAP_POOL_CS2.push(mapObj);
+        } else {
+            // Truly unknown map - for now add to both in client-side fallback,
+            // but the server will override this via /api/maps/list
+            if (!existingCS2.has(id)) MAP_POOL_CS2.push(mapObj);
+            if (!existingS2.has(id)) MAP_POOL_S2.push(mapObj);
         }
     });
 } catch(e) {

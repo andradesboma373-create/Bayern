@@ -28,6 +28,29 @@ export const normalizeTournament = (t: any): Tournament => {
     copy.settings = { ...copy.settings };
   }
 
+  // PRE-NORMALIZATION: If bracketRounds is an object (Firestore format), try to fix it NOW 
+  // before hasPlayoffStage check or any other logic runs.
+  if (copy.bracketRounds && typeof copy.bracketRounds === 'object' && !Array.isArray(copy.bracketRounds)) {
+    const fixed = ensureArrayOfRounds(copy.bracketRounds);
+    if (fixed) copy.bracketRounds = fixed;
+  }
+  if (copy.losersBracketRounds && typeof copy.losersBracketRounds === 'object' && !Array.isArray(copy.losersBracketRounds)) {
+    const fixed = ensureArrayOfRounds(copy.losersBracketRounds);
+    if (fixed) copy.losersBracketRounds = fixed;
+  }
+  if (copy.tieredBracketRounds && typeof copy.tieredBracketRounds === 'object' && !Array.isArray(copy.tieredBracketRounds)) {
+    const fixed = ensureArrayOfRounds(copy.tieredBracketRounds);
+    if (fixed) copy.tieredBracketRounds = fixed;
+  }
+  if (copy.swissRounds && typeof copy.swissRounds === 'object' && !Array.isArray(copy.swissRounds)) {
+    const fixed = ensureArrayOfRounds(copy.swissRounds);
+    if (fixed) copy.swissRounds = fixed;
+  }
+  if (copy.grandFinal && typeof copy.grandFinal === 'object' && !Array.isArray(copy.grandFinal)) {
+    const fixed = ensureArrayOfMatches(copy.grandFinal);
+    if (fixed) copy.grandFinal = fixed;
+  }
+
   const hasGroupStage = (Array.isArray(copy.groups) && copy.groups.length > 0) || 
                         (Array.isArray(copy.gslGroups) && copy.gslGroups.length > 0) || 
                         (Array.isArray(copy.swissRounds) && copy.swissRounds.length > 0) ||
@@ -151,18 +174,83 @@ export const normalizeTournament = (t: any): Tournament => {
   // 5. Auto-repair missing playoff bracket if it was lost in transmission or stripped in lightweight storage
   const isPlayoffMode = copy.settings.stage1Type === 'playoff' || copy.settings.mode === 'single_stage';
   if (isPlayoffMode && (!copy.bracketRounds || copy.bracketRounds.length === 0) && Array.isArray(copy.teams) && copy.teams.length >= 2) {
-    if (copy.settings.eliminationType === 'double') {
-      const res = generateDoubleElimination(copy.teams);
-      copy.bracketRounds = res.winnersBracket;
-      copy.losersBracketRounds = res.losersBracket;
-      copy.grandFinal = res.grandFinal;
-    } else {
-      copy.bracketRounds = generateSingleEliminationBracket(copy.teams);
+    // CRITICAL: Double check that bracketRounds is REALLY missing and not just in a format we missed
+    if (!copy.bracketRounds_json || copy.bracketRounds_json === '[]') {
+        console.warn(`[Tournament Normalizer] Auto-repairing playoff bracket for ${copy.id}. This might reset progress if data was partially lost.`);
+        if (copy.settings.eliminationType === 'double') {
+          const res = generateDoubleElimination(copy.teams);
+          copy.bracketRounds = res.winnersBracket;
+          copy.losersBracketRounds = res.losersBracket;
+          copy.grandFinal = res.grandFinal;
+        } else {
+          copy.bracketRounds = generateSingleEliminationBracket(copy.teams);
+        }
     }
   }
 
   return copy as Tournament;
 };
+
+/**
+ * Converts nested rounds from arrays, JSON strings, or Firestore objects into typed Match[][]
+ */
+export function ensureArrayOfRounds(val: any, jsonVal?: string): Match[][] | undefined {
+  if (Array.isArray(val) && val.length > 0) {
+    // Check if it's an array of arrays. If it's an array of objects but those objects look like Firestore rounds...
+    if (val.every(item => item && typeof item === 'object' && !Array.isArray(item) && (item._isNestedArray || Object.keys(item).some(k => k.startsWith('item_') || k.startsWith('round_'))))) {
+       return val.map(item => ensureArrayOfMatches(item)).filter(Boolean) as Match[][];
+    }
+    return val;
+  }
+  if (jsonVal && typeof jsonVal === 'string' && jsonVal.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(jsonVal);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (e) {}
+  }
+  if (val && typeof val === 'object' && val !== null) {
+    const keys = Object.keys(val);
+    if (keys.length > 0) {
+      const sortedKeys = keys
+        .filter(k => k !== '_isNestedArray')
+        .sort((a, b) => {
+          const na = parseInt(a.replace(/\D/g, ''));
+          const nb = parseInt(b.replace(/\D/g, ''));
+          if (!isNaN(na) && !isNaN(nb)) return na - nb;
+          return a.localeCompare(b);
+        });
+      
+      const arr = sortedKeys.map(k => {
+          const item = val[k];
+          if (item && typeof item === 'object' && !Array.isArray(item)) {
+              return ensureArrayOfMatches(item);
+          }
+          return item;
+      }).filter(Array.isArray);
+      
+      if (arr.length > 0) return arr;
+    }
+  }
+  return Array.isArray(val) ? val : undefined;
+}
+
+export function ensureArrayOfMatches(val: any, jsonVal?: string): Match[] | undefined {
+  if (Array.isArray(val) && val.length > 0) return val;
+  if (jsonVal && typeof jsonVal === 'string' && jsonVal.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(jsonVal);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {}
+  }
+  if (val && typeof val === 'object' && val !== null) {
+    const keys = Object.keys(val)
+      .filter(k => k !== '_isNestedArray')
+      .sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0));
+    const arr = keys.map(k => val[k]).filter(m => m && typeof m === 'object');
+    if (arr.length > 0) return arr;
+  }
+  return Array.isArray(val) ? val : undefined;
+}
 
 /**
  * Safely serializes tournament for Google Cloud Firestore (avoids nested arrays error)
@@ -199,18 +287,22 @@ export const serializeTournamentForFirestore = (tournament: Tournament): any => 
 export const deserializeTournamentFromFirestore = (data: any): Tournament => {
   if (!data) return data;
   const t: any = { ...data };
-  if (t.bracketRounds_json && (!t.bracketRounds || !Array.isArray(t.bracketRounds))) {
-    try { t.bracketRounds = JSON.parse(t.bracketRounds_json); } catch (e) {}
-  }
-  if (t.losersBracketRounds_json && (!t.losersBracketRounds || !Array.isArray(t.losersBracketRounds))) {
-    try { t.losersBracketRounds = JSON.parse(t.losersBracketRounds_json); } catch (e) {}
-  }
-  if (t.swissRounds_json && (!t.swissRounds || !Array.isArray(t.swissRounds))) {
-    try { t.swissRounds = JSON.parse(t.swissRounds_json); } catch (e) {}
-  }
-  if (t.tieredBracketRounds_json && (!t.tieredBracketRounds || !Array.isArray(t.tieredBracketRounds))) {
-    try { t.tieredBracketRounds = JSON.parse(t.tieredBracketRounds_json); } catch (e) {}
-  }
+  
+  const bracket = ensureArrayOfRounds(t.bracketRounds, t.bracketRounds_json);
+  if (bracket) t.bracketRounds = bracket;
+
+  const losers = ensureArrayOfRounds(t.losersBracketRounds, t.losersBracketRounds_json);
+  if (losers) t.losersBracketRounds = losers;
+
+  const swiss = ensureArrayOfRounds(t.swissRounds, t.swissRounds_json);
+  if (swiss) t.swissRounds = swiss;
+
+  const tiered = ensureArrayOfRounds(t.tieredBracketRounds, t.tieredBracketRounds_json);
+  if (tiered) t.tieredBracketRounds = tiered;
+
+  const gf = ensureArrayOfMatches(t.grandFinal, t.grandFinal_json);
+  if (gf) t.grandFinal = gf;
+
   if (t.gslGroups_json && (!t.gslGroups || !Array.isArray(t.gslGroups))) {
     try { t.gslGroups = JSON.parse(t.gslGroups_json); } catch (e) {}
   }

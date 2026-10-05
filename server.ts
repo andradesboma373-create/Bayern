@@ -172,7 +172,7 @@ process.on('unhandledRejection', (reason: any) => {
 });
 // ==========================================
 
-import { MAP_POOL_CS2, MAP_POOL_S2, simulateMatchSeries } from "./src/lib/simulation";
+import { MAP_POOL_CS2, MAP_POOL_S2, simulateMatchSeries, CS2_MAP_IDS, S2_MAP_IDS } from "./src/lib/simulation";
 
 
 const db = "localdb";
@@ -1050,18 +1050,38 @@ app.get('/maps/:name', (req, res, next) => {
   if (name.includes('sakura')) {
     name = name.replace('sakura', 'hanami');
   }
-  const publicMaps = path.join(process.cwd(), 'public', 'maps', name);
-  const distMaps = path.join(process.cwd(), 'dist', 'maps', name);
+  
+  const publicDir = path.join(process.cwd(), 'public', 'maps');
+  const distDir = path.join(process.cwd(), 'dist', 'maps');
   
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'public, max-age=86400');
 
-  if (fs.existsSync(publicMaps)) {
-    return res.sendFile(publicMaps);
+  // If the name already has an extension, try to serve it directly
+  if (name.includes('.')) {
+    const subdirs = ['', 'cs2', 'so2'];
+    for (const dir of subdirs) {
+        const p1 = path.join(publicDir, dir, name);
+        const p2 = path.join(distDir, dir, name);
+        if (fs.existsSync(p1)) return res.sendFile(p1);
+        if (fs.existsSync(p2)) return res.sendFile(p2);
+    }
   }
-  if (fs.existsSync(distMaps)) {
-    return res.sendFile(distMaps);
+
+  // Otherwise, try known extensions
+  const pureName = name.replace(/\.(jpg|jpeg|png)$/i, '');
+  const extensions = ['.jpg', '.png', '.jpeg', '.webp'];
+  const subdirs = ['', 'cs2', 'so2'];
+  
+  for (const dir of subdirs) {
+      for (const ext of extensions) {
+        const p1 = path.join(publicDir, dir, pureName + ext);
+        const p2 = path.join(distDir, dir, pureName + ext);
+        if (fs.existsSync(p1)) return res.sendFile(p1);
+        if (fs.existsSync(p2)) return res.sendFile(p2);
+      }
   }
+  
   next();
 });
 
@@ -4103,6 +4123,87 @@ async function loadAllBots() {
 
 // Settings and Telegram Bot restart API Endpoint
 
+// --- Auto-inject custom maps from public/maps ---
+let customMapsCS2: string[] = [];
+let customMapsS2: string[] = [];
+
+const scanMapsDir = () => {
+    try {
+        const publicMapsDir = path.join(process.cwd(), 'public', 'maps');
+        const cs2Dir = path.join(publicMapsDir, 'cs2');
+        const so2Dir = path.join(publicMapsDir, 'so2');
+        
+        customMapsCS2 = [];
+        customMapsS2 = [];
+
+        if (fs.existsSync(cs2Dir)) {
+          customMapsCS2 = fs.readdirSync(cs2Dir)
+            .filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png'))
+            .map(f => f.replace(/\.(jpg|jpeg|png)$/i, ''));
+        }
+        if (fs.existsSync(so2Dir)) {
+          customMapsS2 = fs.readdirSync(so2Dir)
+            .filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png'))
+            .map(f => f.replace(/\.(jpg|jpeg|png)$/i, ''));
+        }
+        
+        // Fallback for root maps dir (legacy)
+        const rootFiles = fs.readdirSync(publicMapsDir)
+          .filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png'))
+          .map(f => f.replace(/\.(jpg|jpeg|png)$/i, ''));
+        
+        rootFiles.forEach(f => {
+            const lowF = f.toLowerCase();
+            if (CS2_MAP_IDS.has(lowF)) {
+                if (!customMapsCS2.includes(f)) customMapsCS2.push(f);
+            } else if (S2_MAP_IDS.has(lowF)) {
+                if (!customMapsS2.includes(f)) customMapsS2.push(f);
+            } else {
+                // If truly unknown and in root, we don't know where it belongs
+                // User should use subfolders for separation
+                // For now, let's not add it to either to force separation
+            }
+        });
+    } catch(e) {}
+};
+scanMapsDir();
+
+const getCombinedMapPool = () => {
+    const cs2Base = [...MAP_POOL_CS2];
+    const s2Base = [...MAP_POOL_S2];
+    
+    // Strict separation: remove maps from the wrong pool to honor "only CS in CS world, only SO2 in SO2 world"
+    const cs2Final = cs2Base.filter(m => !S2_MAP_IDS.has(m.id.toLowerCase()));
+    const s2Final = s2Base.filter(m => !CS2_MAP_IDS.has(m.id.toLowerCase()));
+
+    const existingCS2 = new Set(cs2Final.map(m => m.id.toLowerCase()));
+    const existingS2 = new Set(s2Final.map(m => m.id.toLowerCase()));
+    
+    customMapsCS2.forEach(mapName => {
+        const id = mapName.toLowerCase();
+        const formattedName = mapName.charAt(0).toUpperCase() + mapName.slice(1);
+        if (!existingCS2.has(id)) {
+            cs2Final.push({ id, name: formattedName, tSideBias: 0.50, ctSideBias: 0.50 });
+        }
+    });
+
+    customMapsS2.forEach(mapName => {
+        const id = mapName.toLowerCase();
+        const formattedName = mapName.charAt(0).toUpperCase() + mapName.slice(1);
+        if (!existingS2.has(id)) {
+            s2Final.push({ id, name: formattedName, tSideBias: 0.50, ctSideBias: 0.50 });
+        }
+    });
+
+    return { cs2: cs2Final, s2: s2Final };
+};
+// ------------------------------------------------
+
+app.get("/api/maps/list", (req, res) => {
+    scanMapsDir();
+    res.json(getCombinedMapPool());
+});
+
 app.post("/api/settings/upload-map", upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -4114,7 +4215,8 @@ app.post("/api/settings/upload-map", upload.single('image'), async (req, res) =>
     }
     
     // Convert mapName to lowercase and add .jpg
-    const fileName = `${mapName.toLowerCase()}.jpg`;
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    const fileName = `${mapName.toLowerCase()}${ext.toLowerCase() === '.png' ? '.png' : '.jpg'}`;
     
     // Save to LocalDB so it persists across container restarts
     const base64Image = req.file.buffer.toString('base64');
@@ -4129,10 +4231,6 @@ app.post("/api/settings/upload-map", upload.single('image'), async (req, res) =>
       console.warn("Failed to save map to LocalDB, only writing to local disk:", dbErr);
     }
 
-    const destPath = path.join(process.cwd(), 'public', 'maps', fileName);
-    
-    // Make sure public/maps exists
-    
     const publicMapsDir = path.join(process.cwd(), 'public', 'maps');
     if (!fs.existsSync(publicMapsDir)) {
       fs.mkdirSync(publicMapsDir, { recursive: true });
@@ -4147,6 +4245,12 @@ app.post("/api/settings/upload-map", upload.single('image'), async (req, res) =>
         fs.mkdirSync(distMapsDir, { recursive: true });
       }
       fs.writeFileSync(path.join(distMapsDir, fileName), req.file.buffer);
+    }
+
+    // Update in-memory list
+    const pureName = fileName.replace(/\.(jpg|jpeg|png)$/i, '');
+    if (!customMapsListInServer.includes(pureName)) {
+        customMapsListInServer.push(pureName);
     }
     
     res.json({ success: true, fileName });
@@ -5028,6 +5132,11 @@ async function loadCustomMaps() {
         const buf = Buffer.from(data.imageBase64, 'base64');
         fs.writeFileSync(path.join(publicDir, data.fileName), buf);
         if (hasDist) fs.writeFileSync(path.join(distDir, data.fileName), buf);
+        
+        const pureName = data.fileName.replace(/\.(jpg|jpeg|png)$/i, '');
+        if (!customMapsListInServer.includes(pureName)) {
+            customMapsListInServer.push(pureName);
+        }
       }
     });
     console.log("Custom maps restored.");
