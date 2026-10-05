@@ -243,7 +243,7 @@ export default function MatchCard({
                     </div>
                     
                     
-                    {/* Play / Veto Simulation Button (Realtime mode) or Confirm Button (Standard mode) */}
+                    {/* Play / Veto Simulation Button or Confirm Button */}
                     {match.team1 && match.team2 && !match.winnerId && match.team1.id !== 'BYE' && match.team2.id !== 'BYE' && !isExporting && (
                         bracketMode === 'realtime' ? (
                             onVetoMatch ? (
@@ -255,19 +255,31 @@ export default function MatchCard({
                                 </button>
                             ) : null
                         ) : (
-                            <button 
-                                onClick={() => {
-                                    if (match.score1 === match.score2) {
-                                        if (!window.confirm("У вас зафиксирована ничья. В плей-офф ничьи обычно не допускаются. Вы уверены, что хотите завершить матч? (Победитель может быть не определен корректно)")) {
-                                            return;
+                            <div className="flex flex-col gap-1.5 mt-2">
+                                <button 
+                                    onClick={() => {
+                                        if (match.score1 === match.score2) {
+                                            if (!window.confirm("У вас зафиксирована ничья. В плей-офф ничьи обычно не допускаются. Вы уверены, что хотите завершить матч? (Победитель может быть не определен корректно)")) {
+                                                return;
+                                            }
                                         }
-                                    }
-                                    onAdvanceWinner(bracketType, rIdx, mIdx);
-                                }} 
-                                className={boxCls.btnConfirm}
-                            >
-                                Завершить матч
-                            </button>
+                                        onAdvanceWinner(bracketType, rIdx, mIdx);
+                                    }} 
+                                    className={boxCls.btnConfirm}
+                                >
+                                    Завершить матч
+                                </button>
+                                {onVetoMatch && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => onVetoMatch(match.team1!, match.team2!)} 
+                                        className="w-full bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-lg py-1.5 px-2 text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                        title="Сыграть полноценный матч через симулятор с пиком карт и раундами"
+                                    >
+                                        🎮 Или сыграть матч в симуляторе
+                                    </button>
+                                )}
+                            </div>
                         )
                     )}
                 </div>

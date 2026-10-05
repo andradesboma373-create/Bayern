@@ -67,7 +67,7 @@ export function TeamLogo({
   
   if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
     // Route external URLs through server proxy with CORS headers so canvas export won't be tainted
-    src = `/api/proxy-image?url=${encodeURIComponent(logoUrl)}`;
+    src = `/api/proxy-image?url=${encodeURIComponent(src)}`;
   }
 
   return (
@@ -81,6 +81,7 @@ export function TeamLogo({
         alt={teamName}
         crossOrigin="anonymous"
         referrerPolicy="no-referrer"
+        style={{ imageRendering: '-webkit-optimize-contrast' }}
         className="max-w-full max-h-full object-contain drop-shadow-lg"
         onError={() => setError(true)}
       />

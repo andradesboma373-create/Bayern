@@ -18,13 +18,13 @@ const PRESET_TOURNAMENT_LOGOS = [
   { id: 'pgl', name: 'PGL', url: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=150&auto=format&fit=crop&q=80' },
 ];
 
-const CS2_MAP_BACKGROUNDS = [
-  { id: 'cs2_mirage', name: 'Mirage', url: '/maps/mirage.jpg' },
-  { id: 'cs2_dust2', name: 'Dust II', url: '/maps/dust2.jpg' },
-  { id: 'cs2_inferno', name: 'Inferno', url: '/maps/inferno.jpg' },
-  { id: 'cs2_nuke', name: 'Nuke', url: '/maps/nuke.jpg' },
-  { id: 'cs2_ancient', name: 'Ancient', url: '/maps/ancient.jpg' },
-  { id: 'cs2_anubis', name: 'Anubis', url: '/maps/anubis.jpg' },
+const TOURNAMENT_STAGE_THEMES = [
+  { id: 'cyber_grid', name: '👾 Кибер-Сетка' },
+  { id: 'dark_arena', name: '🏟️ Кибер-Арена' },
+  { id: 'carbon_gold', name: '🔱 Золотой Подиум' },
+  { id: 'cosmic_arena', name: '🌌 Космос' },
+  { id: 'neon_cyber', name: '⚡ Неон Кибер' },
+  { id: 'dark_minimalist', name: '🖤 Минимал' },
 ];
 
 interface Props {
@@ -54,8 +54,16 @@ export default function TournamentSettingsForm({
   const [logoUrl, setLogoUrl] = useState(initialLogoUrl);
   const [prizePool, setPrizePool] = useState(initialPrizePool);
   const game = (initialSettings?.game as any) || initialGame || 'cs2';
-  const [bgImage, setBgImage] = useState<string>(initialSettings?.bgImage || '');
-  const [bgTheme, setBgTheme] = useState<string>(initialSettings?.bgTheme || (game === 'cs2' ? 'cs2_mirage' : 'cyber_grid'));
+  const [bgImage, setBgImage] = useState<string>(() => {
+    const raw = initialSettings?.bgImage || '';
+    if (raw.includes('/maps/') || raw.startsWith('/maps/')) return '';
+    return raw;
+  });
+  const [bgTheme, setBgTheme] = useState<string>(() => {
+    const raw = initialSettings?.bgTheme;
+    if (!raw || raw.startsWith('cs2_') || raw.startsWith('so2_')) return 'cyber_grid';
+    return raw;
+  });
   const [showSo2MediaModal, setShowSo2MediaModal] = useState(false);
   const [settings, setSettings] = useState<TournamentSettings>(initialSettings || {
     mode: 'single_stage',
@@ -538,35 +546,28 @@ export default function TournamentSettingsForm({
       <div className="bg-black/40 p-5 rounded-2xl border border-white/10 space-y-4">
         <div className="flex items-center justify-between">
           <label className="block text-[#ff8f00] font-black uppercase tracking-widest text-xs flex items-center gap-2">
-            <Sparkles className="w-4 h-4" /> Фон турнира (CS2 Карты / Свой фон)
+            <Sparkles className="w-4 h-4" /> Фон турнира (Киберспортивная сцена / Свой фон)
           </label>
-          <span className="text-white/40 text-xs">Выберите карту CS2 или загрузите своё фото</span>
+          <span className="text-white/40 text-xs">Выберите тему арены или загрузите своё фото</span>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-4">
-          <div className="relative shrink-0 w-24 h-16 rounded-xl overflow-hidden border border-white/20 bg-black/60 shadow-md">
+          <div className="relative shrink-0 w-28 h-16 rounded-xl overflow-hidden border border-white/20 bg-black/60 shadow-md">
             {bgImage ? (
               <div 
                 className="w-full h-full bg-cover bg-center" 
                 style={{ backgroundImage: `url(${bgImage})` }}
               />
             ) : (
-              <div 
-                className="w-full h-full bg-cover bg-center" 
-                style={{ backgroundImage: bgTheme.startsWith('cs2_') ? `url('/maps/${bgTheme.replace('cs2_', '')}.jpg')` : undefined }}
-              >
-                {!bgTheme.startsWith('cs2_') && (
-                  <div className="w-full h-full flex items-center justify-center text-[10px] text-white/40 font-bold uppercase">
-                    Кибер-сетка
-                  </div>
-                )}
+              <div className="w-full h-full flex items-center justify-center p-2 text-center text-[10px] text-[#ff8f00] font-black uppercase bg-[#090b14] border border-[#ff8f00]/20">
+                {TOURNAMENT_STAGE_THEMES.find(t => t.id === bgTheme)?.name || 'Кибер-Сетка'}
               </div>
             )}
             {bgImage && (
               <button
                 type="button"
                 onClick={() => setBgImage('')}
-                className="absolute top-1 right-1 bg-red-600 hover:bg-red-500 text-white p-0.5 rounded-full text-[10px] shadow"
+                className="absolute top-1 right-1 bg-red-600 hover:bg-red-500 text-white p-0.5 rounded-full text-[10px] shadow cursor-pointer"
                 title="Сбросить свой фон"
               >
                 <X className="w-3 h-3" />
@@ -620,23 +621,23 @@ export default function TournamentSettingsForm({
                   if (e.target.value) setBgTheme('custom');
                 }}
                 className="flex-1 bg-black/50 border border-white/10 px-4 py-2.5 rounded-xl text-white text-xs outline-none focus:border-[#ff8f00]/50"
-                placeholder="Или вставьте ссылку на фон (https://...)"
+                placeholder="Или вставьте ссылку на свой фон (https://...)"
               />
             </div>
 
-            {/* CS2 Map Presets */}
+            {/* Tournament Stage Themes Presets */}
             <div className="flex items-center gap-2 flex-wrap pt-1">
-              <span className="text-[10px] text-white/40 uppercase font-bold">Карты CS2:</span>
-              {CS2_MAP_BACKGROUNDS.map(m => (
+              <span className="text-[10px] text-white/40 uppercase font-bold">Темы кибер-арены:</span>
+              {TOURNAMENT_STAGE_THEMES.map(m => (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => {
-                    setBgImage(m.url);
+                    setBgImage('');
                     setBgTheme(m.id);
                   }}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all border cursor-pointer ${
-                    (bgImage === m.url || (!bgImage && bgTheme === m.id))
+                    (!bgImage && bgTheme === m.id)
                       ? 'bg-[#ff8f00] text-black border-[#ff8f00] shadow-[0_0_10px_rgba(255,143,0,0.3)]'
                       : 'bg-black/40 text-white/70 border-white/10 hover:text-white hover:bg-white/5'
                   }`}

@@ -1043,6 +1043,28 @@ app.get('/api/proxy-image', async (req, res) => {
   }
 });
 
+// Dedicated maps image endpoint with Hanami auto-resolution and CORS headers
+app.get('/maps/:name', (req, res, next) => {
+  let name = (req.params.name || '').toLowerCase();
+  // If legacy requests sakura, serve hanami
+  if (name.includes('sakura')) {
+    name = name.replace('sakura', 'hanami');
+  }
+  const publicMaps = path.join(process.cwd(), 'public', 'maps', name);
+  const distMaps = path.join(process.cwd(), 'dist', 'maps', name);
+  
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+
+  if (fs.existsSync(publicMaps)) {
+    return res.sendFile(publicMaps);
+  }
+  if (fs.existsSync(distMaps)) {
+    return res.sendFile(distMaps);
+  }
+  next();
+});
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/api/gemini/live" });
 const PORT = 3000;

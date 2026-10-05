@@ -122,6 +122,7 @@ export function getBoxStyle(style?: 'classic' | 'minimalist' | 'cyber' | 'retro'
 
 export interface Tournament {
   channelId?: string;
+  userId?: string;
   game?: string;
   id: string;
   name: string;

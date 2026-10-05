@@ -1047,6 +1047,51 @@ export const updateBetaTournamentMatchResult = (
       }
     }
 
+    if (!updated && tourney.gslGroups) {
+      for (const g of tourney.gslGroups) {
+        const checkBracket = (b: any[]) => {
+          for (let r = 0; r < b.length; r++) {
+            for (let m = 0; m < b[r].length; m++) {
+              const match = b[r][m];
+              if (!match || !match.team1 || !match.team2) continue;
+              const m1 = normalize(match.team1.name || "");
+              const m2 = normalize(match.team2.name || "");
+              if ((m1 === name1 && m2 === name2) || (m1 === name2 && m2 === name1)) {
+                match.score1 = m1 === name1 ? team1Score : team2Score;
+                match.score2 = m1 === name1 ? team2Score : team1Score;
+                match.winnerId = match.score1 > match.score2 ? match.team1.id : match.score2 > match.score1 ? match.team2.id : null;
+                match.isFinished = true;
+                return true;
+              }
+            }
+          }
+          return false;
+        };
+        if (g.upperBracket && checkBracket(g.upperBracket)) { updated = true; break; }
+        if (g.lowerBracket && checkBracket(g.lowerBracket)) { updated = true; break; }
+      }
+    }
+
+    if (!updated && tourney.tieredBracketRounds) {
+      for (let r = 0; r < tourney.tieredBracketRounds.length; r++) {
+        for (let m = 0; m < tourney.tieredBracketRounds[r].length; m++) {
+          const match = tourney.tieredBracketRounds[r][m];
+          if (!match || !match.team1 || !match.team2) continue;
+          const m1 = normalize(match.team1.name || "");
+          const m2 = normalize(match.team2.name || "");
+          if ((m1 === name1 && m2 === name2) || (m1 === name2 && m2 === name1)) {
+            match.score1 = m1 === name1 ? team1Score : team2Score;
+            match.score2 = m1 === name1 ? team2Score : team1Score;
+            match.winnerId = match.score1 > match.score2 ? match.team1.id : match.score2 > match.score1 ? match.team2.id : null;
+            match.isFinished = true;
+            updated = true;
+            break;
+          }
+        }
+        if (updated) break;
+      }
+    }
+
     if (updated) {
       saveTournament(userId, tourney);
     }

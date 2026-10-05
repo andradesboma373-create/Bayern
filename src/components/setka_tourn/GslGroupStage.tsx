@@ -3,6 +3,7 @@ import { Tournament, Match, GslGroup, Team } from './types';
 import MatchCard from './MatchCard';
 import { updateGslMatch, getGslGroupStandings, areAllGslGroupsFinished } from './gslLogic';
 import { Trophy, ArrowRight, Users, CheckCircle2 } from 'lucide-react';
+import { recordTournamentMatchResult } from '../../lib/tournamentMatchRecorder';
 
 interface Props {
   tournament: Tournament;
@@ -94,6 +95,10 @@ export default function GslGroupStage({
     const targetBracket = bracketType === 'upper' ? targetGroup.upperBracket : targetGroup.lowerBracket;
     const match = targetBracket[rIdx]?.[mIdx];
     if (!match) return;
+
+    try {
+      recordTournamentMatchResult(tournament.userId || 'guest', tournament, match, `GSL Группа ${targetGroup.name}`);
+    } catch (e) {}
 
     const updatedGroup = updateGslMatch(targetGroup, bracketType, rIdx, mIdx, match.score1, match.score2, advanceCount);
     const newGroups = [...gslGroups];

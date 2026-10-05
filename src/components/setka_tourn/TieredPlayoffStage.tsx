@@ -4,6 +4,7 @@ import TeamLogo from '../TeamLogo';
 import { advanceTieredPlayoffMatch, getGslGroupStandings } from './gslLogic';
 import { Trophy, ArrowLeftRight, ArrowUpDown } from 'lucide-react';
 import { getBoxStyle } from './boxStyles';
+import { recordTournamentMatchResult } from '../../lib/tournamentMatchRecorder';
 
 interface Props {
   tournament: Tournament;
@@ -20,6 +21,25 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
   const accentColor = settings.cardThemeColor || '#ff8f00';
 
   const [selectedSwapSlot, setSelectedSwapSlot] = useState<{ rIdx: number; mIdx: number; teamNum: 1 | 2 } | null>(null);
+
+  const [hiddenRounds, setHiddenRounds] = useState<Record<number, boolean>>(() => {
+    return (tournament.settings as any)?.hiddenRounds || {};
+  });
+
+  const toggleRoundHidden = (rIdx: number, hide?: boolean) => {
+    const nextVal = hide !== undefined ? hide : !hiddenRounds[rIdx];
+    const updated = { ...hiddenRounds, [rIdx]: nextVal };
+    setHiddenRounds(updated);
+    if (tournament.settings) {
+      onUpdate({
+        ...tournament,
+        settings: {
+          ...tournament.settings,
+          hiddenRounds: updated
+        } as any
+      });
+    }
+  };
 
   useEffect(() => {
     if (!isSwapMode) setSelectedSwapSlot(null);
@@ -153,6 +173,10 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
     const match = rounds[rIdx]?.[mIdx];
     if (!match || !match.team1 || !match.team2) return;
 
+    try {
+      recordTournamentMatchResult(tournament.userId || 'guest', tournament, match, getRoundName(rIdx, rounds.length));
+    } catch (e) {}
+
     const newRounds = advanceTieredPlayoffMatch(rounds, rIdx, mIdx, match.score1, match.score2);
     onUpdate({ ...tournament, tieredBracketRounds: newRounds });
   };
@@ -236,6 +260,75 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
         </div>
       )}
 
+      {/* Collapsible rounds toolbar */}
+      {rounds.length >= 3 && !isExporting && (
+        <div className="no-export flex items-center justify-between gap-3 flex-wrap bg-white/5 border border-white/10 px-4 py-2.5 rounded-xl mb-4 backdrop-blur-sm">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-xs font-black uppercase tracking-wider text-white/50 flex items-center gap-1.5 mr-1">
+              <span>📐</span> Скрыть раунды:
+            </span>
+            {rounds.map((round, rIdx) => {
+              const remaining = rounds.length - rIdx;
+              if (remaining < 3) return null;
+              const isChecked = !!hiddenRounds[rIdx];
+              const isFinished = round.every(m => m && (m.isFinished || !!m.winnerId));
+              const roundLabel = getRoundName(rIdx, rounds.length);
+
+              return (
+                <label 
+                  key={rIdx} 
+                  className={`flex items-center gap-2 cursor-pointer select-none text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
+                    isChecked 
+                      ? 'bg-[#ff8f00]/15 text-[#ff8f00] border-[#ff8f00]/40 shadow-[0_0_10px_rgba(255,143,0,0.15)]' 
+                      : 'bg-black/30 hover:bg-black/50 text-white/70 hover:text-white border-white/10'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(e) => toggleRoundHidden(rIdx, e.target.checked)}
+                    className="w-4 h-4 rounded text-[#ff8f00] bg-black/40 border-white/20 cursor-pointer accent-[#ff8f00]"
+                  />
+                  <span>Скрыть {roundLabel}</span>
+                  {isFinished && (
+                    <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                      ✓
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const updated: Record<number, boolean> = {};
+                rounds.forEach((round, rIdx) => {
+                  if (rounds.length - rIdx >= 3 && round.every(m => m && (m.isFinished || !!m.winnerId))) {
+                    updated[rIdx] = true;
+                  }
+                });
+                setHiddenRounds(updated);
+              }}
+              className="text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg border border-emerald-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+              title="Автоматически скрыть сыгранные раунды"
+            >
+              <span>⚡</span> Скрыть сыгранные
+            </button>
+            {Object.values(hiddenRounds).some(Boolean) && (
+              <button
+                type="button"
+                onClick={() => setHiddenRounds({})}
+                className="text-xs font-bold text-white/50 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 transition-all cursor-pointer flex items-center gap-1"
+              >
+                <span>👁️</span> Показать все
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Bracket Canvas */}
       <div
         className="flex gap-4 overflow-x-auto overflow-y-auto items-stretch w-full bg-black/30 p-8 rounded-2xl border border-white/5"
@@ -243,6 +336,39 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
       >
         {rounds.map((round, rIdx) => {
           const totalRounds = rounds.length;
+          const isHidden = !!hiddenRounds[rIdx];
+          const canCollapse = (totalRounds - rIdx) >= 3;
+          const nextRound = rounds[rIdx + 1];
+
+          if (isHidden && canCollapse) {
+            return (
+              <div key={`tiered-col-${rIdx}`} className="flex flex-col w-[64px] shrink-0 border-r border-white/10 bg-black/40 py-2 px-1 relative z-10 select-none">
+                <div className="h-10 flex flex-col items-center justify-center mb-4">
+                  {!isExporting ? (
+                    <button
+                      onClick={() => toggleRoundHidden(rIdx, false)}
+                      title={`Развернуть ${getRoundName(rIdx, totalRounds)}`}
+                      className="w-full py-1.5 px-1 bg-[#ff8f00]/15 hover:bg-[#ff8f00]/30 text-[#ff8f00] text-[10px] font-black uppercase rounded-lg border border-[#ff8f00]/40 flex flex-col items-center justify-center transition-all cursor-pointer shadow-sm group"
+                    >
+                      <span className="text-xs group-hover:scale-125 transition-transform">➕</span>
+                      <span className="tracking-tight">{getRoundName(rIdx, totalRounds)}</span>
+                    </button>
+                  ) : (
+                    <div className="w-full py-1 px-1 bg-[#ff8f00]/15 text-[#ff8f00] text-[10px] font-black uppercase rounded-lg border border-[#ff8f00]/30 text-center tracking-tight">
+                      {getRoundName(rIdx, totalRounds)}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col justify-around flex-1 gap-6">
+                  {round.map((m, mIdx) => (
+                    <div key={`tiered-stub-${rIdx}-${mIdx}`} className="flex-1 min-h-[100px] flex items-center justify-end relative">
+                      <div className="w-full border-t-2 border-[#ff8f00]/40" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
           const isTop3 = (tournament.settings.gslAdvanceCount || 3) === 3;
           
           // Determine which round is pre-seeded for 1st places & 2nd places

@@ -11,7 +11,7 @@ import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { simulationPerf } from '../lib/simulationPerformance';
 import VetoModal from "./VetoModal";
 import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass } from '../lib/utils';
-import { updateBetaTournamentMatchResult, loadTournaments, saveTournament } from './setka_tourn/storage';
+import { updateBetaTournamentMatchResult, loadTournaments, saveTournament, getCanonicalRoomId } from './setka_tourn/storage';
 
 const DEFAULT_TEAM_T = [
   { nickname: 'Player 1', role: 'rifler', rating: 148 },
@@ -595,17 +595,28 @@ export default function Simulator({ user }: { user: any }) {
 
       const tSaveStart = performance.now();
       if (user) {
-        if (isLocal) {
-          const localMatches = JSON.parse(localStorage.getItem(`matches_${user.uid}`) || '[]');
-          localMatches.push(matchToSave);
-          saveMatchesToLocalStorage(user.uid, localMatches);
-          await updatePlayerStats(db, user.uid, matchToSave, true);
-          try {
-            const { updateMapStats } = await import('../lib/mapStats');
-            await updateMapStats(user.uid, matchToSave, true);
-          } catch (e) {}
+        const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
 
-          if (selectedTournament) {
+        // 1. Immediately save to local storage under both room and user keys for high responsiveness
+        const rawLocal = localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${user.uid}`) || '[]';
+        const parsedMatches = JSON.parse(rawLocal);
+        const nextLocalMatches = [matchToSave, ...parsedMatches.filter((m: any) => m && m.id !== matchToSave.id)];
+        saveMatchesToLocalStorage(roomId, nextLocalMatches);
+        if (roomId !== user.uid) {
+          saveMatchesToLocalStorage(user.uid, nextLocalMatches);
+        }
+
+        // 2. If part of a tournament, update tournament match state & matchIds
+        if (selectedTournament) {
+          updateBetaTournamentMatchResult(
+            roomId,
+            selectedTournament,
+            newMatch.team1Name,
+            newMatch.team2Name,
+            newMatch.team1Score,
+            newMatch.team2Score
+          );
+          if (user.uid !== roomId) {
             updateBetaTournamentMatchResult(
               user.uid,
               selectedTournament,
@@ -614,16 +625,30 @@ export default function Simulator({ user }: { user: any }) {
               newMatch.team1Score,
               newMatch.team2Score
             );
-            const localTourneys = loadTournaments(user.uid);
-            const target = localTourneys.find((t: any) => t.id === selectedTournament);
-            if (target) {
-              const updated = {
-                ...target,
-                matchIds: [...(target.matchIds || []), newMatch.id]
-              };
+          }
+          const localTourneys = loadTournaments(roomId);
+          const target = localTourneys.find((t: any) => t.id === selectedTournament);
+          if (target) {
+            const updated = {
+              ...target,
+              matchIds: Array.from(new Set([...(target.matchIds || []), newMatch.id]))
+            };
+            saveTournament(roomId, updated);
+            if (user.uid !== roomId) {
               saveTournament(user.uid, updated);
             }
           }
+        }
+
+        window.dispatchEvent(new Event('db-user-updated'));
+        window.dispatchEvent(new Event('tournaments-updated'));
+
+        if (isLocal) {
+          await updatePlayerStats(db, user.uid, matchToSave, true);
+          try {
+            const { updateMapStats } = await import('../lib/mapStats');
+            await updateMapStats(user.uid, matchToSave, true);
+          } catch (e) {}
         } else {
           try {
             // Atomic Batch Write to Firebase / DB (Requirement 6, 9)
@@ -639,19 +664,11 @@ export default function Simulator({ user }: { user: any }) {
             } catch (e) {}
             
             if (selectedTournament) {
-               updateBetaTournamentMatchResult(
-                 user.uid,
-                 selectedTournament,
-                 newMatch.team1Name,
-                 newMatch.team2Name,
-                 newMatch.team1Score,
-                 newMatch.team2Score
-               );
                try {
                  const tDoc = await getDoc(doc(db, 'tournaments', selectedTournament));
                  if (tDoc.exists()) {
                      const tData = tDoc.data();
-                     const newMatchIds = [...(tData.matchIds || []), newMatchId];
+                     const newMatchIds = Array.from(new Set([...(tData.matchIds || []), newMatchId]));
                      batch.set(doc(db, 'tournaments', selectedTournament), { matchIds: newMatchIds }, { merge: true });
                  }
                } catch(e) { console.error('Error attaching to tournament', e); }
@@ -662,15 +679,24 @@ export default function Simulator({ user }: { user: any }) {
             simulationPerf.addFirebaseWrites(1);
           } catch (e) {
             console.warn("Saving simulated match locally as fallback", e);
-            const localMatches = JSON.parse(localStorage.getItem(`matches_${user.uid}`) || '[]');
-            localMatches.push(matchToSave);
-            saveMatchesToLocalStorage(user.uid, localMatches);
             await updatePlayerStats(db, user.uid, matchToSave, true);
             try {
               const { updateMapStats } = await import('../lib/mapStats');
               await updateMapStats(user.uid, matchToSave, true);
             } catch (err) {}
           }
+
+          // Background server cache sync
+          try {
+            fetch('/api/sync-cache', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: roomId,
+                matches: [matchToSave]
+              })
+            }).catch(() => {});
+          } catch (e) {}
         }
       }
 

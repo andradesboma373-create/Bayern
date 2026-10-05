@@ -100,7 +100,7 @@ export const SO2_MAPS: So2MapPreset[] = [
     id: 'hanami',
     name: 'Hanami',
     displayName: 'Hanami',
-    imageUrl: 'https://images.unsplash.com/photo-1528164344705-475426879c0d?auto=format&fit=crop&w=800&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1920&q=90',
     description: 'Традиционный японский храм, цветущие сакуры и длинные снайперские коридоры.',
     tSideBias: 0.47,
     ctSideBias: 0.53

@@ -3,6 +3,7 @@ import { Tournament, Match, Group, Team } from './types';
 import TeamLogo from '../TeamLogo';
 import { Trophy } from 'lucide-react';
 import { getBoxStyle } from './boxStyles';
+import { recordTournamentMatchResult } from '../../lib/tournamentMatchRecorder';
 
 interface Props {
   tournament: Tournament;
@@ -53,6 +54,7 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
   };
 
   const finishMatch = (groupId: string, matchId: string) => {
+    let finishedMatchObj: any = null;
     const newGroups = groups.map(g => {
       if (g.id !== groupId) return g;
       const newMatches = g.matches.map(m => {
@@ -66,10 +68,19 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
         else if (score2 > score1) winnerId = m.team2?.id;
         else isDraw = true;
 
-        return { ...m, winnerId: winnerId || null, isDraw };
+        const updated = { ...m, winnerId: winnerId || null, isDraw };
+        finishedMatchObj = updated;
+        return updated;
       });
       return { ...g, matches: newMatches };
     });
+
+    if (finishedMatchObj) {
+      try {
+        recordTournamentMatchResult(tournament.userId || 'guest', tournament, finishedMatchObj, `Групповой этап`);
+      } catch (e) {}
+    }
+
     onUpdate({ ...tournament, groups: newGroups });
   };
 

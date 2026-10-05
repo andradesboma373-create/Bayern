@@ -24,80 +24,9 @@ import { safeLocalStorageSet } from '../../lib/utils';
 import { getCanonicalRoomId } from './storage';
 import { useGameUniverse } from '../../lib/gameUniverse';
 import So2MediaLibraryModal from '../So2MediaLibraryModal';
+import { syncAndBackfillTournamentMatches } from '../../lib/tournamentMatchRecorder';
 
 export const BG_THEMES = {
-  cs2_mirage: {
-    id: 'cs2_mirage',
-    name: '🏰 Mirage (CS2)',
-    className: 'bg-[#0a0a0f]',
-    style: {
-      backgroundImage: `url('/maps/mirage.jpg')`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-    },
-    overlay: null,
-    watermark: 'MIRAGE'
-  },
-  cs2_dust2: {
-    id: 'cs2_dust2',
-    name: '🏜️ Dust II (CS2)',
-    className: 'bg-[#0f0c08]',
-    style: {
-      backgroundImage: `url('/maps/dust2.jpg')`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-    },
-    overlay: null,
-    watermark: 'DUST II'
-  },
-  cs2_inferno: {
-    id: 'cs2_inferno',
-    name: '🔥 Inferno (CS2)',
-    className: 'bg-[#0c0807]',
-    style: {
-      backgroundImage: `url('/maps/inferno.jpg')`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-    },
-    overlay: null,
-    watermark: 'INFERNO'
-  },
-  cs2_nuke: {
-    id: 'cs2_nuke',
-    name: '☢️ Nuke (CS2)',
-    className: 'bg-[#070b0c]',
-    style: {
-      backgroundImage: `url('/maps/nuke.jpg')`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-    },
-    overlay: null,
-    watermark: 'NUKE'
-  },
-  cs2_ancient: {
-    id: 'cs2_ancient',
-    name: '🌿 Ancient (CS2)',
-    className: 'bg-[#070d08]',
-    style: {
-      backgroundImage: `url('/maps/ancient.jpg')`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-    },
-    overlay: null,
-    watermark: 'ANCIENT'
-  },
-  cs2_anubis: {
-    id: 'cs2_anubis',
-    name: '🏛️ Anubis (CS2)',
-    className: 'bg-[#0e0c08]',
-    style: {
-      backgroundImage: `url('/maps/anubis.jpg')`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-    },
-    overlay: null,
-    watermark: 'ANUBIS'
-  },
   cyber_grid: {
     id: 'cyber_grid',
     name: '👾 Кибер-Сетка',
@@ -113,7 +42,41 @@ export const BG_THEMES = {
       backgroundSize: '100% 100%, 100% 100%, 100% 100%, 40px 40px, 40px 40px',
     },
     overlay: null,
-    watermark: 'STAKE RANKED'
+    watermark: 'ESPORTS ARENA'
+  },
+  esports_arena: {
+    id: 'esports_arena',
+    name: '🏟️ Кибер-Арена',
+    className: 'bg-[#070913]',
+    style: {
+      backgroundImage: `
+        radial-gradient(ellipse at 50% 0%, rgba(59, 130, 246, 0.16) 0%, transparent 70%),
+        radial-gradient(ellipse at 50% 100%, rgba(139, 92, 246, 0.12) 0%, transparent 60%),
+        radial-gradient(circle at 20% 40%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 40%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+        linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px)
+      `,
+      backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px',
+    },
+    overlay: null,
+    watermark: 'CHAMPIONSHIP'
+  },
+  carbon_gold: {
+    id: 'carbon_gold',
+    name: '🔱 Золотой Подиум',
+    className: 'bg-[#08080a]',
+    style: {
+      backgroundImage: `
+        radial-gradient(circle at 50% 50%, rgba(255, 184, 0, 0.08) 0%, transparent 60%),
+        radial-gradient(circle at 10% 10%, rgba(255, 184, 0, 0.04) 0%, transparent 35%),
+        radial-gradient(circle at 90% 90%, rgba(255, 184, 0, 0.04) 0%, transparent 35%),
+        radial-gradient(rgba(255, 184, 0, 0.12) 1px, transparent 1px)
+      `,
+      backgroundSize: '100% 100%, 100% 100%, 100% 100%, 24px 24px',
+    },
+    overlay: null,
+    watermark: 'GRAND FINAL'
   },
   cosmic_arena: {
     id: 'cosmic_arena',
@@ -121,47 +84,89 @@ export const BG_THEMES = {
     className: 'bg-[#030206]',
     style: {
       backgroundImage: `
-        radial-gradient(circle at 15% 20%, rgba(139, 92, 246, 0.12) 0%, transparent 55%),
-        radial-gradient(circle at 85% 75%, rgba(236, 72, 153, 0.1) 0%, transparent 55%),
-        radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 15% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 55%),
+        radial-gradient(circle at 85% 75%, rgba(236, 72, 153, 0.12) 0%, transparent 55%),
+        radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
         linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px)
       `,
       backgroundSize: '100% 100%, 100% 100%, 100% 100%, 50px 50px, 50px 50px',
     },
     overlay: null,
-    watermark: 'CHAMPIONS'
+    watermark: 'PLAYOFFS'
   },
-  carbon_gold: {
-    id: 'carbon_gold',
-    name: '🔱 Золото',
-    className: 'bg-[#08080a]',
+  neon_pulse: {
+    id: 'neon_pulse',
+    name: '⚡ Неоновый Пульс',
+    className: 'bg-[#040810]',
     style: {
       backgroundImage: `
-        radial-gradient(circle at 50% 50%, rgba(255, 184, 0, 0.06) 0%, transparent 60%),
-        radial-gradient(circle at 10% 10%, rgba(255, 184, 0, 0.03) 0%, transparent 35%),
-        radial-gradient(circle at 90% 90%, rgba(255, 184, 0, 0.03) 0%, transparent 35%),
-        radial-gradient(rgba(255, 184, 0, 0.1) 1px, transparent 1px)
+        radial-gradient(circle at 50% 20%, rgba(6, 182, 212, 0.14) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 50%),
+        linear-gradient(to right, rgba(6, 182, 212, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(6, 182, 212, 0.02) 1px, transparent 1px)
       `,
-      backgroundSize: '100% 100%, 100% 100%, 100% 100%, 24px 24px',
+      backgroundSize: '100% 100%, 100% 100%, 100% 100%, 40px 40px, 40px 40px',
     },
     overlay: null,
-    watermark: 'GRAND FINAL'
+    watermark: 'CYBER ARENA'
+  },
+  crimson_stage: {
+    id: 'crimson_stage',
+    name: '🔥 Багровая Сцена',
+    className: 'bg-[#080304]',
+    style: {
+      backgroundImage: `
+        radial-gradient(circle at 50% 15%, rgba(239, 68, 68, 0.15) 0%, transparent 65%),
+        radial-gradient(circle at 15% 85%, rgba(185, 28, 28, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 85% 85%, rgba(249, 115, 22, 0.06) 0%, transparent 50%),
+        linear-gradient(to right, rgba(239, 68, 68, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(239, 68, 68, 0.02) 1px, transparent 1px)
+      `,
+      backgroundSize: '100% 100%, 100% 100%, 100% 100%, 36px 36px, 36px 36px',
+    },
+    overlay: null,
+    watermark: 'MAJOR'
   },
   dark_minimalist: {
     id: 'dark_minimalist',
-    name: '🖤 Минимал',
+    name: '🖤 Темный Минимал',
     className: 'bg-[#040406]',
     style: {
       backgroundImage: `
-        radial-gradient(circle at 50% 50%, #0c0c10 0%, #040406 100%)
+        radial-gradient(circle at 50% 50%, #0d0e14 0%, #040406 100%)
       `,
       backgroundSize: '100% 100%',
     },
     overlay: null,
     watermark: ''
+  },
+  titanium_stealth: {
+    id: 'titanium_stealth',
+    name: '🛡️ Титановый Стелс',
+    className: 'bg-[#06080c]',
+    style: {
+      backgroundImage: `
+        radial-gradient(circle at 50% 40%, rgba(148, 163, 184, 0.08) 0%, transparent 60%),
+        radial-gradient(circle at 10% 90%, rgba(100, 116, 139, 0.05) 0%, transparent 40%),
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px)
+      `,
+      backgroundSize: '100% 100%, 100% 100%, 32px 32px, 32px 32px',
+    },
+    overlay: null,
+    watermark: 'TITANIUM'
   }
 };
+
+export function getCleanTournamentTheme(themeKey?: string) {
+  if (!themeKey) return BG_THEMES.cyber_grid;
+  if (themeKey in BG_THEMES) {
+    return BG_THEMES[themeKey as keyof typeof BG_THEMES];
+  }
+  return BG_THEMES.cyber_grid;
+}
 
 export default function TournamentManager({ user }: { user: any }) {
   const userId = user?.uid || 'guest';
@@ -180,9 +185,15 @@ export default function TournamentManager({ user }: { user: any }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const isolatedBg = activeTournament ? getTournamentBgImage(activeTournament.id) : null;
   const rawBg = isolatedBg || activeTournament?.settings?.bgImage;
-  const bgImage = (rawBg && rawBg !== 'null' && rawBg !== 'undefined' && String(rawBg).trim() !== '') ? rawBg : null;
-  const defaultTheme = (activeTournament?.game || activeTournament?.settings?.game || 'cs2') === 'cs2' ? 'cs2_mirage' : 'cyber_grid';
-  const bgTheme = activeTournament?.settings?.bgTheme || (bgImage ? 'custom' : defaultTheme);
+  // Ensure tournament background is NEVER a map background
+  const isMapBg = rawBg && (String(rawBg).includes('/maps/') || String(rawBg).startsWith('/maps/'));
+  const bgImage = (!isMapBg && rawBg && rawBg !== 'null' && rawBg !== 'undefined' && String(rawBg).trim() !== '') ? rawBg : null;
+  const defaultTheme = 'cyber_grid';
+  let rawTheme = activeTournament?.settings?.bgTheme;
+  if (!rawTheme || rawTheme.startsWith('cs2_') || rawTheme.startsWith('so2_')) {
+    rawTheme = 'cyber_grid';
+  }
+  const bgTheme = rawTheme || (bgImage ? 'custom' : defaultTheme);
   const [isBgLoaded, setIsBgLoaded] = useState<boolean>(true);
   const [isExporting, setIsExporting] = useState(false);
   const [isSwapMode, setIsSwapMode] = useState(false);
@@ -228,10 +239,13 @@ export default function TournamentManager({ user }: { user: any }) {
     setHistoryStack([]);
   }, [activeTournament?.id]);
 
-  // Full concentration on tournament assets: preloads background, tournament logo, and all team logos
+  // Full concentration on tournament assets & automatic match history backfill
   useEffect(() => {
     if (activeTournament) {
       concentrateOnTournament(activeTournament, userId);
+      try {
+        syncAndBackfillTournamentMatches(userId, activeTournament);
+      } catch (e) {}
     }
   }, [activeTournament?.id, userId]);
 
@@ -1588,7 +1602,9 @@ export default function TournamentManager({ user }: { user: any }) {
               const fileName = `${safeName}-${stageLabel}-bracket.png`;
 
               await downloadElementAsImage(stageRef.current, fileName, {
-                  backgroundColor: defaultBgColor
+                  backgroundColor: defaultBgColor,
+                  pixelRatio: 2.5,
+                  quality: 1.0
               });
           } catch (err: any) {
               console.error('Failed to export image', err?.message || err);
@@ -2698,11 +2714,14 @@ export default function TournamentManager({ user }: { user: any }) {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredTournaments.map(t => {
               const rawTBg = t.settings?.bgImage || getTournamentBgImage(t.id);
-              const cardBgImg = (rawTBg && rawTBg !== 'null' && rawTBg !== 'undefined' && String(rawTBg).trim() !== '') ? rawTBg : null;
-              const isCS2 = (t.game || t.settings?.game || 'cs2') === 'cs2';
-              const defaultCardTheme = isCS2 ? 'cs2_mirage' : 'cyber_grid';
-              const cardThemeKey = t.settings?.bgTheme || (cardBgImg ? 'custom' : defaultCardTheme);
-              const cardTheme = BG_THEMES[cardThemeKey as keyof typeof BG_THEMES] || BG_THEMES.cs2_mirage || BG_THEMES.cyber_grid;
+              const isMapCardBg = rawTBg && (String(rawTBg).includes('/maps/') || String(rawTBg).startsWith('/maps/'));
+              const cardBgImg = (!isMapCardBg && rawTBg && rawTBg !== 'null' && rawTBg !== 'undefined' && String(rawTBg).trim() !== '') ? rawTBg : null;
+              const defaultCardTheme = 'cyber_grid';
+              let cardThemeKey = t.settings?.bgTheme;
+              if (!cardThemeKey || cardThemeKey.startsWith('cs2_') || cardThemeKey.startsWith('so2_')) {
+                cardThemeKey = 'cyber_grid';
+              }
+              const cardTheme = getCleanTournamentTheme(cardThemeKey);
 
               return (
               <div 

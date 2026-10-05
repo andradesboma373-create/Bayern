@@ -6,5 +6,5 @@ for m in "${maps[@]}"; do
   wget -qO public/maps/$m.jpg $REPO/de_$m.jpg
 done
 
-# We also have others like breeze, dune, province, rust, sakura, sandstone.
+# We also have others like breeze, dune, province, rust, hanami, sandstone.
 # Since these aren't standard CSGO maps from that repo, I will just generate beautiful placeholder jpegs using Imagemagick.

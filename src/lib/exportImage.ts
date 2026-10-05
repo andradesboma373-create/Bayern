@@ -116,39 +116,39 @@ export async function exportElementToDataUrl(
     // MULTI-TIER PROGRESSIVE FALLBACK EXECUTION
     // ==========================================
 
-    // TIER 1: Full quality PNG (pixelRatio 2)
+    // TIER 1: Ultra HD / Crisp PNG (pixelRatio 3.0 or custom, 100% quality)
     try {
-      options.onProgress?.('Рендеринг изображения (HD)...');
+      options.onProgress?.('Рендеринг изображения (Ultra HD 4K)...');
       return await toPng(element, {
         ...baseConfig,
-        quality: options.quality || 0.95,
-        pixelRatio: options.pixelRatio || 2,
+        quality: options.quality || 1.0,
+        pixelRatio: options.pixelRatio || 3.0,
         cacheBust: false
       });
     } catch (tier1Err) {
-      console.warn('Export Tier 1 (HD PNG) failed, attempting Tier 2 (Standard PNG)...', tier1Err);
+      console.warn('Export Tier 1 (Ultra HD PNG) failed, attempting Tier 2 (Full HD PNG)...', tier1Err);
     }
 
-    // TIER 2: Standard quality PNG (pixelRatio 1)
+    // TIER 2: Full HD PNG (pixelRatio 2.2)
     try {
-      options.onProgress?.('Рендеринг (Стандарт)...');
+      options.onProgress?.('Рендеринг (Full HD Crisp)...');
       return await toPng(element, {
         ...baseConfig,
-        quality: 0.9,
-        pixelRatio: 1,
+        quality: 1.0,
+        pixelRatio: 2.2,
         cacheBust: false
       });
     } catch (tier2Err) {
-      console.warn('Export Tier 2 (Standard PNG) failed, attempting Tier 3 (JPEG)...', tier2Err);
+      console.warn('Export Tier 2 (Full HD PNG) failed, attempting Tier 3 (JPEG HD)...', tier2Err);
     }
 
-    // TIER 3: Highly-compatible JPEG format
+    // TIER 3: High quality JPEG format (pixelRatio 2, 95% quality)
     try {
-      options.onProgress?.('Рендеринг (JPEG)...');
+      options.onProgress?.('Рендеринг (JPEG HD)...');
       return await toJpeg(element, {
         ...baseConfig,
-        quality: 0.88,
-        pixelRatio: 1,
+        quality: 0.95,
+        pixelRatio: 2,
         cacheBust: false
       });
     } catch (tier3Err) {

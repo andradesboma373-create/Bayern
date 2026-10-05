@@ -1,16 +1,17 @@
-import React, { useMemo, useState, useRef } from 'react';
-import { X, Trophy, Download, Award, Trash2, Calendar, Crosshair } from 'lucide-react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { X, Trophy, Download, Award, Trash2, Calendar, Crosshair, Sparkles } from 'lucide-react';
 import { downloadElementAsImage } from '../../lib/exportImage';
 import TeamLogo from '../TeamLogo';
 import PlayerAvatar from '../PlayerAvatar';
 import FinalistsModal from './FinalistsModal';
 import MvpModal from './MvpModal';
 import PlayerProfileModal from '../PlayerProfileModal';
-import { loadTournaments } from './storage';
+import { loadTournaments, getCanonicalRoomId } from './storage';
 import { db, doc, deleteDoc } from '../../firebase';
 import { saveMatchesToLocalStorage, getKdColorClass, getSwingColorClass } from '../../lib/utils';
 import { RatingSystem } from '../../match-logic/systems/RatingSystem';
 import { RATING_CONFIG } from '../../match-logic/config/RatingConfig';
+import { syncAndBackfillTournamentMatches } from '../../lib/tournamentMatchRecorder';
 
 interface Props {
   user: any;
@@ -28,22 +29,49 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
   const [confirmingDeleteMatch, setConfirmingDeleteMatch] = useState<string | null>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
 
+  // Auto backfill tournament matches on open
+  useEffect(() => {
+    const uid = user?.uid || 'guest';
+    const roomId = getCanonicalRoomId(uid);
+    const tourneys = loadTournaments(roomId);
+    const currentTourney = tourneys.find((t: any) => t.id === tournamentId);
+    if (currentTourney) {
+      syncAndBackfillTournamentMatches(uid, currentTourney);
+      setRefreshTrigger(prev => prev + 1);
+    }
+
+    // Resilient server fetch if local matches cache is low
+    const rawMatches = localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${uid}`);
+    if (!rawMatches || JSON.parse(rawMatches).length === 0) {
+      fetch(`/api/backup-data/${roomId}`).then(r => r.json()).then(d => {
+        if (d && d.success && Array.isArray(d.matches) && d.matches.length > 0) {
+          saveMatchesToLocalStorage(roomId, d.matches);
+          if (uid !== roomId) saveMatchesToLocalStorage(uid, d.matches);
+          setRefreshTrigger(prev => prev + 1);
+        }
+      }).catch(() => {});
+    }
+  }, [user, tournamentId]);
+
   const handleDeleteMatch = async (matchId: string) => {
     if (!matchId) return;
     const uid = user?.uid || 'guest';
+    const roomId = getCanonicalRoomId(uid);
 
     // 1. Mark in deleted_matches set
-    const deletedRaw = localStorage.getItem(`deleted_matches_${uid}`);
+    const deletedRaw = localStorage.getItem(`deleted_matches_${roomId}`) || localStorage.getItem(`deleted_matches_${uid}`);
     const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
     deletedSet.add(matchId);
     try {
-      localStorage.setItem(`deleted_matches_${uid}`, JSON.stringify(Array.from(deletedSet)));
+      localStorage.setItem(`deleted_matches_${roomId}`, JSON.stringify(Array.from(deletedSet)));
+      if (uid !== roomId) localStorage.setItem(`deleted_matches_${uid}`, JSON.stringify(Array.from(deletedSet)));
     } catch (e) {}
 
     // 2. Filter local state
-    const localMatches = JSON.parse(localStorage.getItem(`matches_${uid}`) || '[]');
+    const localMatches = JSON.parse(localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${uid}`) || '[]');
     const filtered = localMatches.filter((m: any) => m && m.id !== matchId && m._id !== matchId);
-    saveMatchesToLocalStorage(uid, filtered);
+    saveMatchesToLocalStorage(roomId, filtered);
+    if (uid !== roomId) saveMatchesToLocalStorage(uid, filtered);
     setConfirmingDeleteMatch(null);
     setRefreshTrigger(prev => prev + 1);
     window.dispatchEvent(new Event('db-user-updated'));
@@ -54,12 +82,12 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
       await fetch('/api/matches/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: uid, matchId })
+        body: JSON.stringify({ userId: roomId, matchId })
       }).catch(() => {});
       await fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: uid, matches: filtered })
+        body: JSON.stringify({ userId: roomId, matches: filtered })
       }).catch(() => {});
     } catch (e) {
       console.warn("Delete match in Top20Modal:", e);
@@ -106,21 +134,39 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
 
   const { tourney, stats, tourMatches } = useMemo(() => {
     const uid = user?.uid || 'guest';
-    const localMatches = JSON.parse(localStorage.getItem(`matches_${uid}`) || '[]');
-    const localPlayers = JSON.parse(localStorage.getItem(`players_${uid}`) || '[]');
-    const localTeams = JSON.parse(localStorage.getItem(`teams_${uid}`) || '[]');
-    const localTourneys = loadTournaments(uid);
-    const tourney = localTourneys.find((t: any) => t.id === tournamentId);
+    const roomId = getCanonicalRoomId(uid);
+    let localMatches = JSON.parse(
+      localStorage.getItem(`matches_${roomId}`) || 
+      localStorage.getItem(`matches_${uid}`) || 
+      '[]'
+    );
+    const localPlayers = JSON.parse(
+      localStorage.getItem(`players_${roomId}`) || 
+      localStorage.getItem(`players_${uid}`) || 
+      '[]'
+    );
+    const localTeams = JSON.parse(
+      localStorage.getItem(`teams_${roomId}`) || 
+      localStorage.getItem(`teams_${uid}`) || 
+      '[]'
+    );
+    const localTourneys = loadTournaments(roomId);
+    let tourney = localTourneys.find((t: any) => t.id === tournamentId);
     const tourneyName = tourney?.name || '';
     
     // Filter matches strictly for this tournament
-    const tourMatches = localMatches.filter((m: any) => {
+    let tourMatches = localMatches.filter((m: any) => {
       if (!m) return false;
       if (m.tournamentId && m.tournamentId === tournamentId) return true;
       if (tourneyName && m.tournamentName && m.tournamentName.toLowerCase().trim() === tourneyName.toLowerCase().trim()) return true;
       if (tourney?.matchIds && Array.isArray(tourney.matchIds) && tourney.matchIds.includes(m.id)) return true;
       return false;
     });
+
+    // If zero matches found in history but tournament has finished matches, auto backfill right now!
+    if (tourMatches.length === 0 && tourney) {
+      tourMatches = syncAndBackfillTournamentMatches(uid, tourney);
+    }
     
     const playerStatsMap = new Map<string, any>();
     
@@ -280,7 +326,10 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
                 </h2>
                 
                 <p className="text-white/40 text-xs uppercase tracking-[0.3em] mt-2 font-bold">ТОП-20 ИГРОКОВ ТУРНИРА • ПОДРОБНАЯ СТАТИСТИКА</p>
-                <p className="text-blue-400/80 text-[10px] uppercase tracking-wider mt-2 font-bold">В Топ-20 попадают только игроки из матчей, сыгранных через симулятор (кнопка "Играть Матч"). Быстрый ввод счета не генерирует статистику.</p>
+                <p className="text-emerald-400/90 text-[10px] uppercase tracking-wider mt-2 font-bold flex items-center justify-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-emerald-400" />
+                  Статистика формируется автоматически для всех сыгранных и симулированных матчей турнира
+                </p>
 
             </div>
             {!isDownloading && (

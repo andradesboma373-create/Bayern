@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, deleteDoc, doc, limit, orderBy } from '../firebase';
+import { collection, query, where, getDocs, deleteDoc, doc, limit } from '../firebase';
 import { saveMatchesToLocalStorage } from '../lib/utils';
 import { Calendar, Trophy, Crosshair, Trash2 } from 'lucide-react';
 import MatchDetails from './MatchDetails';
 import TeamLogo from './TeamLogo';
 import { useGameUniverse } from '../lib/gameUniverse';
-import { getCanonicalRoomId } from './setka_tourn/storage';
+import { getCanonicalRoomId, loadTournaments } from './setka_tourn/storage';
+import { syncAndBackfillTournamentMatches } from '../lib/tournamentMatchRecorder';
 
 export default function Matches({ user }: { user: any }) {
   const [game] = useGameUniverse();
@@ -28,8 +29,45 @@ export default function Matches({ user }: { user: any }) {
       const deletedRaw = localStorage.getItem(`deleted_matches_${roomId}`) || localStorage.getItem(`deleted_matches_${user.uid}`);
       const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
 
-      // 1. Load from localStorage immediately for high responsiveness
-      const rawLocalMatches = JSON.parse(localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${user.uid}`) || '[]');
+      // 1. Proactively backfill any finished tournament matches if available
+      try {
+        const userTournaments = loadTournaments(roomId);
+        userTournaments.forEach(t => {
+          if (t && t.id) {
+            syncAndBackfillTournamentMatches(roomId, t);
+          }
+        });
+      } catch (err) {}
+
+      // 2. Load from localStorage immediately for high responsiveness
+      let rawLocalMatches = JSON.parse(localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${user.uid}`) || '[]');
+
+      // 3. If local matches are empty, immediately query backup data from server
+      if (!Array.isArray(rawLocalMatches) || rawLocalMatches.length === 0) {
+        try {
+          const res = await fetch(`/api/backup-data/${roomId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && Array.isArray(data.matches) && data.matches.length > 0) {
+              rawLocalMatches = data.matches;
+              saveMatchesToLocalStorage(roomId, rawLocalMatches);
+              if (roomId !== user.uid) saveMatchesToLocalStorage(user.uid, rawLocalMatches);
+            }
+          }
+        } catch (e) {}
+      }
+
+      const isGameMatch = (m: any) => {
+        const mGame = (m.gameMode || 'cs2').toLowerCase();
+        if (game === 'cs2') {
+          return mGame === 'cs2' || mGame === 'csgo' || mGame === '5v5' || !m.gameMode;
+        }
+        if (game === 'so2') {
+          return mGame === 'so2' || mGame === 'standoff2';
+        }
+        return mGame === game;
+      };
+
       const localMatches = (rawLocalMatches || [])
         .filter((m: any) => m !== null && m !== undefined)
         .map((m: any, idx: number) => ({
@@ -43,7 +81,7 @@ export default function Matches({ user }: { user: any }) {
           format: m.format || (m.bo ? `BO${m.bo}` : 'BO1')
         }))
         .filter((m: any) => !deletedSet.has(m.id))
-        .filter((m: any) => m.gameMode === game || (game === 'cs2' && m.gameMode === 'csgo')); // filter by active world
+        .filter(isGameMatch);
 
       setMatches(localMatches.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setLoading(false);
@@ -52,12 +90,13 @@ export default function Matches({ user }: { user: any }) {
         if (user.isLocalDemo) {
           return;
         }
-        const q = query(collection(db, 'matches'), where('userId', '==', roomId), orderBy('date', 'desc'), limit(150));
+        // Safe query without composite index requirement (sort in-memory)
+        const q = query(collection(db, 'matches'), where('userId', '==', roomId), limit(150));
         const qs = await getDocs(q);
         
         let allDocs = qs.docs;
         if (allDocs.length === 0) {
-          const qChannel = query(collection(db, 'matches'), where('channelId', '==', roomId), orderBy('date', 'desc'), limit(150));
+          const qChannel = query(collection(db, 'matches'), where('channelId', '==', roomId), limit(150));
           const qsChannel = await getDocs(qChannel);
           allDocs = qsChannel.docs;
         }
@@ -77,17 +116,17 @@ export default function Matches({ user }: { user: any }) {
             };
           })
           .filter((m: any) => m && m.id && !deletedSet.has(m.id))
-          .filter((m: any) => m.gameMode === game || (game === 'cs2' && m.gameMode === 'csgo')) // filter by active world
+          .filter(isGameMatch)
           .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-        if (dbMatches.length > 0 || localMatches.length === 0) {
+        if (dbMatches.length > 0) {
           setMatches(dbMatches);
           try {
             saveMatchesToLocalStorage(roomId, dbMatches);
           } catch (e) {}
         }
       } catch (e) {
-        console.warn("Using localStorage fallback for matches", e);
+        console.warn("Using localStorage/server fallback for matches", e);
       }
     };
     fetchMatches();

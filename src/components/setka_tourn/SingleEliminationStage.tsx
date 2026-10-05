@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Match, Tournament, Team } from './types';
 import BracketRenderer from './BracketRenderer';
 import MatchCard from './MatchCard';
+import { recordTournamentMatchResult } from '../../lib/tournamentMatchRecorder';
 
 import { cascadeAdvancements, advanceDoubleElimMatch, generateDoubleElimination, generateSingleEliminationBracket } from './doubleEliminationLogic';
 
@@ -19,6 +20,61 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
   const gf = Array.isArray(tournament.grandFinal) ? tournament.grandFinal : [];
   
   const isDouble = tournament.settings?.eliminationType === 'double';
+
+  const [hiddenRounds, setHiddenRounds] = useState<Record<number, boolean>>(() => {
+    return (tournament.settings as any)?.hiddenRounds || {};
+  });
+
+  const toggleRoundHidden = (rIdx: number, hide?: boolean) => {
+    const nextVal = hide !== undefined ? hide : !hiddenRounds[rIdx];
+    const updated = { ...hiddenRounds, [rIdx]: nextVal };
+    setHiddenRounds(updated);
+    if (tournament.settings) {
+      onUpdate({
+        ...tournament,
+        settings: {
+          ...tournament.settings,
+          hiddenRounds: updated
+        } as any
+      });
+    }
+  };
+
+  const hideAllFinishedRounds = () => {
+    const updated = { ...hiddenRounds };
+    wRounds.forEach((round, rIdx) => {
+      const remaining = wRounds.length - rIdx;
+      if (remaining >= 3) {
+        const isFinished = round.every(m => m && (m.isFinished || !!m.winnerId));
+        if (isFinished) {
+          updated[rIdx] = true;
+        }
+      }
+    });
+    setHiddenRounds(updated);
+    if (tournament.settings) {
+      onUpdate({
+        ...tournament,
+        settings: {
+          ...tournament.settings,
+          hiddenRounds: updated
+        } as any
+      });
+    }
+  };
+
+  const showAllRounds = () => {
+    setHiddenRounds({});
+    if (tournament.settings) {
+      onUpdate({
+        ...tournament,
+        settings: {
+          ...tournament.settings,
+          hiddenRounds: {}
+        } as any
+      });
+    }
+  };
 
   const handleUpdateScore = (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number, teamNum: 1 | 2, score: number) => {
     let newTournament = { ...tournament };
@@ -79,6 +135,13 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
 
     const winningTeam = match.score1 > match.score2 ? match.team1 : match.team2;
     const losingTeam = match.score1 > match.score2 ? match.team2 : match.team1;
+
+    // Immediately record match to global match history and tournament stats
+    try {
+        recordTournamentMatchResult(tournament.userId || 'guest', tournament, match, type);
+    } catch (e) {
+        console.warn("Could not record match result:", e);
+    }
 
     if (isDouble) {
         advanceDoubleElimMatch(wBracket, lBracket, gFinal, typeChar, rIdx, mIdx, winningTeam, losingTeam);
@@ -153,11 +216,44 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
     return `Раунд ${rIdx + 1}`;
   };
 
+  const getRoundShortLabel = (rIdx: number, totalRounds: number) => {
+    const remaining = totalRounds - rIdx;
+    if (remaining === 1) return "Финал";
+    if (remaining === 2) return "1/2";
+    if (remaining === 3) return "1/4";
+    if (remaining === 4) return "1/8";
+    if (remaining === 5) return "1/16";
+    return `R${rIdx + 1}`;
+  };
+
+  const collapsibleRounds = wRounds
+    .map((round, rIdx) => {
+      const remaining = wRounds.length - rIdx;
+      if (remaining < 3) return null;
+      const isFinished = round.every(m => m && (m.isFinished || !!m.winnerId));
+      return {
+        rIdx,
+        remaining,
+        label: getRoundLabel(rIdx, wRounds.length),
+        shortLabel: getRoundShortLabel(rIdx, wRounds.length),
+        isFinished,
+        matchCount: round.length
+      };
+    })
+    .filter(Boolean) as {
+      rIdx: number;
+      remaining: number;
+      label: string;
+      shortLabel: string;
+      isFinished: boolean;
+      matchCount: number;
+    }[];
+
   return (
     <div className="w-full flex flex-col gap-12">
         {wRounds.length > 0 && (
             <div className="flex flex-col mb-12">
-                <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
                     <h3 className="text-xl font-black text-[#ff8f00] uppercase tracking-widest flex items-center gap-2">
                         🏆 {isDouble ? "Верхняя сетка (Winners) & Гранд-Финал" : "Сетка Плей-офф"}
                     </h3>
@@ -198,41 +294,212 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                     </div>
                 </div>
 
+                {/* Round visibility toggles ("Фигня с галочками") */}
+                {collapsibleRounds.length > 0 && !isExporting && (
+                    <div className="no-export flex items-center justify-between gap-3 flex-wrap bg-white/5 border border-white/10 px-4 py-2.5 rounded-xl mb-4 backdrop-blur-sm">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="text-xs font-black uppercase tracking-wider text-white/50 flex items-center gap-1.5 mr-1">
+                                <span>📐</span> Скрыть раунды:
+                            </span>
+                            {collapsibleRounds.map(({ rIdx, label, shortLabel, isFinished, matchCount }) => {
+                                const isChecked = !!hiddenRounds[rIdx];
+                                return (
+                                    <label 
+                                        key={rIdx} 
+                                        className={`flex items-center gap-2 cursor-pointer select-none text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
+                                            isChecked 
+                                                ? 'bg-[#ff8f00]/15 text-[#ff8f00] border-[#ff8f00]/40 shadow-[0_0_10px_rgba(255,143,0,0.15)]' 
+                                                : 'bg-black/30 hover:bg-black/50 text-white/70 hover:text-white border-white/10'
+                                        }`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => toggleRoundHidden(rIdx, e.target.checked)}
+                                            className="w-4 h-4 rounded text-[#ff8f00] bg-black/40 border-white/20 cursor-pointer accent-[#ff8f00]"
+                                        />
+                                        <span>Скрыть {shortLabel}</span>
+                                        {isFinished ? (
+                                            <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                                ✓ Сыгран
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] font-mono text-white/30">
+                                                ({matchCount})
+                                            </span>
+                                        )}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={hideAllFinishedRounds}
+                                className="text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg border border-emerald-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                                title="Автоматически скрыть все завершенные раунды (1/16, 1/8, 1/4)"
+                            >
+                                <span>⚡</span> Скрыть сыгранные
+                            </button>
+                            {Object.values(hiddenRounds).some(Boolean) && (
+                                <button
+                                    type="button"
+                                    onClick={showAllRounds}
+                                    className="text-xs font-bold text-white/50 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 transition-all cursor-pointer flex items-center gap-1"
+                                    title="Показать все раунды полностью"
+                                >
+                                    <span>👁️</span> Показать все
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex gap-0 overflow-x-auto overflow-y-auto items-stretch w-full bg-black/20 p-6 rounded-2xl border border-white/5" style={{ minHeight: '400px' }}>
                     {/* Render Winners Bracket Rounds */}
-                    {wRounds.map((round, rIdx) => (
-                        <div key={`w-${rIdx}`} className="flex flex-col w-[320px] shrink-0">
-                            <div className="h-10 flex items-center justify-center font-black text-white/40 uppercase tracking-widest text-sm mb-4">
-                                {getRoundLabel(rIdx, wRounds.length)}
+                    {wRounds.map((round, rIdx) => {
+                        const isHidden = !!hiddenRounds[rIdx];
+                        const canCollapse = (wRounds.length - rIdx) >= 3;
+                        const nextRound = wRounds[rIdx + 1];
+
+                        if (isHidden && canCollapse) {
+                            // Collapsed column: compact column with clean circuit conductors leading directly into 1/8 / 1/4 matches
+                            return (
+                                <div key={`w-col-${rIdx}`} className="flex flex-col w-[64px] shrink-0 border-r border-white/10 bg-black/40 py-2 px-1 relative z-10 select-none">
+                                    {/* Compact Header */}
+                                    <div className="h-10 flex flex-col items-center justify-center mb-4">
+                                        {!isExporting ? (
+                                            <button
+                                                onClick={() => toggleRoundHidden(rIdx, false)}
+                                                title={`Развернуть ${getRoundLabel(rIdx, wRounds.length)} (${round.length} матчей)`}
+                                                className="w-full py-1.5 px-1 bg-[#ff8f00]/15 hover:bg-[#ff8f00]/30 text-[#ff8f00] text-[10px] font-black uppercase rounded-lg border border-[#ff8f00]/40 flex flex-col items-center justify-center transition-all cursor-pointer shadow-sm group"
+                                            >
+                                                <span className="text-xs group-hover:scale-125 transition-transform">➕</span>
+                                                <span className="tracking-tight">{getRoundShortLabel(rIdx, wRounds.length)}</span>
+                                            </button>
+                                        ) : (
+                                            <div className="w-full py-1 px-1 bg-[#ff8f00]/15 text-[#ff8f00] text-[10px] font-black uppercase rounded-lg border border-[#ff8f00]/30 text-center tracking-tight">
+                                                {getRoundShortLabel(rIdx, wRounds.length)}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Body with Branch Circuit Conductors Leading into Next Round */}
+                                    <div className="flex flex-col flex-1">
+                                        {(nextRound || round).map((_, nextMIdx) => {
+                                            const m1 = round[2 * nextMIdx];
+                                            const m2 = round[2 * nextMIdx + 1];
+                                            const hasWinner1 = !!m1?.winnerId;
+                                            const hasWinner2 = !!m2?.winnerId;
+                                            const hasBothWinners = hasWinner1 && hasWinner2;
+
+                                            const winner1Name = m1?.winnerId ? (m1.winnerId === m1.team1?.id ? (m1.team1?.name || 'Победитель') : (m1.team2?.name || 'Победитель')) : null;
+                                            const winner2Name = m2?.winnerId ? (m2.winnerId === m2.team1?.id ? (m2.team1?.name || 'Победитель') : (m2.team2?.name || 'Победитель')) : null;
+
+                                            return (
+                                                <div key={`stub-${rIdx}-${nextMIdx}`} className="flex-1 min-h-[140px] flex items-center justify-end relative group">
+                                                    {/* Upper branch conductor */}
+                                                    <div 
+                                                        className={`absolute right-4 w-7 top-[20%] bottom-[50%] border-r-2 border-t-2 rounded-tr-lg pointer-events-none transition-colors ${
+                                                            hasWinner1 ? 'border-[#ff8f00]' : 'border-white/20 group-hover:border-[#ff8f00]/50'
+                                                        }`} 
+                                                    />
+                                                    {/* Lower branch conductor */}
+                                                    <div 
+                                                        className={`absolute right-4 w-7 top-[50%] bottom-[20%] border-r-2 border-b-2 rounded-br-lg pointer-events-none transition-colors ${
+                                                            hasWinner2 ? 'border-[#ff8f00]' : 'border-white/20 group-hover:border-[#ff8f00]/50'
+                                                        }`} 
+                                                    />
+                                                    {/* Center horizontal line conducting into the next match incoming connector */}
+                                                    <div 
+                                                        className={`absolute right-0 w-4 top-[50%] border-t-2 pointer-events-none transition-colors ${
+                                                            hasBothWinners ? 'border-[#ff8f00]' : 'border-white/30 group-hover:border-[#ff8f00]'
+                                                        }`} 
+                                                    />
+                                                    {/* Node junction indicator dot where branches merge */}
+                                                    <div 
+                                                        className={`absolute right-3.5 top-[50%] -translate-y-1/2 w-2.5 h-2.5 rounded-full z-10 transition-all ${
+                                                            hasBothWinners 
+                                                                ? 'bg-[#ff8f00] shadow-[0_0_10px_rgba(255,143,0,0.9)] ring-2 ring-[#ff8f00]/30' 
+                                                                : 'bg-white/40 group-hover:bg-[#ff8f00]'
+                                                        }`} 
+                                                    />
+
+                                                    {/* Interactive Hover Details Tooltip */}
+                                                    {!isExporting && (
+                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute right-12 bg-[#0c0d16] text-white text-[11px] p-3 rounded-xl border border-white/20 whitespace-nowrap z-50 pointer-events-none shadow-2xl backdrop-blur-md">
+                                                            <div className="text-[#ff8f00] font-black uppercase text-[10px] tracking-wider mb-1.5 flex items-center gap-1.5">
+                                                                <span>⚔️</span> {getRoundLabel(rIdx, wRounds.length)} &rarr; Выход в Матч #{nextMIdx + 1}
+                                                            </div>
+                                                            <div className="text-white/80 font-mono text-[10px] flex flex-col gap-1.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-white/40">Пара 1:</span>
+                                                                    <span className={hasWinner1 ? 'text-emerald-400 font-bold' : 'text-white/60'}>
+                                                                        {m1 ? `${m1.team1?.name || 'TBD'} ${m1.score1 ?? 0}:${m1.score2 ?? 0} ${m1.team2?.name || 'TBD'}` : 'TBD'}
+                                                                        {winner1Name ? ` (Вышел: ${winner1Name})` : ''}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-white/40">Пара 2:</span>
+                                                                    <span className={hasWinner2 ? 'text-emerald-400 font-bold' : 'text-white/60'}>
+                                                                        {m2 ? `${m2.team1?.name || 'TBD'} ${m2.score1 ?? 0}:${m2.score2 ?? 0} ${m2.team2?.name || 'TBD'}` : 'TBD'}
+                                                                        {winner2Name ? ` (Вышел: ${winner2Name})` : ''}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div key={`w-${rIdx}`} className="flex flex-col w-[320px] shrink-0">
+                                <div className="h-10 flex items-center justify-between font-black text-white/40 uppercase tracking-widest text-sm mb-4 px-2">
+                                    <span>{getRoundLabel(rIdx, wRounds.length)}</span>
+                                    {canCollapse && !isExporting && (
+                                        <button
+                                            onClick={() => toggleRoundHidden(rIdx, true)}
+                                            className="text-[11px] font-bold text-white/40 hover:text-[#ff8f00] bg-white/5 hover:bg-white/10 px-2 py-1 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                                            title={`Скрыть блоки ${getRoundLabel(rIdx, wRounds.length)}`}
+                                        >
+                                            <span>👁️</span> Скрыть
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="flex flex-col flex-1">
+                                    {round.map((match, mIdx) => (
+                                        <MatchCard
+                                            key={match.id}
+                                            match={match}
+                                            bracketType="winners"
+                                            rIdx={rIdx}
+                                            mIdx={mIdx}
+                                            onUpdateScore={handleUpdateScore}
+                                            onAdvanceWinner={handleAdvanceWinner}
+                                            onVetoMatch={onVetoMatch}
+                                            isFinal={rIdx === wRounds.length - 1}
+                                            isTop={mIdx % 2 === 0}
+                                            hasInConnector={rIdx > 0}
+                                            hasOutConnector={true}
+                                            boxStyle={tournament.settings?.boxStyle as any}
+                                            cardThemeColor={tournament.settings?.cardThemeColor}
+                                            btnStyle={tournament.settings?.btnStyle}
+                                            bracketMode={tournament.settings?.bracketMode}
+                                            onSwapTeam={handleSwapTeam}
+                                            allTeams={tournament.teams}
+                                            isExporting={isExporting}
+                                            isSwapMode={isSwapMode}
+                                        />
+                                    ))}
+                                </div>
                             </div>
-                            <div className="flex flex-col flex-1">
-                                {round.map((match, mIdx) => (
-                                    <MatchCard
-                                        key={match.id}
-                                        match={match}
-                                        bracketType="winners"
-                                        rIdx={rIdx}
-                                        mIdx={mIdx}
-                                        onUpdateScore={handleUpdateScore}
-                                        onAdvanceWinner={handleAdvanceWinner}
-                                        onVetoMatch={onVetoMatch}
-                                        isFinal={rIdx === wRounds.length - 1}
-                                        isTop={mIdx % 2 === 0}
-                                        hasInConnector={rIdx > 0}
-                                        hasOutConnector={true}
-                                        boxStyle={tournament.settings?.boxStyle as any}
-                                        cardThemeColor={tournament.settings?.cardThemeColor}
-                                        btnStyle={tournament.settings?.btnStyle}
-                                        bracketMode={tournament.settings?.bracketMode}
-                                        onSwapTeam={handleSwapTeam}
-                                        allTeams={tournament.teams}
-                                        isExporting={isExporting}
-                                        isSwapMode={isSwapMode}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
 
                     {/* Divider & Grand Final Columns side by side */}
                     {isDouble && gf.length > 0 && (
