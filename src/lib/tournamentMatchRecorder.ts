@@ -52,27 +52,32 @@ export function getTeamRoster(team: any, roomId: string, allPlayers: any[] = [])
 
   // 1. If team has embedded players
   if (Array.isArray(team.players) && team.players.length > 0) {
-    return team.players.slice(0, 5);
+    const firstP = team.players[0];
+    if (typeof firstP === 'object' && firstP.nickname) {
+       return team.players.slice(0, 5);
+    }
   }
 
-  // 2. Look up players by teamId in existing players list
+  // 2. Look up players by teamId or teamName in existing players list
   const teamId = team.id;
   const teamName = team.name || team.teamName || '';
-  const matching = allPlayers.filter(p => 
-    p && (p.teamId === teamId || (teamName && p.team && p.team.toLowerCase() === teamName.toLowerCase()))
+  
+  // Try to find players that belong to this team
+  let matching = allPlayers.filter(p => 
+    p && (p.teamId === teamId || (teamName && p.teamName && p.teamName.toLowerCase().trim() === teamName.toLowerCase().trim()))
   );
+  
   if (matching.length >= 3) {
     return matching.slice(0, 5);
   }
 
-  // 3. Fallback: synthesize realistic player nicknames for the team
-  const cleanTeam = teamName.replace(/[^a-zA-Z0-9а-яА-ЯёЁ]/g, '').slice(0, 8);
+  // 3. Fallback: use generic numbered players if we can't find real ones
   const synthRoster = [
-    { id: `p_${cleanTeam}_1`, nickname: `${cleanTeam}_Captain`, role: 'IGL', rating: 110 },
-    { id: `p_${cleanTeam}_2`, nickname: `${cleanTeam}_Sniper`, role: 'AWPer', rating: 115 },
-    { id: `p_${cleanTeam}_3`, nickname: `${cleanTeam}_Entry`, role: 'Entry', rating: 105 },
-    { id: `p_${cleanTeam}_4`, nickname: `${cleanTeam}_Rifler`, role: 'Rifler', rating: 102 },
-    { id: `p_${cleanTeam}_5`, nickname: `${cleanTeam}_Support`, role: 'Support', rating: 98 },
+    { id: `p_${teamId || 'gen'}_1`, nickname: `${teamName} #1`, role: 'IGL', rating: 105 },
+    { id: `p_${teamId || 'gen'}_2`, nickname: `${teamName} #2`, role: 'AWPer', rating: 110 },
+    { id: `p_${teamId || 'gen'}_3`, nickname: `${teamName} #3`, role: 'Entry', rating: 102 },
+    { id: `p_${teamId || 'gen'}_4`, nickname: `${teamName} #4`, role: 'Rifler', rating: 98 },
+    { id: `p_${teamId || 'gen'}_5`, nickname: `${teamName} #5`, role: 'Support', rating: 95 },
   ];
   return synthRoster;
 }
@@ -105,9 +110,16 @@ export function generateRealisticMatchRecord(
 
   // Determine realistic map scores
   const maps: any[] = [];
-  const mapPool = tournament.game === 'so2' 
-    ? ['Rust', 'Sandstone', 'Sakura', 'Province', 'Zone 9']
-    : ['Mirage', 'Inferno', 'Nuke', 'Ancient', 'Anubis', 'Dust II'];
+  const baseMapPool = tournament.game === 'so2' 
+    ? ['Rust', 'Sandstone', 'Sakura', 'Province', 'Zone 9', 'Breeze', 'Dune', 'Hanami']
+    : ['Mirage', 'Inferno', 'Nuke', 'Ancient', 'Anubis', 'Dust II', 'Overpass', 'Train', 'Cache'];
+
+  // Shuffle map pool based on seed
+  const mapPool = [...baseMapPool];
+  for (let i = mapPool.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [mapPool[i], mapPool[j]] = [mapPool[j], mapPool[i]];
+  }
 
   const t1Roster = getTeamRoster(t1, roomId, allPlayers);
   const t2Roster = getTeamRoster(t2, roomId, allPlayers);
@@ -316,7 +328,7 @@ export function generateRealisticMatchRecord(
     date: new Date().toISOString(),
     tournamentId: tournament.id,
     tournamentName: tournament.name,
-    gameMode: tournament.game || tournament.settings?.game || 'cs2',
+    gameMode: tournament.game || tournament.settings?.game || (tournament.id?.includes('so2') ? 'so2' : 'cs2'),
     format: formatStr,
     bo: isBO5 ? 5 : (isBO3 ? 3 : 1),
     team1Name: t1Name,

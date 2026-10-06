@@ -23,7 +23,7 @@ export default function Settings({ user }: { user: any }) {
   const [customRolesCS2, setCustomRolesCS2] = useState<any[]>(DEFAULT_ROLES_CS2);
   const [customRolesS2, setCustomRolesS2] = useState<any[]>(DEFAULT_ROLES_S2);
   const [activeTab, setActiveTab] = useState<'general' | 'individual' | 'database'>('general');
-  const [activeRoleGame, setActiveRoleGame] = useState<'cs2' | 's2'>('cs2');
+  const [activeRoleGame, setActiveRoleGame] = useState<'cs2' | 's2' | 'so2'>('cs2');
 
   // Apply rating settings globally immediately
   useEffect(() => {

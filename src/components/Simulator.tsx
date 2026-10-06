@@ -10,8 +10,12 @@ import { simulateMatchSeries, MAP_POOL_CS2, MAP_POOL_S2, refreshMapPools } from 
 import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { simulationPerf } from '../lib/simulationPerformance';
 import VetoModal from "./VetoModal";
-import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass } from '../lib/utils';
+import MatchStitcherModal from './MatchStitcherModal';
+import SeriesStitcherModal from './SeriesStitcherModal';
+import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass, shuffleArray } from '../lib/utils';
 import { updateBetaTournamentMatchResult, loadTournaments, saveTournament, getCanonicalRoomId } from './setka_tourn/storage';
+import { useGameUniverse } from '../lib/gameUniverse';
+import { Trophy, Sparkles, Layers, ChevronRight } from 'lucide-react';
 
 const DEFAULT_TEAM_T = [
   { nickname: 'Player 1', role: 'rifler', rating: 148 },
@@ -143,7 +147,9 @@ export default function Simulator({ user }: { user: any }) {
   const resultContainerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const [game, setGame] = useState('cs2');
+  const [activeGame, setActiveGame] = useGameUniverse();
+  const game = activeGame;
+  const setGame = setActiveGame;
   const [format, setFormat] = useState('BO3');
   const [isSimulating, setIsSimulating] = useState(false);
     const [result, setResult] = useState<any>(null);
@@ -169,8 +175,8 @@ export default function Simulator({ user }: { user: any }) {
   const [view, setView] = useState<'setup' | 'live' | 'result'>('setup');
   const [showVeto, setShowVeto] = useState(false);
   const [vetoKey, setVetoKey] = useState(0);
-  const [isSequential, setIsSequential] = useState(false);
-  const [sequentialRevealedIndex, setSequentialRevealedIndex] = useState(0);
+  const [showSkleyka, setShowSkleyka] = useState(false);
+  const [showSeriesStitcher, setShowSeriesStitcher] = useState(false);
   const [channelTeams, setChannelTeams] = useState<any[]>([]);
   const [showChannelLoad, setShowChannelLoad] = useState<1 | 2 | null>(null);
   const [teamSearch, setTeamSearch] = useState("");
@@ -506,12 +512,22 @@ export default function Simulator({ user }: { user: any }) {
     try {
       const { toPng } = await import('html-to-image');
       const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      
+      // Force a desktop-like width for the capture to ensure side-by-side layout
+      const originalWidth = resultContainerRef.current.style.width;
+      const originalMinWidth = resultContainerRef.current.style.minWidth;
+      
+      // We set a fixed width for capture then revert it
+      resultContainerRef.current.style.width = '1200px';
+      resultContainerRef.current.style.minWidth = '1200px';
+
       let imgData: string;
       try {
         imgData = await toPng(resultContainerRef.current, {
           backgroundColor: '#0a0a0f',
           cacheBust: true,
           pixelRatio: 2,
+          width: 1200,
           skipFonts: true,
           fontEmbedCSS: '',
           imagePlaceholder: transparentPlaceholder,
@@ -519,18 +535,12 @@ export default function Simulator({ user }: { user: any }) {
             borderRadius: '1.5rem',
           }
         });
-      } catch (retryErr) {
-        imgData = await toPng(resultContainerRef.current, {
-          backgroundColor: '#0a0a0f',
-          pixelRatio: 1.5,
-          skipFonts: true,
-          fontEmbedCSS: '',
-          imagePlaceholder: transparentPlaceholder,
-          style: {
-            borderRadius: '1.5rem',
-          }
-        });
+      } finally {
+        // Restore original styles
+        resultContainerRef.current.style.width = originalWidth;
+        resultContainerRef.current.style.minWidth = originalMinWidth;
       }
+      
       const downloadAnchorNode = document.createElement('a');
       downloadAnchorNode.setAttribute("href", imgData);
       downloadAnchorNode.setAttribute("download", `match_${result.team1Name}_vs_${result.team2Name}_${Date.now()}.png`);
@@ -559,7 +569,7 @@ export default function Simulator({ user }: { user: any }) {
         const mapPool = (isCS2 ? cs2MapPool : s2MapPool).map(m => m.name);
         const availableMaps = mapPool.filter(m => !pickedMaps.includes(m));
         const needed = bo - pickedMaps.length;
-        const randomPicks = [...availableMaps].sort(() => Math.random() - 0.5).slice(0, needed);
+        const randomPicks = shuffleArray(availableMaps).slice(0, needed);
         pickedMaps = [...pickedMaps, ...randomPicks];
       }
 
@@ -723,13 +733,7 @@ export default function Simulator({ user }: { user: any }) {
       simulationPerf.printReport();
 
       setResult(newMatch);
-      if (isSequential && newMatch.bo !== 1) {
-        setSequentialRevealedIndex(0);
-        setSelectedResultTab(0);
-      } else {
-        setSequentialRevealedIndex((newMatch.maps?.length || 1) - 1);
-        setSelectedResultTab(newMatch.bo === 1 ? 0 : 'overall');
-      }
+      setSelectedResultTab(newMatch.bo === 1 ? 0 : 'overall');
       setView('result');
     } catch (e: any) {
       console.error(e);
@@ -846,43 +850,31 @@ export default function Simulator({ user }: { user: any }) {
   }
 
   if (view === 'result') {
-    const isSequentialActive = isSequential && result?.bo !== 1;
     const isOverall = selectedResultTab === 'overall';
     const currentMapIdx = typeof selectedResultTab === 'number' ? selectedResultTab : null;
     const currentSelectedMap = (currentMapIdx !== null && Array.isArray(result?.maps) && result.maps[currentMapIdx]) 
       ? result.maps[currentMapIdx] 
       : null;
-    const bo1Map = (result?.bo === 1 && Array.isArray(result?.maps) && result.maps.length > 0) 
-      ? result.maps[0] 
-      : null;
-    const activeBgMapName = (currentSelectedMap?.mapName || currentSelectedMap?.name || currentSelectedMap?.mapId || bo1Map?.mapName || bo1Map?.name || bo1Map?.mapId || 'de_mirage').toLowerCase();
-
-    // Calculate score of series up to currently selected map
-    const runningMaps = (currentMapIdx !== null && Array.isArray(result?.maps))
-      ? result.maps.slice(0, currentMapIdx + 1)
-      : (Array.isArray(result?.maps) ? result.maps : []);
-
-    const runScore1 = runningMaps.filter((m: any) => (m.team1Score ?? m.score1 ?? 0) > (m.team2Score ?? m.score2 ?? 0)).length;
-    const runScore2 = runningMaps.filter((m: any) => (m.team2Score ?? m.score2 ?? 0) > (m.team1Score ?? m.score1 ?? 0)).length;
+    
+    // In overall view, use the first map of the series as background
+    const firstMapInSeries = (Array.isArray(result?.maps) && result.maps.length > 0) ? result.maps[0] : null;
+    
+    const bgSourceMap = currentSelectedMap || firstMapInSeries;
+    const activeBgMapName = (bgSourceMap?.mapId || bgSourceMap?.id || bgSourceMap?.mapName || bgSourceMap?.name || 'mirage').toLowerCase().replace(/\s+/g, '');
 
     const mapScore1 = currentSelectedMap ? (currentSelectedMap.team1Score ?? currentSelectedMap.score1 ?? 0) : 0;
     const mapScore2 = currentSelectedMap ? (currentSelectedMap.team2Score ?? currentSelectedMap.score2 ?? 0) : 0;
 
-    const displayedScore1 = isOverall ? result.team1Score : (result.bo === 1 ? (bo1Map?.team1Score ?? bo1Map?.score1 ?? result.team1Score) : mapScore1);
-    const displayedScore2 = isOverall ? result.team2Score : (result.bo === 1 ? (bo1Map?.team2Score ?? bo1Map?.score2 ?? result.team2Score) : mapScore2);
+    const displayedScore1 = isOverall ? result.team1Score : (result.bo === 1 ? (firstMapInSeries?.team1Score ?? firstMapInSeries?.score1 ?? result.team1Score) : mapScore1);
+    const displayedScore2 = isOverall ? result.team2Score : (result.bo === 1 ? (firstMapInSeries?.team2Score ?? firstMapInSeries?.score2 ?? result.team2Score) : mapScore2);
 
     return (
       <div className="flex flex-col gap-6 w-full animate-fade-in">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-black text-white tracking-widest uppercase">
-              {isSequentialActive && !isOverall ? `КАРТА ${currentMapIdx! + 1}` : 'РЕЗУЛЬТАТЫ МАТЧА'}
+              {isOverall ? 'РЕЗУЛЬТАТЫ МАТЧА' : `КАРТА ${currentMapIdx! + 1}`}
             </h2>
-            {isSequentialActive && !isOverall && (
-              <span className="bg-[#ff8f00]/10 text-[#ff8f00] border border-[#ff8f00]/30 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider">
-                Пошаговый показ
-              </span>
-            )}
           </div>
           <div className="flex gap-4">
             <button onClick={downloadPhoto} className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 cursor-pointer">
@@ -896,7 +888,7 @@ export default function Simulator({ user }: { user: any }) {
 
         <div ref={resultContainerRef} className="flex flex-col gap-6 bg-[#0a0a0f] p-6 rounded-3xl border border-white/5">
           <div className="bg-gradient-to-br from-[#12121a] to-[#1a1a24] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden"
-               style={(currentSelectedMap || bo1Map) ? {
+               style={bgSourceMap ? {
                  backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.85), rgba(26,26,36,0.95)), url('/maps/${activeBgMapName}')`,
                  backgroundSize: 'cover',
                  backgroundPosition: 'center'
@@ -905,16 +897,16 @@ export default function Simulator({ user }: { user: any }) {
             <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2"></div>
             
             <div className="flex items-center justify-center gap-6 mb-4 relative z-10">
-              <TeamLogo game={game === "cs2" ? "cs2" : "s2"} teamName={result.team1Name} sizeClassName="w-16 h-16 text-2xl" />
+              <TeamLogo game={game === "cs2" ? "cs2" : "so2"} teamName={result.team1Name} sizeClassName="w-16 h-16 text-2xl" />
               <div>
                 <h2 className="text-3xl font-black tracking-widest text-white uppercase">{result.team1Name} vs {result.team2Name}</h2>
-                {isSequentialActive && !isOverall && (
+                {!isOverall && currentSelectedMap && (
                   <p className="text-sm font-bold text-[#ff8f00] tracking-wider uppercase mt-1">
                     {currentSelectedMap?.mapName || `Карта ${currentMapIdx! + 1}`}
                   </p>
                 )}
               </div>
-              <TeamLogo game={game === "cs2" ? "cs2" : "s2"} teamName={result.team2Name} sizeClassName="w-16 h-16 text-2xl" />
+              <TeamLogo game={game === "cs2" ? "cs2" : "so2"} teamName={result.team2Name} sizeClassName="w-16 h-16 text-2xl" />
             </div>
 
             <div className="text-6xl font-black tracking-widest mb-3 relative z-10 drop-shadow-xl">
@@ -927,15 +919,6 @@ export default function Simulator({ user }: { user: any }) {
               </span>
             </div>
 
-            {isSequentialActive && !isOverall && (
-              <div className="inline-flex items-center gap-2 bg-black/60 border border-white/10 rounded-full px-5 py-1.5 mb-4 relative z-10">
-                <span className="text-xs font-bold text-white/50 uppercase tracking-wider">Счет в серии:</span>
-                <span className="text-sm font-black text-[#ff8f00]">{runScore1}</span>
-                <span className="text-xs text-white/30 font-black">—</span>
-                <span className="text-sm font-black text-blue-400">{runScore2}</span>
-              </div>
-            )}
-
             {isOverall && result.mvp && (
               <div className="inline-flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-full px-6 py-2 mb-6 relative z-10">
                 <span className="text-yellow-500">⭐</span>
@@ -947,21 +930,16 @@ export default function Simulator({ user }: { user: any }) {
             {result.bo !== 1 && Array.isArray(result.maps) && (
               <div className="mt-6 flex flex-col items-center gap-3 relative z-10">
                 <button 
-                  onClick={() => {
-                    if (isSequentialActive && sequentialRevealedIndex < result.maps.length - 1) {
-                      setSequentialRevealedIndex(result.maps.length - 1);
-                    }
-                    setSelectedResultTab('overall');
-                  }}
+                  onClick={() => setSelectedResultTab('overall')}
                   className={`w-full max-w-md px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center min-h-[48px] ${selectedResultTab === 'overall' ? 'bg-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
                 >
-                  {isSequentialActive && sequentialRevealedIndex < result.maps.length - 1 ? '⚡ ПОКАЗАТЬ ПОЛНЫЙ РЕЗУЛЬТАТ (ПРОПУСТИТЬ ШАГИ)' : 'ОБЩАЯ СТАТИСТИКА'}
+                  ОБЩАЯ СТАТИСТИКА СЕРИИ
                 </button>
 
-                <div className="flex flex-wrap justify-center gap-3">
-                  {result.maps.slice(0, isSequentialActive ? sequentialRevealedIndex + 1 : result.maps.length).map((map: any, i: number) => {
+                <div className="flex flex-nowrap justify-center gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                  {result.maps.map((map: any, i: number) => {
                     const mTitle = map?.mapName || map?.name || map?.mapId || `Карта ${i + 1}`;
-                    const mImg = (map?.mapName || map?.name || map?.mapId || 'de_mirage').toLowerCase();
+                    const mImg = (map?.mapId || map?.id || map?.mapName || map?.name || 'mirage').toLowerCase().replace(/\s+/g, '');
                     const sc1 = map?.team1Score ?? map?.score1 ?? 0;
                     const sc2 = map?.team2Score ?? map?.score2 ?? 0;
 
@@ -985,26 +963,6 @@ export default function Simulator({ user }: { user: any }) {
                       </button>
                     );
                   })}
-
-                  {/* В пошаговом режиме: если серия еще не закончилась, показываем только одну следующую карту как "под вопросом" без раскрытия последующих */}
-                  {isSequentialActive && sequentialRevealedIndex < result.maps.length - 1 && (
-                    <div 
-                      onClick={() => {
-                        const nextIdx = currentMapIdx !== null && currentMapIdx < sequentialRevealedIndex ? currentMapIdx + 1 : sequentialRevealedIndex + 1;
-                        if (nextIdx > sequentialRevealedIndex) {
-                          setSequentialRevealedIndex(nextIdx);
-                        }
-                        setSelectedResultTab(nextIdx);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="w-[120px] h-[80px] rounded-xl border border-dashed border-[#ff8f00]/40 bg-[#ff8f00]/5 hover:bg-[#ff8f00]/10 flex flex-col items-center justify-center text-center p-2 cursor-pointer transition-all hover:scale-105 shadow-sm"
-                      title="Нажмите, чтобы сыграть / открыть следующую карту"
-                    >
-                      <span className="text-xs mb-0.5">❓</span>
-                      <span className="text-[10px] font-black text-[#ff8f00] uppercase tracking-wider">Карта {sequentialRevealedIndex + 2}</span>
-                      <span className="text-[9px] text-white/50 font-bold">Под вопросом</span>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -1013,7 +971,7 @@ export default function Simulator({ user }: { user: any }) {
           <div className="grid grid-cols-1 gap-6">
             {selectedResultTab === 'overall' ? (
               <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                <div className="grid grid-cols-2 gap-8">
                   <StatsTable teamName={`${result.team1Name} (Всего)`} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={result.team1Stats} />
                   <StatsTable teamName={`${result.team2Name} (Всего)`} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={result.team2Stats} />
                 </div>
@@ -1046,82 +1004,10 @@ export default function Simulator({ user }: { user: any }) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-2 gap-8">
                       <StatsTable teamName={result.team1Name} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={activeMap.team1Stats} />
                       <StatsTable teamName={result.team2Name} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={activeMap.team2Stats} />
                     </div>
-
-                    {/* Sequential Stepper Navigation */}
-                    {isSequentialActive && currentMapIdx !== null && (
-                      <>
-                        {currentMapIdx < result.maps.length - 1 ? (
-                          <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 p-5 bg-gradient-to-r from-[#171725] to-[#1a1a2e] border border-[#ff8f00]/30 rounded-2xl shadow-xl">
-                            <div className="flex items-center gap-3.5">
-                              <div className="w-10 h-10 rounded-xl bg-[#ff8f00]/10 border border-[#ff8f00]/30 flex items-center justify-center text-[#ff8f00] font-black text-sm">
-                                {currentMapIdx + 1}
-                              </div>
-                              <div>
-                                <div className="text-[11px] text-[#ff8f00] font-bold uppercase tracking-wider">Пошаговый показ матча</div>
-                                <div className="text-sm font-black text-white">
-                                  Счет в серии: <span className="text-[#ff8f00]">{runScore1}</span> — <span className="text-blue-500">{runScore2}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                              <button
-                                onClick={() => {
-                                  const nextIdx = currentMapIdx + 1;
-                                  if (nextIdx > sequentialRevealedIndex) {
-                                    setSequentialRevealedIndex(nextIdx);
-                                  }
-                                  setSelectedResultTab(nextIdx);
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                                className="flex-1 sm:flex-none px-6 py-3.5 bg-gradient-to-r from-[#ff8f00] to-[#ffa000] hover:from-[#ffa000] hover:to-[#ffb000] text-black font-black text-xs sm:text-sm rounded-xl uppercase tracking-wider shadow-lg shadow-[#ff8f00]/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                              >
-                                <span>ПЕРЕЙТИ К СЛЕДУЮЩЕЙ КАРТЕ ({result.maps[currentMapIdx + 1]?.mapName || `Карта ${currentMapIdx + 2}`})</span>
-                                <span className="text-base">→</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSequentialRevealedIndex(result.maps.length - 1);
-                                  setSelectedResultTab('overall');
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                                className="px-4 py-3.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-xs font-bold rounded-xl transition-colors cursor-pointer border border-white/5"
-                              >
-                                Показать все сразу
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 p-5 bg-gradient-to-r from-amber-500/10 via-[#171725] to-blue-500/10 border border-yellow-500/40 rounded-2xl shadow-xl">
-                            <div className="flex items-center gap-3.5">
-                              <span className="text-3xl">🏆</span>
-                              <div>
-                                <div className="text-[11px] text-yellow-500 font-bold uppercase tracking-wider">Все карты сыграны • Серия завершена</div>
-                                <div className="text-sm sm:text-base font-black text-white uppercase">
-                                  Итоговый счет серии: <span className="text-[#ff8f00]">{result.team1Score}</span> — <span className="text-blue-500">{result.team2Score}</span> ({result.team1Score > result.team2Score ? result.team1Name : result.team2Name} побеждает!)
-                                </div>
-                              </div>
-                            </div>
-
-                            <button
-                              onClick={() => {
-                                setSequentialRevealedIndex(result.maps.length - 1);
-                                setSelectedResultTab('overall');
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                              }}
-                              className="w-full sm:w-auto px-7 py-3.5 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-black text-xs sm:text-sm rounded-xl uppercase tracking-wider shadow-lg shadow-yellow-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer animate-pulse"
-                            >
-                              <span>ПОКАЗАТЬ ПОЛНЫЙ РЕЗУЛЬТАТ СЕРИИ</span>
-                              <span>🏆</span>
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
                   </div>
                 );
               })()
@@ -1144,22 +1030,23 @@ export default function Simulator({ user }: { user: any }) {
         
         <div className="relative z-10 flex flex-wrap gap-4 bg-black/40 p-3 rounded-2xl border border-white/10 backdrop-blur-sm">
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider ml-1">Игра</span>
-            <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
-              <button onClick={() => { setGame('s2'); setSelectedMaps([]); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${game === 's2' ? 'bg-[#ff8f00] text-black shadow-md shadow-[#ff8f00]/20' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>STANDOFF 2</button>
-              <button onClick={() => { setGame('cs2'); setSelectedMaps([]); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${game === 'cs2' ? 'bg-[#ff8f00] text-black shadow-md shadow-[#ff8f00]/20' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>CS2</button>
-            </div>
-          </div>
-          
-          <div className="hidden sm:block w-[1px] bg-white/10 my-1"></div>
-          
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider ml-1">Формат</span>
+            <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider ml-1">Формат серии</span>
             <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
               {['BO1', 'BO3', 'BO5'].map(f => (
-                <button key={f} onClick={() => { setFormat(f); setSelectedMaps([]); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${format === f ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>{f}</button>
+                <button key={f} onClick={() => { setFormat(f); setSelectedMaps([]); }} className={`px-6 py-1.5 rounded-lg text-xs font-bold transition-all ${format === f ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>{f}</button>
               ))}
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider ml-1">Аналитика фото</span>
+            <button 
+              onClick={() => setShowSkleyka(true)}
+              className="flex items-center gap-2 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 hover:bg-yellow-500/20 px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all shadow-lg shadow-yellow-500/5 group"
+            >
+              <Sparkles className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+              Топ Склейки
+            </button>
           </div>
         </div>
       </div>
@@ -1180,7 +1067,15 @@ export default function Simulator({ user }: { user: any }) {
                   const mapPool = (game === 'cs2' ? cs2MapPool : s2MapPool).map(m => m.name);
                   const availableMaps = mapPool.filter(m => !selectedMaps.includes(m));
                   const needed = bo - selectedMaps.length;
-                  const randomPicks = [...availableMaps].sort(() => Math.random() - 0.5).slice(0, needed);
+                  
+                  // Fisher-Yates shuffle for better randomness
+                  const shuffled = [...availableMaps];
+                  for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                  }
+                  
+                  const randomPicks = shuffled.slice(0, needed);
                   setSelectedMaps([...selectedMaps, ...randomPicks]);
                 }
               }} className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 px-3 py-1.5 rounded-lg font-bold uppercase transition-colors">Случайно</button>
@@ -1238,22 +1133,27 @@ export default function Simulator({ user }: { user: any }) {
             </select>
           </div>
 
-          <label className="flex items-center gap-2.5 px-3 py-2.5 bg-black/40 border border-white/10 hover:border-[#ff8f00]/30 rounded-xl cursor-pointer select-none group transition-colors">
-            <input 
-              type="checkbox" 
-              checked={isSequential} 
-              onChange={(e) => setIsSequential(e.target.checked)}
-              className="w-4 h-4 rounded bg-black/40 border-white/20 text-[#ff8f00] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#ff8f00]"
-            />
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-white/90 group-hover:text-[#ff8f00] transition-colors">
-                Показывать карты по порядку
-              </span>
-              <span className="text-[10px] text-white/40">
-                1-я карта → 2-я → 3-я → полный результат серии
-              </span>
+          <button
+            type="button"
+            onClick={() => setShowSeriesStitcher(true)}
+            className="w-full py-3 px-4 bg-gradient-to-r from-purple-900/40 via-indigo-900/40 to-blue-900/40 hover:from-purple-900/60 hover:via-indigo-900/60 hover:to-blue-900/60 border border-purple-500/30 hover:border-purple-400/50 rounded-xl transition-all flex items-center justify-between group cursor-pointer shadow-lg shadow-purple-950/30"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400 group-hover:scale-110 transition-transform">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <div className="text-xs font-black text-white group-hover:text-purple-300 transition-colors uppercase tracking-wider flex items-center gap-1.5">
+                  <span>Склейка матчей (BO3 / BO5)</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold">ФОТО КАРТ</span>
+                </div>
+                <div className="text-[10px] text-white/40">
+                  Закидывайте фото карт по одной → соединяет в общий скрин серии
+                </div>
+              </div>
             </div>
-          </label>
+            <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-purple-400 group-hover:translate-x-0.5 transition-all" />
+          </button>
 
           <button 
             onClick={handleSimulate}
@@ -1362,7 +1262,7 @@ export default function Simulator({ user }: { user: any }) {
               {selectedMaps.length > 0 && (
                 <div>
                   <h4 className="text-sm font-bold text-white/50 uppercase tracking-widest mb-3">Винрейт на выбранных картах</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                     {selectedMaps.map(mapName => (
                       <div key={mapName} className="bg-black/20 p-3 rounded-lg border border-white/5">
                         <div className="text-center text-white/80 font-black mb-2 border-b border-white/5 pb-2">{mapName}</div>
@@ -1420,7 +1320,7 @@ export default function Simulator({ user }: { user: any }) {
                           </div>
                           <div className="flex -space-x-2 overflow-hidden mt-1 px-1">
                              {t.players?.map((p, i) => (
-                             <PlayerAvatar key={i} game={game === "cs2" ? "cs2" : "s2"} playerName={p.nickname} sizeClassName="h-6 w-6" className="ring-2 ring-[#12121a]" />
+                             <PlayerAvatar key={i} game={game === "cs2" ? "cs2" : "so2"} playerName={p.nickname} sizeClassName="h-6 w-6" className="ring-2 ring-[#12121a]" />
                              ))}
                           </div>
                         </button>
@@ -1438,6 +1338,18 @@ export default function Simulator({ user }: { user: any }) {
         <TeamCard game={game as "cs2"|"s2"} nameLabel="Команда 1" nameValue={team1Name} onNameChange={setTeam1Name} color="#ff8f00" players={team1} rating={Math.round(team1.reduce((acc, p) => acc + (Number(p.rating) || 0), 0) / Math.max(1, team1.length))} synergy={team1Synergy} form={team1Form} selectedMaps={selectedMaps} mapExp={team1MapExp} onSynergyChange={setTeam1Synergy} onFormChange={setTeam1Form} onMapExpChange={(map, val) => setTeam1MapExp({...team1MapExp, [map]: val})} onChange={(idx, field, val) => updatePlayer(1, idx, field, val)} onSave={() => handleSaveTeam(team1Name, team1)} onLoad={() => handleLoadTeam(1)} onChannelLoad={user?.isCustom ? () => handleOpenChannelLoad(1) : undefined} />
         <TeamCard game={game as "cs2"|"s2"} nameLabel="Команда 2" nameValue={team2Name} onNameChange={setTeam2Name} color="#3b82f6" players={team2} rating={Math.round(team2.reduce((acc, p) => acc + (Number(p.rating) || 0), 0) / Math.max(1, team2.length))} synergy={team2Synergy} form={team2Form} selectedMaps={selectedMaps} mapExp={team2MapExp} onSynergyChange={setTeam2Synergy} onFormChange={setTeam2Form} onMapExpChange={(map, val) => setTeam2MapExp({...team2MapExp, [map]: val})} onChange={(idx, field, val) => updatePlayer(2, idx, field, val)} onSave={() => handleSaveTeam(team2Name, team2)} onLoad={() => handleLoadTeam(2)} onChannelLoad={user?.isCustom ? () => handleOpenChannelLoad(2) : undefined} />
       </div>
+      {showSkleyka && (
+        <MatchStitcherModal 
+          user={user}
+          onClose={() => setShowSkleyka(false)}
+        />
+      )}
+      {showSeriesStitcher && (
+        <SeriesStitcherModal 
+          user={user}
+          onClose={() => setShowSeriesStitcher(false)}
+        />
+      )}
       <VetoModal
         key={vetoKey}
         isOpen={showVeto}

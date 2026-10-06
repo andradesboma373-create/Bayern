@@ -10,7 +10,7 @@ import GslGroupStage from './GslGroupStage';
 import TieredPlayoffStage from './TieredPlayoffStage';
 import TournamentSettingsForm from './TournamentSettingsForm';
 import MatchCard from './MatchCard';
-import { generateDoubleElimination, cascadeAdvancements, advanceDoubleElimMatch, BYE_TEAM } from './doubleEliminationLogic';
+import { generateDoubleElimination, cascadeAdvancements, advanceDoubleElimMatch, BYE_TEAM, getBalancedSeeding } from './doubleEliminationLogic';
 import { generateNextSwissRound } from './swissLogic';
 import { generateGslGroups, generateTieredPlayoffBracket, generateTieredPlayoffFromStandings, getGslGroupStandings, updateGslMatch, advanceTieredPlayoffMatch } from './gslLogic';
 import TeamLogo from '../TeamLogo';
@@ -20,7 +20,7 @@ import Top20Modal from './Top20Modal';
 import FinalistsModal from './FinalistsModal';
 import MvpModal from './MvpModal';
 import { getAutoMatchedVectorLogo } from '../../lib/logoMatcher';
-import { safeLocalStorageSet } from '../../lib/utils';
+import { safeLocalStorageSet, shuffleArray } from '../../lib/utils';
 import { getCanonicalRoomId } from './storage';
 import { useGameUniverse } from '../../lib/gameUniverse';
 import So2MediaLibraryModal from '../So2MediaLibraryModal';
@@ -410,7 +410,9 @@ export default function TournamentManager({ user }: { user: any }) {
       if (stage1Type === 'gsl_groups') {
           const numGroups = settings.numberOfGroups || 2;
           const advanceCount = settings.gslAdvanceCount || 3;
-          const orderedTeams = settings.seedingType === 'random' ? [...teams].sort(() => Math.random() - 0.5) : [...teams];
+          const orderedTeams = settings.seedingType === 'random' 
+            ? shuffleArray(teams) 
+            : (settings.seedingType === 'skill' ? getBalancedSeeding(teams) : [...teams]);
           initialGslGroups = generateGslGroups(orderedTeams, numGroups, settings.groupAssignments, advanceCount);
       } else if (stage1Type === 'groups') {
           const numGroups = settings.numberOfGroups || 2;
@@ -433,7 +435,9 @@ export default function TournamentManager({ user }: { user: any }) {
                   });
               });
           } else {
-              const shuffled = settings.seedingType === 'random' ? [...teams].sort(() => Math.random() - 0.5) : [...teams];
+              const shuffled = settings.seedingType === 'random' 
+                ? shuffleArray(teams) 
+                : (settings.seedingType === 'skill' ? getBalancedSeeding(teams) : [...teams]);
               shuffled.forEach((team, idx) => {
                   initialGroups[idx % numGroups].teams.push(team);
               });
@@ -466,11 +470,15 @@ export default function TournamentManager({ user }: { user: any }) {
               group.matches = matches;
           });
       } else if (stage1Type === 'swiss') {
-          const orderedTeams = settings.seedingType === 'random' ? [...teams].sort(() => Math.random() - 0.5) : [...teams];
+          const orderedTeams = (settings.seedingType === 'random') 
+            ? shuffleArray(teams) 
+            : (settings.seedingType === 'skill' ? getBalancedSeeding(teams) : [...teams]);
           const firstRound = generateNextSwissRound(orderedTeams, [], settings.swissWinsToAdvance || 3, settings.swissLossesToEliminate || 3);
           if (firstRound) initialSwissRounds.push(firstRound);
       } else {
-          const shuffled = settings.seedingType === 'random' ? [...teams].sort(() => Math.random() - 0.5) : [...teams];
+          const shuffled = (settings.seedingType === 'random') 
+            ? shuffleArray(teams) 
+            : (settings.seedingType === 'skill' ? getBalancedSeeding(teams) : [...teams]);
           if (settings.eliminationType === 'double') {
               const res = generateDoubleElimination(shuffled);
               initialBracket = res.winnersBracket;

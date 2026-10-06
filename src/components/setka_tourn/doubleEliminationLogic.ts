@@ -2,6 +2,63 @@ import { Match, Team } from './types';
 
 export const BYE_TEAM: Team = { id: 'BYE', name: 'BYE' };
 
+/**
+ * Calculates average team rating based on players
+ */
+export function getTeamRating(team: Team): number {
+    if (!team || team.id === 'BYE') return 0;
+    if (!team.players || team.players.length === 0) return 500; // Default base rating
+    
+    const sum = team.players.reduce((acc, p) => {
+        const r = Number(p.rating) || Number(p.avgRating) || 100;
+        return acc + r;
+    }, 0);
+    return sum / team.players.length;
+}
+
+/**
+ * Arranges teams in a standard tournament seed order (1 vs 16, 8 vs 9, etc)
+ * so that top seeds meet only in the finals.
+ */
+export function getBalancedSeeding(teams: Team[]): Team[] {
+    if (teams.length <= 2) return teams;
+
+    // 1. Sort teams by strength (descending)
+    const sorted = [...teams].sort((a, b) => getTeamRating(b) - getTeamRating(a));
+    
+    const numTeams = sorted.length;
+    let nextPowerOfTwo = 1;
+    while (nextPowerOfTwo < numTeams) nextPowerOfTwo *= 2;
+    
+    // 2. Pad with BYE teams to reach power of 2
+    const padded: (Team | null)[] = [...sorted];
+    while (padded.length < nextPowerOfTwo) {
+        padded.push(null); // Will be replaced by BYE
+    }
+
+    // 3. Generate standard tournament seed sequence
+    // Example for 8: [1, 8, 5, 4, 3, 6, 7, 2]
+    let seedOrder = [1];
+    while (seedOrder.length < nextPowerOfTwo) {
+        const nextOrder = [];
+        const currentMax = seedOrder.length * 2;
+        for (const seed of seedOrder) {
+            nextOrder.push(seed);
+            nextOrder.push(currentMax + 1 - seed);
+        }
+        seedOrder = nextOrder;
+    }
+
+    // 4. Map seed order back to teams
+    const result: Team[] = [];
+    for (const seed of seedOrder) {
+        const team = padded[seed - 1];
+        result.push(team || BYE_TEAM);
+    }
+
+    return result;
+}
+
 export const generateDoubleElimination = (teamsList: Team[]) => {
     let winnersBracket: Match[][] = [];
     let losersBracket: Match[][] = [];

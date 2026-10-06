@@ -58,13 +58,22 @@ export default function Matches({ user }: { user: any }) {
       }
 
       const isGameMatch = (m: any) => {
-        const mGame = (m.gameMode || 'cs2').toLowerCase();
-        if (game === 'cs2') {
-          return mGame === 'cs2' || mGame === 'csgo' || mGame === '5v5' || !m.gameMode;
-        }
+        const mGame = (m.gameMode || '').toLowerCase();
+        
+        // If tournament name contains SO2 or S2, it's likely SO2
+        const tName = (m.tournamentName || '').toLowerCase();
+        const isLikelySO2 = mGame === 'so2' || mGame === 's2' || mGame === 'standoff2' || mGame === 'standoff 2' || 
+                           tName.includes('standoff') || tName.includes('so2') || tName.includes(' s2');
+
         if (game === 'so2') {
-          return mGame === 'so2' || mGame === 'standoff2';
+          return isLikelySO2;
         }
+        
+        // Default to CS2 if not explicitly SO2 and we are in CS2 world
+        if (game === 'cs2') {
+          return !isLikelySO2 || mGame === 'cs2' || mGame === 'csgo' || mGame === '5v5';
+        }
+        
         return mGame === game;
       };
 

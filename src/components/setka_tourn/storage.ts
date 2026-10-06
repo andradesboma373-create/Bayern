@@ -1,4 +1,4 @@
-import { Tournament, Team } from "./types";
+import { Tournament, Team, Match } from "./types";
 import {
   cascadeAdvancements,
   advanceDoubleElimMatch,

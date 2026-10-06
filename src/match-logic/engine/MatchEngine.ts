@@ -105,6 +105,12 @@ export class MatchEngine {
       return acc + r;
     }, 0) / Math.max(1, Math.min(5, team2Input.length));
 
+    const teamRatingDiff = t1Overall - t2Overall;
+
+    (state as any).t1Overall = t1Overall;
+    (state as any).t2Overall = t2Overall;
+    (state as any).teamRatingDiff = teamRatingDiff;
+
     // Team synergy: subtle impact (max ±1.5% as requested by user)
     const team1Synergy = options?.team1Synergy ?? 50;
     const team2Synergy = options?.team2Synergy ?? 50;
@@ -214,9 +220,29 @@ export class MatchEngine {
       const synergyMod = teamId === t1Id ? t1SynergyMod : t2SynergyMod;
       const mapExpMod = teamId === t1Id ? t1MapExpMod : t2MapExpMod;
       
-      // Blend: 70% individual skill + 30% team overall baseline + form + natural match performance variance
-      const playerMatchLuck = (rng() + rng() - 1.0) * 10;
-      const baseRating = (rawRating * 0.90) + (teamOverall * 0.10) + teamForm + playerMatchLuck;
+      // Realistic match day form & situational variance:
+      // In esports, players have good and bad games (bell curve distribution)
+      let matchFormLuck = (rng() + rng() + rng() - 1.5) * 5.0; // range -7.5 to +7.5
+      
+      // "Игра жизни" (Game of their life) & Off-game dynamics:
+      // Any player (especially underdogs or close rating teammates) can have a pop-off match!
+      let playerFocusMod = 1.0;
+      const popOffRoll = rng();
+      if (popOffRoll < 0.12) {
+        // 12% chance of a monster pop-off game (+9 to +13 rating boost)
+        matchFormLuck += 9 + rng() * 4;
+        playerFocusMod = 1.05;
+      } else if (popOffRoll > 0.92) {
+        // 8% chance of an off-day / cold match (-7 to -10)
+        matchFormLuck -= 7 + rng() * 3;
+        playerFocusMod = 0.95;
+      }
+
+      // Team-wide influence (Captain's calls / Team cohesion):
+      const teamOverallWeight = isCS2 ? 0.12 : 0.10; // Reduced from 0.18/0.15 to make individual skill more decisive
+      const individualWeight = 1.0 - teamOverallWeight;
+
+      const baseRating = (rawRating * individualWeight) + (teamOverall * teamOverallWeight) + teamForm + matchFormLuck;
       const effectiveRating = baseRating * synergyMod * mapExpMod;
       const rating = Math.max(1, effectiveRating);
       const skillVal = rating;
@@ -227,7 +253,7 @@ export class MatchEngine {
       let iq = skillVal;
       let movement = skillVal;
       let utility = skillVal;
-      let focus = 1.0;
+      let focus = playerFocusMod;
       let aggression = 1.0;
       let impact = 1.0;
       
@@ -243,50 +269,67 @@ export class MatchEngine {
           iq = skillVal * 1.01;
           movement = skillVal * 1.00;
           utility = skillVal * 0.95;
-          focus = 1.05;
+          focus *= 1.04;
           aggression = 0.88;
           impact = 1.02;
-          reaction = skillVal * 1.01;
+          reaction = skillVal * 1.10; // Increased from 1.07
           speedBonus = 0.00;
       } else if (isEntry) {
-          aim = skillVal * 1.03;
-          iq = skillVal * 0.99;
-          movement = skillVal * 1.04;
-          utility = skillVal * 0.92;
-          focus = 0.98;
-          aggression = 1.07;
-          impact = 1.05;
-          reaction = skillVal * 1.03;
-          speedBonus = 0.02;
+          // Entry goes in first, purely relying on strong aim now.
+          aim = skillVal * 1.18; // Increased from 1.15
+          iq = skillVal * 1.10;
+          movement = skillVal * 1.06;
+          utility = skillVal * 0.96;
+          focus *= 1.02;
+          aggression = 1.12;
+          impact = 1.25;
+          reaction = skillVal * 1.08;
+          speedBonus = 0.00;
       } else if (isLurker) {
-          aim = skillVal * 1.02;
-          iq = skillVal * 1.04;
-          movement = skillVal * 1.02;
+          aim = skillVal * 1.01;
+          iq = skillVal * 1.03;
+          movement = skillVal * 1.01;
           utility = skillVal * 0.92;
-          focus = 1.03;
+          focus *= 1.02;
           aggression = 0.90;
-          impact = 1.03;
-          reaction = skillVal * 1.02;
+          impact = 1.02;
+          reaction = skillVal * 1.01;
           speedBonus = 0.01;
       } else if (isSupport) {
-          aim = skillVal * 0.99;
-          iq = skillVal * 1.03;
-          movement = skillVal * 0.98;
-          utility = skillVal * 1.15;
-          focus = 0.98;
-          aggression = 0.88;
-          impact = 0.98;
-          reaction = skillVal * 0.99;
-          speedBonus = -0.01;
+          // Support is a standard rifler who also contributes heavy utility setups
+          aim = skillVal * 1.00;
+          iq = skillVal * 1.02;
+          movement = skillVal * 1.01;
+          utility = skillVal * 1.35;
+          focus *= 1.01;
+          aggression = 0.82;
+          impact = 1.00;
+          reaction = skillVal * 1.00;
+          speedBonus = 0.00;
       } else if (isCaptain) {
-          aim = skillVal * 0.97;
-          iq = skillVal * 1.18;
+          // Captain / IGL focuses on calling strats; frags less unless their rating is superstar tier ("имба" 115+)
+          const isStarCaptain = rawRating >= 115;
+          const isStrongCaptain = rawRating >= 105;
+          if (isStarCaptain) {
+              aim = skillVal * 1.00;
+              reaction = skillVal * 1.00;
+              aggression = 0.85;
+              impact = 1.00;
+          } else if (isStrongCaptain) {
+              aim = skillVal * 0.93;
+              reaction = skillVal * 0.94;
+              aggression = 0.76;
+              impact = 0.93;
+          } else {
+              aim = skillVal * 0.88;
+              reaction = skillVal * 0.89;
+              aggression = 0.70;
+              impact = 0.88;
+          }
+          iq = skillVal * 1.10;
           movement = skillVal * 0.96;
           utility = skillVal * 1.12;
           focus = 1.00;
-          aggression = 0.84;
-          impact = 0.97;
-          reaction = skillVal * 0.97;
           speedBonus = -0.01;
       } else {
           // Rifler (including adapted snipers and adapted captains)
@@ -303,14 +346,15 @@ export class MatchEngine {
               reaction = skillVal * 1.01;
               speedBonus = 0.00;
             } else if (origLower.includes('captain') || origLower.includes('igl') || origLower.includes('капитан')) {
-              aim = skillVal * 0.97;
-              iq = skillVal * 1.15;
-              movement = skillVal * 0.98;
+              const isStar = rawRating >= 115;
+              aim = skillVal * (isStar ? 1.00 : 0.89);
+              iq = skillVal * 1.10;
+              movement = skillVal * 0.96;
               utility = skillVal * 1.10;
               focus = 1.00;
-              aggression = 0.90;
-              impact = 0.98;
-              reaction = skillVal * 0.98;
+              aggression = isStar ? 0.84 : 0.72;
+              impact = isStar ? 1.00 : 0.89;
+              reaction = skillVal * (isStar ? 1.00 : 0.89);
               speedBonus = 0.00;
             } else {
               aim = skillVal * 1.02;
@@ -370,7 +414,7 @@ export class MatchEngine {
         grenades: [],
         position: {x: 0, y: 0},
         targetPosition: null,
-        speed: 1.6 + (skillVal / 800) + speedBonus,
+        speed: 1.80 + speedBonus,
         alive: true,
         state: 'IDLE',
         targetEnemyId: null,
@@ -467,7 +511,7 @@ export class MatchEngine {
       const st = (p.statistics || {}) as any;
       return {
         id: p.id, nickname: p.name, kills: st.kills || 0, deaths: st.deaths || 0, assists: st.assists || 0, damage: st.damage || 0,
-        hs: st.headshots || 0, role: p.role || 'rifler', rating: p.rating || 100,
+        hs: st.headshots || 0, role: p.originalRole || p.role || 'rifler', rating: p.rating || 100,
         fk: st.openingKills || 0, fd: st.openingDeaths || 0,
         k1: st.k1 || 0, k2: st.k2 || 0, k3: st.k3 || 0, k4: st.k4 || 0, k5: st.k5 || 0,
         kastRounds: st.kastRounds || 0,
@@ -491,7 +535,7 @@ export class MatchEngine {
       const st = (p.statistics || {}) as any;
       return {
         id: p.id, nickname: p.name, kills: st.kills || 0, deaths: st.deaths || 0, assists: st.assists || 0, damage: st.damage || 0,
-        hs: st.headshots || 0, role: p.role || 'rifler', rating: p.rating || 100,
+        hs: st.headshots || 0, role: p.originalRole || p.role || 'rifler', rating: p.rating || 100,
         fk: st.openingKills || 0, fd: st.openingDeaths || 0,
         k1: st.k1 || 0, k2: st.k2 || 0, k3: st.k3 || 0, k4: st.k4 || 0, k5: st.k5 || 0,
         kastRounds: st.kastRounds || 0,

@@ -26,14 +26,14 @@ export const ROLE_SUBCLASSES: Record<string, RoleSubclass[]> = {
     ],
     captain: [
         { id: 'classic_igl', name: 'Капитан', desc: 'Повышает дисциплину и синергию состава (+6 к синергии)', icon: '🧠', synergyBonus: 6, assistMultBonus: 0.15 },
-        { id: 'fragging_igl', name: 'Стреляющий капитан', desc: 'Лично делает ключевые фрагменты в раундах (+12% к убийствам)', icon: '💥', killMultBonus: 0.12, impactBonus: 0.10 },
-        { id: 'sniper_igl', name: 'Капитан снайпер', desc: 'Управляет картой с AWP в руках', icon: '🎯', killMultBonus: 0.08, impactBonus: 0.12 },
-        { id: 'tactician_igl', name: 'Капитан-тактик', desc: 'Организует четкие размены и грамотные закупки', icon: '📋', assistMultBonus: 0.25, synergyBonus: 3 }
+        { id: 'fragging_igl', name: 'Стреляющий капитан', desc: 'Периодически подключается к фраггингу (+5% к убийствам)', icon: '💥', killMultBonus: 0.05, impactBonus: 0.04 },
+        { id: 'sniper_igl', name: 'Капитан снайпер', desc: 'Управляет картой с AWP в руках', icon: '🎯', killMultBonus: 0.06, impactBonus: 0.08 },
+        { id: 'tactician_igl', name: 'Капитан-тактик', desc: 'Организует четкие размены и грамотные закупки', icon: '📋', assistMultBonus: 0.25, synergyBonus: 4 }
     ],
     support: [
-        { id: 'anchor', name: 'Опорник', desc: 'Железное удержание позиций в обороне за CT', icon: '🔒', defenseBonus: 0.20, deathMultBonus: -0.08 },
-        { id: 'utility_support', name: 'Саппорт', desc: 'Максимальный эффект от флешек и дымов (+40% ассистов)', icon: '💣', assistMultBonus: 0.40, impactBonus: 0.05 },
-        { id: 'second_entry', name: 'Разменщик (2-я волна)', desc: 'Мгновенно разменивает открывающего игрока', icon: '⚡', killMultBonus: 0.10, impactBonus: 0.08 }
+        { id: 'anchor', name: 'Опорник', desc: 'Железное удержание позиций в обороне за CT', icon: '🔒', defenseBonus: 0.20, deathMultBonus: -0.08, killMultBonus: 0.02 },
+        { id: 'utility_support', name: 'Саппорт', desc: 'Максимальный эффект от раскидок и дымов', icon: '💣', impactBonus: 0.12, killMultBonus: 0.02 },
+        { id: 'second_entry', name: 'Разменщик (2-я волна)', desc: 'Мгновенно разменивает открывающего игрока', icon: '⚡', killMultBonus: 0.08, impactBonus: 0.08 }
     ],
     rifler: [
         { id: 'classic_rifler', name: 'Классический рифлер', desc: 'Стабильная стрельба на любых дистанциях', icon: '🔫', killMultBonus: 0.06, deathMultBonus: -0.03 },
@@ -66,21 +66,21 @@ export function getSubclassObj(roleId: string, subclassId?: string): RoleSubclas
 }
 
 export const DEFAULT_ROLES_S2 = [
-    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.03, skillMultiplier: 1.01, impact: 1.02, deathMultiplier: 0.99, assistMultiplier: 1.00 },
+    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.02, skillMultiplier: 1.01, impact: 1.02, deathMultiplier: 0.99, assistMultiplier: 1.00 },
     { id: 'sniper', name: 'Снайпер', killMultiplier: 1.15, skillMultiplier: 1.08, impact: 1.15, deathMultiplier: 0.85, assistMultiplier: 1.00 },
     { id: 'lurker', name: 'Люркер', killMultiplier: 1.08, skillMultiplier: 1.04, impact: 1.10, deathMultiplier: 0.88, assistMultiplier: 1.00 },
-    { id: 'opener', name: 'Опенер', killMultiplier: 1.10, skillMultiplier: 1.06, impact: 1.25, deathMultiplier: 1.00, assistMultiplier: 1.05 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 1.00, skillMultiplier: 1.00, impact: 1.00, deathMultiplier: 1.00, assistMultiplier: 1.35 },
-    { id: 'captain', name: 'Капитан', killMultiplier: 1.00, skillMultiplier: 1.02, impact: 1.05, deathMultiplier: 1.00, assistMultiplier: 1.25 }
+    { id: 'opener', name: 'Entry', killMultiplier: 1.12, skillMultiplier: 1.06, impact: 1.25, deathMultiplier: 1.12, assistMultiplier: 1.05 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 1.01, skillMultiplier: 1.02, impact: 1.02, deathMultiplier: 0.96, assistMultiplier: 1.00 },
+    { id: 'captain', name: 'Капитан', killMultiplier: 0.88, skillMultiplier: 0.98, impact: 0.98, deathMultiplier: 1.02, assistMultiplier: 1.00 }
 ];
 
 export const DEFAULT_ROLES_CS2 = [
     { id: 'rifler', name: 'Рифлер', killMultiplier: 1.02, skillMultiplier: 1.00, impact: 1.02, deathMultiplier: 0.98, assistMultiplier: 1.00 },
     { id: 'sniper', name: 'AWPer', killMultiplier: 1.10, skillMultiplier: 1.05, impact: 1.12, deathMultiplier: 0.84, assistMultiplier: 0.80 },
     { id: 'lurker', name: 'Люркер', killMultiplier: 1.05, skillMultiplier: 1.03, impact: 1.08, deathMultiplier: 0.86, assistMultiplier: 0.90 },
-    { id: 'opener', name: 'Entry', killMultiplier: 1.06, skillMultiplier: 1.04, impact: 1.20, deathMultiplier: 1.15, assistMultiplier: 1.02 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 0.94, skillMultiplier: 0.98, impact: 0.95, deathMultiplier: 0.98, assistMultiplier: 1.40 },
-    { id: 'captain', name: 'IGL', killMultiplier: 0.92, skillMultiplier: 1.05, impact: 1.10, deathMultiplier: 1.04, assistMultiplier: 1.30 }
+    { id: 'opener', name: 'Entry', killMultiplier: 1.08, skillMultiplier: 1.05, impact: 1.20, deathMultiplier: 1.08, assistMultiplier: 1.00 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 1.00, skillMultiplier: 1.02, impact: 1.02, deathMultiplier: 0.95, assistMultiplier: 1.00 },
+    { id: 'captain', name: 'IGL', killMultiplier: 0.86, skillMultiplier: 0.98, impact: 0.98, deathMultiplier: 1.02, assistMultiplier: 1.00 }
 ];
 
 export const MAP_POOL_CS2 = [
@@ -114,8 +114,8 @@ export function refreshMapPools(customCS2: any[], customS2: any[]) {
     }
 }
 
-export const CS2_MAP_IDS = new Set(['mirage', 'inferno', 'dust2', 'nuke', 'ancient', 'anubis', 'cache', 'vertigo', 'overpass', 'train', 'viaduct']);
-export const S2_MAP_IDS = new Set(['breeze', 'rust', 'province', 'sandstone', 'dune', 'hanami', 'prison', 'sakura', 'zone9', 'village', 'lakeside']);
+export const CS2_MAP_IDS = new Set(['mirage', 'inferno', 'dust2', 'nuke', 'ancient', 'anubis', 'cache', 'vertigo', 'overpass', 'train', 'viaduct', 'dust ii', 'overpass', 'cobblestone', 'biome', 'abbey', 'tuscan']);
+export const S2_MAP_IDS = new Set(['breeze', 'rust', 'province', 'sandstone', 'dune', 'hanami', 'prison', 'sakura', 'zone9', 'village', 'lakeside', 'calypso', 'arizona', 'outer']);
 
 try {
     const existingCS2 = new Set(MAP_POOL_CS2.map(m => m.id.toLowerCase()));
@@ -231,11 +231,16 @@ function getRoleSkillMultiplier(roleId: string, isCS2: boolean, nickname?: strin
     return mult;
 }
 
-function getRoleKillMultiplier(roleId: string, isCS2: boolean, nickname?: string, subclassId?: string) {
+function getRoleKillMultiplier(roleId: string, isCS2: boolean, nickname?: string, subclassId?: string, playerRating?: number) {
     const roles = activeCustomRoles || (isCS2 ? DEFAULT_ROLES_CS2 : DEFAULT_ROLES_S2);
     const norm = normalizeRoleId(roleId);
     const role = roles.find(r => r.id === norm || r.id === roleId);
     let mult = role ? role.killMultiplier : 1.0;
+    if (norm === 'captain' && playerRating !== undefined) {
+        const rVal = playerRating < 10 ? playerRating * 100 : playerRating;
+        if (rVal >= 115) mult = 1.00; // Star fragging IGL
+        else if (rVal >= 105) mult = 0.92;
+    }
     const sub = getSubclassObj(roleId, subclassId);
     if (sub && sub.killMultBonus) mult += sub.killMultBonus;
     return mult;
@@ -673,7 +678,7 @@ function getWeightedRandomIndex(stats: any[], teamData: any[], isCS2: boolean, r
         let w = Math.pow(relR, 1.5);
         
         // Use the defined kill multiplier for each role
-        const km = getRoleKillMultiplier(teamData[i]?.role, isCS2, teamData[i]?.nickname, teamData[i]?.subclass);
+        const km = getRoleKillMultiplier(teamData[i]?.role, isCS2, teamData[i]?.nickname, teamData[i]?.subclass, rVal);
         w = w * km;
         
         if (roundKills) {
@@ -839,7 +844,26 @@ export function simulateMap(
     result.mapName = result.mapName || mapName;
     result.name = result.name || mapName;
     result.mapId = result.mapId || mapName;
-    
+
+    // Strict 13:0 / 16:0 Shutout Guard:
+    // If rating difference is < 20, 13:0 is prohibited and losing team breaks shutout.
+    const regTarget = format === 'MR15' ? 16 : 13;
+    const isShutout = (result.team1Score === regTarget && result.team2Score === 0) || (result.team2Score === regTarget && result.team1Score === 0);
+    if (isShutout) {
+      const t1Overall = (state as any).t1Overall || 100;
+      const t2Overall = (state as any).t2Overall || 100;
+      const leaderRating = result.team1Score > result.team2Score ? t1Overall : t2Overall;
+      const trailingRating = result.team1Score > result.team2Score ? t2Overall : t1Overall;
+      const ratingDiff = leaderRating - trailingRating;
+      if (ratingDiff < 20) {
+        if (result.team1Score > result.team2Score) {
+          result.team2Score = 1;
+        } else {
+          result.team1Score = 1;
+        }
+      }
+    }
+
     const mapRounds = result.team1Score + result.team2Score;
     result.team1Stats.forEach((s: any) => s.totalRounds = mapRounds);
     result.team2Stats.forEach((s: any) => s.totalRounds = mapRounds);
@@ -892,11 +916,19 @@ export function simulateMatchSeries(
     const bo = maps.length;
     const winsNeeded = Math.ceil(bo / 2);
     
+    // Determine game mode more reliably
+    let detectedGameMode = isCS2 ? 'cs2' : 'so2';
+    if (!isCS2) {
+      const allMapsAreS2 = maps.every(m => S2_MAP_IDS.has(m.toLowerCase()));
+      const someMapsAreS2 = maps.some(m => S2_MAP_IDS.has(m.toLowerCase()));
+      if (someMapsAreS2) detectedGameMode = 'so2';
+    }
+
     const results = {
         tournamentName,
         format,
         bo,
-        gameMode: isCS2 ? 'cs2' : 's2',
+        gameMode: detectedGameMode,
         team1Name: 'Team 1',
         team2Name: 'Team 2',
         team1Score: 0,

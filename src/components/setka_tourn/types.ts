@@ -51,7 +51,7 @@ export interface TournamentSettings {
   singleEliminationTeams?: Team[];
   
   // Seeding type
-  seedingType?: 'random' | 'manual';
+  seedingType?: 'random' | 'manual' | 'skill';
   
   // Group stage settings
   matchesPerPairing?: 1 | 2;

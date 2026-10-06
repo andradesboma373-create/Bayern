@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { X, Trophy, Download, Award, Trash2, Calendar, Crosshair, Sparkles } from 'lucide-react';
+import { X, Trophy, Download, Award, Trash2, Calendar, Crosshair, Sparkles, Database, Search } from 'lucide-react';
 import { downloadElementAsImage } from '../../lib/exportImage';
 import TeamLogo from '../TeamLogo';
 import PlayerAvatar from '../PlayerAvatar';
@@ -25,9 +25,19 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
   const [selectedProfilePlayer, setSelectedProfilePlayer] = useState<any | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [activeTab, setActiveTab] = useState<'stats' | 'matches'>('stats');
+  const [playerViewMode, setPlayerViewMode] = useState<'all' | 'top20' | 'top10'>('all');
+  const [playerSearch, setPlayerSearch] = useState('');
+  const [customTop1, setCustomTop1] = useState<string | null>(() => {
+    return localStorage.getItem(`tourney_${tournamentId}_top1`) || null;
+  });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [confirmingDeleteMatch, setConfirmingDeleteMatch] = useState<string | null>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
+
+  const handleSelectTop1 = (nickname: string) => {
+    setCustomTop1(nickname);
+    localStorage.setItem(`tourney_${tournamentId}_top1`, nickname);
+  };
 
   // Auto backfill tournament matches on open
   useEffect(() => {
@@ -310,8 +320,58 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
     
     arr.sort((a, b) => b.rating - a.rating || b.kd - a.kd || b.kills - a.kills);
     
-    return { tourney, stats: arr.slice(0, 20), tourMatches };
+    return { tourney, stats: arr, tourMatches };
   }, [user?.uid, tournamentId, refreshTrigger]);
+
+  const displayedStats = useMemo(() => {
+    let list = stats;
+    if (playerSearch.trim()) {
+      const q = playerSearch.toLowerCase().trim();
+      list = list.filter(p => p.nickname.toLowerCase().includes(q) || (p.teamName && p.teamName.toLowerCase().includes(q)));
+    }
+    if (playerViewMode === 'top20') return list.slice(0, 20);
+    if (playerViewMode === 'top10') return list.slice(0, 10);
+    return list;
+  }, [stats, playerSearch, playerViewMode]);
+
+  const currentTop1Player = useMemo(() => {
+    if (customTop1) {
+      const found = stats.find(p => p.nickname.toLowerCase() === customTop1.toLowerCase());
+      if (found) return found;
+    }
+    return stats[0] || null;
+  }, [stats, customTop1]);
+
+  const handleDownloadJson = () => {
+    const data = {
+      tournamentName: tourney?.name || 'Турнир',
+      tournamentId: tourney?.id || tournamentId,
+      totalPlayers: stats.length,
+      matchesCount: tourMatches.length,
+      top1Player: currentTop1Player?.nickname || null,
+      top1PlayerDetails: currentTop1Player,
+      players: stats,
+      matches: tourMatches.map((m: any) => ({
+        id: m.id,
+        team1Name: m.team1Name,
+        team2Name: m.team2Name,
+        score1: m.score1,
+        score2: m.score2,
+        date: m.date,
+        mvp: m.mvp?.nickname || null
+      })),
+      exportedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tournament_${(tourney?.name || 'stats').replace(/\s+/g, '_')}_all_players.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 font-sans">
@@ -325,7 +385,9 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
                     {tourney?.name || 'ТУРНИР'}
                 </h2>
                 
-                <p className="text-white/40 text-xs uppercase tracking-[0.3em] mt-2 font-bold">ТОП-20 ИГРОКОВ ТУРНИРА • ПОДРОБНАЯ СТАТИСТИКА</p>
+                <p className="text-white/40 text-xs uppercase tracking-[0.3em] mt-2 font-bold">
+                  {playerViewMode === 'top20' ? 'ТОП-20 ИГРОКОВ ТУРНИРА' : playerViewMode === 'top10' ? 'ТОП-10 ИГРОКОВ ТУРНИРА' : 'СПИСОК ВСЕХ ИГРОКОВ ТУРНИРА'} • ПОДРОБНАЯ СТАТИСТИКА ({stats.length} ИГРОКОВ)
+                </p>
                 <p className="text-emerald-400/90 text-[10px] uppercase tracking-wider mt-2 font-bold flex items-center justify-center gap-1.5">
                   <Sparkles className="w-3 h-3 text-emerald-400" />
                   Статистика формируется автоматически для всех сыгранных и симулированных матчей турнира
@@ -342,43 +404,78 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
         {/* Action Toolbar */}
         {!isDownloading && (
             <div className="px-6 py-4 flex flex-wrap justify-between items-center gap-3 bg-[#171822] border-b border-white/5">
-                <div className="flex gap-2 bg-[#12121a] p-1 rounded-lg border border-white/5">
-                    <button
-                        onClick={() => setActiveTab('stats')}
-                        className={`px-4 py-2 rounded-md text-xs font-black uppercase tracking-wider transition-colors ${activeTab === 'stats' ? 'bg-white/10 text-[#e8c07d]' : 'text-white/40 hover:text-white/80'}`}
-                    >
-                        Топ-20
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('matches')}
-                        className={`px-4 py-2 rounded-md text-xs font-black uppercase tracking-wider transition-colors ${activeTab === 'matches' ? 'bg-white/10 text-[#e8c07d]' : 'text-white/40 hover:text-white/80'}`}
-                    >
-                        Матчи ({tourMatches.length})
-                    </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex gap-1 bg-[#12121a] p-1 rounded-lg border border-white/5">
+                        <button
+                            onClick={() => { setActiveTab('stats'); setPlayerViewMode('all'); }}
+                            className={`px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider transition-colors ${activeTab === 'stats' && playerViewMode === 'all' ? 'bg-white/10 text-[#e8c07d]' : 'text-white/40 hover:text-white/80'}`}
+                        >
+                            Все ({stats.length})
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('stats'); setPlayerViewMode('top20'); }}
+                            className={`px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider transition-colors ${activeTab === 'stats' && playerViewMode === 'top20' ? 'bg-white/10 text-[#e8c07d]' : 'text-white/40 hover:text-white/80'}`}
+                        >
+                            Топ-20
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('stats'); setPlayerViewMode('top10'); }}
+                            className={`px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider transition-colors ${activeTab === 'stats' && playerViewMode === 'top10' ? 'bg-white/10 text-[#e8c07d]' : 'text-white/40 hover:text-white/80'}`}
+                        >
+                            Топ-10
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('matches')}
+                            className={`px-3 py-1.5 rounded-md text-xs font-black uppercase tracking-wider transition-colors ${activeTab === 'matches' ? 'bg-white/10 text-[#e8c07d]' : 'text-white/40 hover:text-white/80'}`}
+                        >
+                            Матчи ({tourMatches.length})
+                        </button>
+                    </div>
+
+                    {activeTab === 'stats' && (
+                        <div className="relative">
+                            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                            <input 
+                                type="text"
+                                value={playerSearch}
+                                onChange={e => setPlayerSearch(e.target.value)}
+                                placeholder="Поиск игрока..."
+                                className="bg-[#12121a] border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-white/30 outline-none focus:border-[#e8c07d]/50 w-36 sm:w-44 transition-all"
+                            />
+                        </div>
+                    )}
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2.5">
                     <button 
                         onClick={() => setShowMvpModal(true)}
-                        className="bg-gradient-to-r from-[#ff8f00] to-[#e8c07d] hover:brightness-110 text-black font-black uppercase tracking-widest px-5 py-2.5 rounded-lg text-xs flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(255,143,0,0.3)]"
+                        className="bg-gradient-to-r from-[#ff8f00] to-[#e8c07d] hover:brightness-110 text-black font-black uppercase tracking-widest px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(255,143,0,0.3)]"
                     >
-                        <Award className="w-4 h-4 fill-black" />
+                        <Award className="w-3.5 h-3.5 fill-black" />
                         MVP & EVP
                     </button>
                     <button 
                         onClick={() => setShowFinalists(true)}
-                        className="bg-[#e8c07d] hover:bg-[#d6af6d] text-black font-black uppercase tracking-widest px-5 py-2.5 rounded-lg text-xs flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(232,192,125,0.3)]"
+                        className="bg-[#e8c07d] hover:bg-[#d6af6d] text-black font-black uppercase tracking-widest px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-[0_0_15px_rgba(232,192,125,0.3)]"
                     >
-                        <Trophy className="w-4 h-4" />
+                        <Trophy className="w-3.5 h-3.5" />
                         Финалисты
+                    </button>
+                    <button 
+                        onClick={handleDownloadJson}
+                        className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/50 text-blue-400 font-black uppercase tracking-widest px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition-colors"
+                        title="Экспортировать всех игроков и матчи в JSON"
+                    >
+                        <Database className="w-3.5 h-3.5" />
+                        JSON
                     </button>
                     <button 
                         onClick={handleDownloadTop20}
                         disabled={isDownloading}
-                        className="bg-[#ff8f00]/20 hover:bg-[#ff8f00]/30 border border-[#ff8f00]/50 text-[#ff8f00] font-black uppercase tracking-widest px-5 py-2.5 rounded-lg text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+                        className="bg-[#ff8f00]/20 hover:bg-[#ff8f00]/30 border border-[#ff8f00]/50 text-[#ff8f00] font-black uppercase tracking-widest px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
                     >
-                        <Download className="w-4 h-4" />
-                        {isDownloading ? 'Экспорт...' : 'Скачать PNG'}
+                        <Download className="w-3.5 h-3.5" />
+                        {isDownloading ? 'Экспорт...' : 'PNG'}
                     </button>
                 </div>
             </div>
@@ -429,17 +526,17 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
                                         )}
                                         <button
                                             onClick={() => setConfirmingDeleteMatch(m.id)}
-                                            className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-red-500/50 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                            title="Удалить матч (очистить из статистики)"
+                                            className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-lg transition-colors cursor-pointer"
+                                            title="Удалить этот матч из базы данных и сайта"
                                         >
                                             <Trash2 className="w-5 h-5" />
                                         </button>
                                         
                                         {confirmingDeleteMatch === m.id && (
-                                            <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-[#1a1a24] p-2 rounded-lg border border-red-500/30 z-10 shadow-lg">
-                                                <span className="text-xs text-red-400 font-bold whitespace-nowrap">Удалить?</span>
-                                                <button onClick={() => handleDeleteMatch(m.id)} className="px-3 py-1 bg-red-500/20 text-red-500 rounded text-xs font-bold hover:bg-red-500/40 cursor-pointer">Да</button>
-                                                <button onClick={() => setConfirmingDeleteMatch(null)} className="px-3 py-1 bg-white/10 text-white rounded text-xs font-bold hover:bg-white/20 cursor-pointer">Нет</button>
+                                            <div className="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-[#12121a] p-2.5 rounded-xl border border-red-500/50 z-20 shadow-2xl animate-in fade-in">
+                                                <span className="text-xs text-red-400 font-black whitespace-nowrap">Точно удалить?</span>
+                                                <button onClick={() => handleDeleteMatch(m.id)} className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-black cursor-pointer shadow">Да, удалить</button>
+                                                <button onClick={() => setConfirmingDeleteMatch(null)} className="px-2.5 py-1 bg-white/10 text-white rounded-lg text-xs font-bold hover:bg-white/20 cursor-pointer">Отмена</button>
                                             </div>
                                         )}
                                     </div>
@@ -455,74 +552,141 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
                             В этом турнире еще не сыграно ни одного матча.
                         </div>
                     ) : (
-                        <div className="flex flex-col rounded-lg overflow-hidden border border-[#2a2b3d]">
-                    {/* Table Header */}
-                    <div className={`grid ${RATING_CONFIG.USE_SWING ? 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem]' : 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem]'} gap-2 p-3 text-[11px] font-bold text-[#6b7280] uppercase tracking-wider bg-[#202130] items-center text-center`}>
-                        <div>#</div>
-                        <div className="text-left pl-2">Игрок</div>
-                        <div className="text-left">Команда</div>
-                        <div>M</div>
-                        <div>K</div>
-                        <div>A</div>
-                        <div>D</div>
-                        <div>±</div>
-                        <div>K/D</div>
-                        <div>ADR</div>
-                        {RATING_CONFIG.USE_SWING && <div>Swing</div>}
-                        <div>Imp</div>
-                        <div className="text-[#ff8f00]">Rating</div>
-                        <div>MVP</div>
-                    </div>
-                    
-                    {/* Table Body */}
-                    <div className="flex flex-col">
-                        {stats.map((p, idx) => (
-                            <div 
-                              key={p.id} 
-                              onClick={() => setSelectedProfilePlayer(p)}
-                              className={`grid ${RATING_CONFIG.USE_SWING ? 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem]' : 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem]'} gap-2 p-3 items-center border-t border-[#2a2b3d] transition-colors text-sm font-semibold text-center text-white/90 cursor-pointer ${
-                                idx === 0 ? 'bg-[#ff8f00]/10 hover:bg-[#ff8f00]/20 border-l-4 border-l-[#ff8f00]' :
-                                idx === 1 ? 'bg-white/5 hover:bg-white/10 border-l-4 border-l-slate-300' :
-                                idx === 2 ? 'bg-[#cd7f32]/10 hover:bg-[#cd7f32]/20 border-l-4 border-l-[#cd7f32]' :
-                                'bg-[#1a1b26] hover:bg-[#202130]'
-                              }`}
-                              title={`Открыть HLTV профиль ${p.nickname}`}
-                            >
-                                <div className="text-[#6b7280] flex items-center justify-center font-bold">
-                                    {idx === 0 ? <span className="text-[#ff8f00]">🥇 1</span> :
-                                     idx === 1 ? <span className="text-slate-300">🥈 2</span> :
-                                     idx === 2 ? <span className="text-[#cd7f32]">🥉 3</span> :
-                                     idx + 1}
-                                </div>
-                                <div className="text-left pl-2 flex items-center gap-2 truncate">
-                                    <PlayerAvatar playerName={p.nickname} sizeClassName="w-6 h-6" />
-                                    <span className="text-white font-bold hover:text-blue-400 transition-colors">{p.nickname}</span>
-                                </div>
-                                <div className="text-left flex items-center gap-2 text-white/70 truncate">
-                                    <TeamLogo teamName={p.teamName} sizeClassName="w-5 h-5 grayscale opacity-70" />
-                                    {p.teamName}
-                                </div>
-                                <div>{p.matchesCount}</div>
-                                <div>{p.kills}</div>
-                                <div>{p.assists}</div>
-                                <div>{p.deaths}</div>
-                                <div className={p.diff > 0 ? "text-[#34d399] font-bold" : p.diff < 0 ? "text-[#f87171]" : ""}>
-                                    {p.diff > 0 ? `+${p.diff}` : p.diff}
-                                </div>
-                                <div className={getKdColorClass(p.kd)}>{p.kd.toFixed(2)}</div>
-                                <div>{Math.round(p.adr)}</div>
-                                {RATING_CONFIG.USE_SWING && (
-                                    <div className={getSwingColorClass(p.roundSwing)}>
-                                        {p.roundSwing > 0 ? `+${p.roundSwing.toFixed(1)}%` : `${p.roundSwing.toFixed(1)}%`}
+                        <div className="space-y-4">
+                            {/* Top-1 Tournament Showcase Banner */}
+                            {currentTop1Player && (
+                                <div className="bg-gradient-to-r from-yellow-500/15 via-[#1a1b26] to-yellow-500/5 border border-yellow-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-yellow-500/5">
+                                    <div className="flex items-center gap-4">
+                                        <div className="relative">
+                                            <PlayerAvatar playerName={currentTop1Player.nickname} sizeClassName="w-14 h-14 rounded-full ring-2 ring-yellow-500/80 p-0.5 bg-black" />
+                                            <div className="absolute -top-1 -right-1 bg-yellow-500 text-black p-1 rounded-full shadow">
+                                                <Trophy className="w-3.5 h-3.5 fill-black" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">
+                                                    🏆 ТОП-1 ТУРНИРА
+                                                </span>
+                                                {customTop1 && (
+                                                    <span className="text-[9px] text-white/40 font-mono">(выбран вручную)</span>
+                                                )}
+                                            </div>
+                                            <h4 className="text-xl font-black text-white uppercase tracking-wider mt-0.5 flex items-center gap-2">
+                                                {currentTop1Player.nickname}
+                                                <span className="text-xs font-bold text-white/40">({currentTop1Player.teamName})</span>
+                                            </h4>
+                                        </div>
                                     </div>
-                                )}
-                                <div>{p.impact.toFixed(2)}</div>
-                                <div className="text-[#ff8f00] font-black">{p.rating.toFixed(2)}</div>
-                                <div className="text-[#e8c07d]">{p.mvps > 0 ? p.mvps : 0}</div>
+                                    <div className="flex items-center gap-6 bg-black/40 px-4 py-2 rounded-lg border border-white/5">
+                                        <div className="text-center">
+                                            <span className="text-[9px] uppercase tracking-wider text-white/30 block font-bold">Rating</span>
+                                            <span className="text-lg font-black text-yellow-400">{currentTop1Player.rating.toFixed(2)}</span>
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="text-[9px] uppercase tracking-wider text-white/30 block font-bold">K/D</span>
+                                            <span className={`text-lg font-black ${getKdColorClass(currentTop1Player.kd)}`}>{currentTop1Player.kd.toFixed(2)}</span>
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="text-[9px] uppercase tracking-wider text-white/30 block font-bold">Kills</span>
+                                            <span className="text-lg font-black text-white">{currentTop1Player.kills}</span>
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="text-[9px] uppercase tracking-wider text-white/30 block font-bold">Матчей</span>
+                                            <span className="text-lg font-black text-blue-400">{currentTop1Player.matchesCount}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex flex-col rounded-lg overflow-hidden border border-[#2a2b3d]">
+                            {/* Table Header */}
+                            <div className={`grid ${RATING_CONFIG.USE_SWING ? 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem_2.5rem]' : 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3.5rem_2.5rem_2.5rem]'} gap-2 p-3 text-[11px] font-bold text-[#6b7280] uppercase tracking-wider bg-[#202130] items-center text-center`}>
+                                <div>#</div>
+                                <div className="text-left pl-2">Игрок</div>
+                                <div className="text-left">Команда</div>
+                                <div>M</div>
+                                <div>K</div>
+                                <div>A</div>
+                                <div>D</div>
+                                <div>±</div>
+                                <div>K/D</div>
+                                <div>ADR</div>
+                                {RATING_CONFIG.USE_SWING && <div>Swing</div>}
+                                <div>Imp</div>
+                                <div className="text-[#ff8f00]">Rating</div>
+                                <div>MVP</div>
+                                <div>Топ-1</div>
                             </div>
-                        ))}
+                            
+                            {/* Table Body */}
+                            <div className="flex flex-col">
+                                {displayedStats.map((p, idx) => {
+                                    const isTop1 = (customTop1 ? customTop1.toLowerCase() === p.nickname.toLowerCase() : idx === 0);
+                                    return (
+                                    <div 
+                                      key={p.id} 
+                                      onClick={() => setSelectedProfilePlayer(p)}
+                                      className={`grid ${RATING_CONFIG.USE_SWING ? 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3rem_3.5rem_2.5rem_2.5rem]' : 'grid-cols-[2.5rem_1.5fr_1.2fr_2.5rem_2.5rem_2.5rem_2.5rem_3rem_3rem_3rem_3.5rem_2.5rem_2.5rem]'} gap-2 p-3 items-center border-t border-[#2a2b3d] transition-colors text-sm font-semibold text-center text-white/90 cursor-pointer ${
+                                        isTop1 ? 'bg-yellow-500/10 hover:bg-yellow-500/20 border-l-4 border-l-yellow-500' :
+                                        idx === 0 ? 'bg-[#ff8f00]/10 hover:bg-[#ff8f00]/20 border-l-4 border-l-[#ff8f00]' :
+                                        idx === 1 ? 'bg-white/5 hover:bg-white/10 border-l-4 border-l-slate-300' :
+                                        idx === 2 ? 'bg-[#cd7f32]/10 hover:bg-[#cd7f32]/20 border-l-4 border-l-[#cd7f32]' :
+                                        'bg-[#1a1b26] hover:bg-[#202130]'
+                                      }`}
+                                      title={`Открыть HLTV профиль ${p.nickname}`}
+                                    >
+                                        <div className="text-[#6b7280] flex items-center justify-center font-bold">
+                                            {isTop1 ? <span className="text-yellow-400 font-black">👑 1</span> :
+                                             idx === 0 ? <span className="text-[#ff8f00]">🥇 1</span> :
+                                             idx === 1 ? <span className="text-slate-300">🥈 2</span> :
+                                             idx === 2 ? <span className="text-[#cd7f32]">🥉 3</span> :
+                                             idx + 1}
+                                        </div>
+                                        <div className="text-left pl-2 flex items-center gap-2 truncate">
+                                            <PlayerAvatar playerName={p.nickname} sizeClassName="w-6 h-6" />
+                                            <span className="text-white font-bold hover:text-blue-400 transition-colors">{p.nickname}</span>
+                                        </div>
+                                        <div className="text-left flex items-center gap-2 text-white/70 truncate">
+                                            <TeamLogo teamName={p.teamName} sizeClassName="w-5 h-5 grayscale opacity-70" />
+                                            {p.teamName}
+                                        </div>
+                                        <div>{p.matchesCount}</div>
+                                        <div>{p.kills}</div>
+                                        <div>{p.assists}</div>
+                                        <div>{p.deaths}</div>
+                                        <div className={p.diff > 0 ? "text-[#34d399] font-bold" : p.diff < 0 ? "text-[#f87171]" : ""}>
+                                            {p.diff > 0 ? `+${p.diff}` : p.diff}
+                                        </div>
+                                        <div className={getKdColorClass(p.kd)}>{p.kd.toFixed(2)}</div>
+                                        <div>{Math.round(p.adr)}</div>
+                                        {RATING_CONFIG.USE_SWING && (
+                                            <div className={getSwingColorClass(p.roundSwing)}>
+                                                {p.roundSwing > 0 ? `+${p.roundSwing.toFixed(1)}%` : `${p.roundSwing.toFixed(1)}%`}
+                                            </div>
+                                        )}
+                                        <div>{p.impact.toFixed(2)}</div>
+                                        <div className="text-[#ff8f00] font-black">{p.rating.toFixed(2)}</div>
+                                        <div className="text-[#e8c07d]">{p.mvps > 0 ? p.mvps : 0}</div>
+                                        <div onClick={e => e.stopPropagation()} className="flex items-center justify-center">
+                                            <button 
+                                                onClick={() => handleSelectTop1(p.nickname)}
+                                                className={`p-1 rounded transition-all ${
+                                                    isTop1 
+                                                        ? 'bg-yellow-500 text-black shadow-md' 
+                                                        : 'text-white/20 hover:text-yellow-400 hover:bg-white/5'
+                                                }`}
+                                                title={isTop1 ? "Выбран как Топ-1 турнира" : "Назначить Топ-1 турнира"}
+                                            >
+                                                <Trophy className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
-                </div>
                     )}
                 </>
             )}

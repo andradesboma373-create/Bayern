@@ -230,6 +230,15 @@ export function saveMatchesToLocalStorage(userId: string, matchesArray: any[]) {
  * - < 0.95: red (text-red-400 font-bold)
  * - 0.95 - 1.10: gray (text-white/60 font-medium)
  */
+export function shuffleArray<T>(array: T[]): T[] {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 export function getKdColorClass(kd: number | string | undefined | null): string {
   if (kd === undefined || kd === null || kd === '' || kd === '-') return 'text-white/50 font-mono text-xs';
   const val = typeof kd === 'number' ? kd : parseFloat(String(kd));

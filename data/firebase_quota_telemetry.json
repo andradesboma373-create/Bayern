@@ -1,17 +1,17 @@
 {
-  "date": "2026-10-05",
-  "readsToday": 5079,
-  "writesToday": 1630,
+  "date": "2026-10-06",
+  "readsToday": 6234,
+  "writesToday": 21509,
   "maxReads": 50000,
   "maxWrites": 20000,
-  "remainingReads": 44921,
-  "remainingWrites": 18370,
-  "percentReads": 10.16,
-  "percentWrites": 8.15,
-  "percentReadsFormatted": "10.16%",
-  "percentWritesFormatted": "8.15%",
-  "lastUpdated": "2026-10-05T15:43:16.006Z",
-  "lastSyncWithFirestore": "2026-10-05T15:43:15.878Z",
+  "remainingReads": 43766,
+  "remainingWrites": 0,
+  "percentReads": 12.47,
+  "percentWrites": 107.55,
+  "percentReadsFormatted": "12.47%",
+  "percentWritesFormatted": "107.55%",
+  "lastUpdated": "2026-10-06T13:09:04.973Z",
+  "lastSyncWithFirestore": "2026-10-06T13:01:00.479Z",
   "firestoreConnected": true,
   "firestoreDatabaseId": "ai-studio-matchsimulator-cf882484-249e-4726-9c8b-046071d33a59",
   "projectId": "conductive-state-tf6jr",
@@ -25,29 +25,34 @@
   },
   "roomActivity": {
     "channel_bamep_cs2": {
-      "writes": 811,
-      "reads": 4221,
-      "lastActive": "2026-10-05T15:43:16.006Z"
+      "writes": 677,
+      "reads": 3258,
+      "lastActive": "2026-10-06T13:09:04.973Z"
     },
     "channel_airy": {
-      "reads": 36,
-      "writes": 38,
-      "lastActive": "2026-10-05T09:08:07.332Z"
+      "reads": 0,
+      "lastActive": "2026-10-06T03:40:49.131Z",
+      "writes": 0
     },
     "channel_simu": {
       "writes": 0,
-      "reads": 0,
-      "lastActive": "2026-10-04T03:31:03.460Z"
+      "lastActive": "2026-10-06T03:40:49.131Z",
+      "reads": 0
     },
     "channel_bamep_so2": {
-      "writes": 0,
-      "reads": 0,
-      "lastActive": "2026-10-04T07:54:39.508Z"
+      "reads": 12,
+      "lastActive": "2026-10-06T08:08:54.231Z",
+      "writes": 8
     },
     "channel_bam": {
       "lastActive": "2026-10-03T10:14:13.399Z",
       "reads": 0,
       "writes": 0
+    },
+    "guest": {
+      "reads": 0,
+      "writes": 24,
+      "lastActive": "2026-10-06T10:12:42.897Z"
     }
   }
 }

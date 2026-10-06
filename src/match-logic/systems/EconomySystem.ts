@@ -1,5 +1,6 @@
 import { MatchState, Player, Team } from '../models';
 import { WEAPONS } from '../config/Weapons';
+import { CombatSystem } from './CombatSystem';
 
 export class EconomySystem {
   static distributeRoundEndMoney(state: MatchState, winnerTeamId: string, reason: string) {
@@ -301,7 +302,11 @@ export class EconomySystem {
     const isSniper = rLower.includes('sniper') || rLower.includes('awp') || rLower.includes('снайпер') || rLower.includes('авапер');
     
     if (isSniper) {
-        if (budget >= 4750) return 'awp';
+        // Tactical variety: Snipers don't always buy AWP. 
+        // Sometimes they prefer AK/M4 for faster movement or if the team budget is tight.
+        const alwaysAWP = CombatSystem.random() < 0.85; 
+        if (budget >= 4750 && alwaysAWP) return 'awp';
+        
         if (budget >= 2700 + 650 && side === 'T') return 'ak47';
         if (budget >= 2900 + 650 && side === 'CT') return 'm4a1s';
         if (budget >= 1700 + 650) return 'ssg08';

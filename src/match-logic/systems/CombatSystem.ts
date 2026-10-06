@@ -115,15 +115,18 @@ export class CombatSystem {
       const targetTeamAlive = Object.values(state.players).filter(p => p.teamId === target.teamId && p.alive).length;
       
       if (shooterTeamAlive === 1 && targetTeamAlive >= 1) {
-        // Desperation boost for the last survivor
-        effectiveAim += (targetTeamAlive * 1.5); // +1.5 to +7.5 boost
+        // Desperation boost for the last survivor (clutch situation)
+        effectiveAim += (targetTeamAlive * 1.5);
         effectiveIq += (targetTeamAlive * 1.2);
         
-        if ((shooter.iq || 100) > 105) {
-          effectiveAim += 4; // Clutch gene for stars
+        // Clutch Luck: ANY player has a 20% chance to "lock in" and get a massive boost
+        if (this.random() < 0.20) {
+          effectiveAim += 6;
+          effectiveIq += 5;
         }
+
         if (shooter.perk?.clutchBonus) {
-          effectiveAim += shooter.perk.clutchBonus * 20; // Explicit individual clutch perk boost
+          effectiveAim += shooter.perk.clutchBonus * 20; 
         }
       }
     }
@@ -131,84 +134,164 @@ export class CombatSystem {
     // Rating Scaling: ensure higher rated players (110+) naturally outperform lower rated players (80)
     // while keeping team contribution and trading healthy
     const baseAimRatio = Math.max(0.10, effectiveAim / 100);
-    const aimRatio = 1.0 + (baseAimRatio - 1.0) * 0.65; 
+    const aimRatio = 1.0 + (baseAimRatio - 1.0) * 1.00; // Reduced from 1.15 to prevent invincibility
     
     const baseIqRatio = Math.max(0.10, effectiveIq / 100);
-    const targetIqRatio = 1.0 + (baseIqRatio - 1.0) * 0.40;
+    const pRoleLower = (shooter.role || '').toLowerCase();
+    const isShooterEntry = pRoleLower.includes('entry') || pRoleLower.includes('opener') || pRoleLower.includes('энтри');
+    const isShooterSupport = pRoleLower.includes('support') || pRoleLower.includes('саппорт');
+    const isShooterLurker = pRoleLower.includes('lurker') || pRoleLower.includes('люркер');
+    const isShooterCaptain = pRoleLower.includes('captain') || pRoleLower.includes('igl') || pRoleLower.includes('капитан');
+    const isShooterSniper = pRoleLower.includes('sniper') || pRoleLower.includes('awp') || pRoleLower.includes('снайпер');
 
-    const progress = Math.min(1.0, Math.max(0.50, shooter.aimProgress || 0.75));
+    const isTargetCaptain = (target.role || '').toLowerCase().includes('captain') || (target.role || '').toLowerCase().includes('igl');
+    // Captain tactical IQ is for strat calling, not personal superhuman bullet evasion
+    const targetIqRatio = isTargetCaptain 
+      ? 1.0 + (Math.min(1.04, baseIqRatio) - 1.0) * 0.20 
+      : 1.0 + (baseIqRatio - 1.0) * 0.35;
+
+    const progress = Math.min(1.0, Math.max(0.40, shooter.aimProgress || 0.70));
     
     // Baseline hit chance scaling
-    let hitChance = 0.54 + (aimRatio - 1.0) * 0.35 * progress;
+    let hitChance = 0.50 + (aimRatio - 1.0) * 0.45 * progress;
     if (state.game === 'so2') hitChance += 0.05;
 
-    // Soft multi-kill fatigue (only after 2 kills in the round, does not handicap first or second duel)
-    const roundKills = (shooter as any).roundKills || 0;
-    if (roundKills >= 2) {
-      hitChance *= (1.0 - (Math.min(2, roundKills - 1) * 0.08));
+    // Role-specific Hit Chance Tweaks
+    if (isShooterEntry) {
+      // Entry fraggers: Strong opening duel potential
+      hitChance = 0.58 + (aimRatio - 1.0) * 0.50 * progress;
+      if (state.tick < (shooter.reactionTimer + 15)) {
+        hitChance *= 1.10; // Extra sharp at the very start of entry
+      }
+    } else if (isShooterSupport) {
+      // Support players are standard riflers, no artificial penalty
     }
+
+    // Captain / IGL balance: standard captains focus on tactical commands rather than over-fragging
+    if (isShooterCaptain && (shooter.rating || 100) < 112) {
+      const rKills = (shooter as any).roundKills || 0;
+      if (rKills >= 1) {
+        hitChance *= 0.85;
+      }
+    }
+
+    // Soft multi-kill fatigue (scales after each kill in the round so aces are rare and teammates contribute)
+    const roundKills = (shooter as any).roundKills || 0;
+    if (roundKills >= 1) {
+      // Entry fraggers have slightly better multi-kill stamina to avoid "sucking" too hard after 1st kill
+      const multiKillPenalty = isShooterEntry ? 0.08 : 0.12;
+      hitChance *= (1.0 - (Math.min(4, roundKills) * multiKillPenalty));
+    }
+    
     if (weapon.type === 'SNIPER') {
         // High-rated snipers (110+) are sharp, while low-rated snipers (80) miss shots and can be punished
-        hitChance = 0.70 + (aimRatio - 1.0) * 0.45 * Math.max(0.75, progress);
+        hitChance = 0.68 + (aimRatio - 1.0) * 0.55 * Math.max(0.70, progress);
         hitChance *= (weapon.accuracy / 100);
+        
+        // Snipe rating sensitivity: 130 rating sniper vs 80 rating sniper difference should be huge
+        if (aimRatio < 0.95) hitChance *= 0.85; // Low skill snipers miss more
+        
         if (dist < 15) {
             // Close range un-scoped penalty
-            hitChance *= 0.55;
+            hitChance *= 0.50;
         } else {
-            hitChance *= Math.max(0.85, 1 - (dist / (weapon.range * 4)));
+            hitChance *= Math.max(0.80, 1 - (dist / (weapon.range * 4.5)));
         }
     } else {
         hitChance *= (weapon.accuracy / 100);
-        hitChance *= Math.max(0.40, 1 - (dist / (weapon.range * 1.3)));
+        hitChance *= Math.max(0.38, 1 - (dist / (weapon.range * 1.25)));
     }
     
     // Target defensive movement / IQ positioning: high movement and IQ help evade incoming fire
     const targetMoveRatio = Math.max(0.10, (target.movement || 100) / 100);
-    const targetEvasion = Math.max(0.75, Math.min(1.25, 1.0 - (targetIqRatio - 1.0) * 0.06 - (targetMoveRatio - 1.0) * 0.04));
+    const targetEvasion = Math.max(0.82, Math.min(1.15, 1.0 - (targetIqRatio - 1.0) * 0.05 - (targetMoveRatio - 1.0) * 0.04));
     hitChance *= targetEvasion;
+    
+    // Support teammate flash utility: support throws flashbang to set up teammate
+    const supportMates = Object.values(state.players).filter(pl => 
+      pl.alive && pl.teamId === shooter.teamId && pl.id !== shooter.id &&
+      ((pl.role || '').toLowerCase().includes('support') || (pl.role || '').toLowerCase().includes('саппорт')) &&
+      pl.grenades && pl.grenades.includes('flash')
+    );
+    if (supportMates.length > 0) {
+      const supp = supportMates[0];
+      const utilityMult = Math.max(0.5, (supp.utility || 100) / 100);
+      const flashChance = 0.20 * utilityMult; // Supports (135 utility) will flash ~27% of the time, Riflers ~20%
+      
+      if (this.random() < flashChance) {
+        supp.grenades = supp.grenades.filter(g => g !== 'flash');
+        hitChance *= 1.15; // Flashed target!
+        // Record flash assist attribution with timestamp
+        (target as any).flashedById = supp.id;
+        (target as any).flashedTick = state.tick;
+      }
+    }
     
     // Stationary / angle holding advantage
     if (shooter.state === 'HOLDING') {
-        hitChance *= weapon.type === 'SNIPER' ? 1.08 : 1.12;
+        hitChance *= isShooterSniper ? 1.10 : 1.14;
     }
 
     // Site anchor defensive advantage: CT holding site zone against attackers emerging from chokes
     if (shooter.side === 'CT' && shooter.state === 'HOLDING' && (shooter.currentNodeId === 'a_site' || shooter.currentNodeId === 'b_site' || shooter.currentNodeId === 'jungle' || shooter.currentNodeId === 'window')) {
-        hitChance *= 1.12;
+        hitChance *= 1.15;
     }
 
     // Attacking through narrow choke entries penalty while moving
     if (shooter.side === 'T' && shooter.state === 'MOVING' && (shooter.currentNodeId === 'a_main' || shooter.currentNodeId === 'b_apps' || shooter.currentNodeId === 't_ramp')) {
-        hitChance *= 0.88;
+        hitChance *= 0.85;
     }
 
     // Sniper cover mechanic: mild cover advantage only if holding stationary behind site cover
     const targetWeapon = WEAPONS[target.weaponId] || WEAPONS['glock'];
     if (targetWeapon.type === 'SNIPER' && state.tick < (target.shootTimer || 0)) {
         if (target.state === 'HOLDING') {
-            hitChance *= 0.90;
+            hitChance *= 0.88;
         }
     }
     
     // Movement penalties
     if (shooter.state === 'MOVING') {
-        hitChance *= weapon.type === 'SNIPER' ? 0.35 : 0.78;
+        hitChance *= weapon.type === 'SNIPER' ? 0.30 : 0.75;
     }
-    if (target.state === 'MOVING') hitChance *= 0.90;
+    if (target.state === 'MOVING') hitChance *= 0.88;
     
     // Flank / Distraction / Crossfire bonus: only when attacking from a different angle/node than where the target is facing
     if (target.targetEnemyId && target.targetEnemyId !== shooter.id) {
         const primaryEnemy = state.players[target.targetEnemyId];
         // If shooter is at a different position/node than the primary enemy, it's a true flank/crossfire
         if (primaryEnemy && primaryEnemy.currentNodeId !== shooter.currentNodeId) {
-            hitChance *= 1.20;
+            const flankBonus = isShooterLurker ? 1.25 : 1.18;
+            hitChance *= flankBonus;
         } else if (target.state !== 'HOLDING') {
             hitChance *= 1.08;
         }
     }
     
+    // Tactical Entry & Support Synergy:
+    // Entry fraggers get a boost during site execution when entering a site,
+    // especially if a support teammate is alive and nearby to throw utility ("под раскид").
+    const isExecuting = shooterTeam?.strategy?.includes('EXECUTE') || shooterTeam?.strategy?.includes('FAST');
+    const isOnSite = shooter.currentNodeId?.includes('site');
+    
+    if (shooter.side === 'T' && isExecuting && isOnSite) {
+      if (isShooterEntry) {
+        hitChance *= 1.12; // Entry fragger confidence on site
+      }
+      
+      const nearbySupport = Object.values(state.players).find(pl => 
+        pl.alive && pl.teamId === shooter.teamId && pl.id !== shooter.id &&
+        ((pl.role || '').toLowerCase().includes('support') || (pl.role || '').toLowerCase().includes('саппорт')) &&
+        MapSystem.getDistance(MapSystem.getNode(pl.currentNodeId), MapSystem.getNode(shooter.currentNodeId)) < 40
+      );
+      
+      if (nearbySupport) {
+        hitChance *= 1.10; // "Под раскид" bonus
+      }
+    }
+
     // Balanced hit chance caps
-    hitChance = weapon.type === 'SNIPER' ? Math.min(0.98, Math.max(0.40, hitChance)) : Math.min(0.85, Math.max(0.28, hitChance)); 
+    hitChance = weapon.type === 'SNIPER' ? Math.min(0.98, Math.max(0.35, hitChance)) : Math.min(0.85, Math.max(0.25, hitChance)); 
     
     const roll = this.random();
     this.createSoundEvent(state, shooter.currentNodeId, shooter.id);
@@ -218,10 +301,10 @@ export class CombatSystem {
     // Utility usage: HE grenade in contested node (scaled by player's utility stat)
     if (shooter.grenades && shooter.grenades.includes('he') && !target.damageTaken.has(shooter.id)) {
         shooter.grenades = shooter.grenades.filter(g => g !== 'he');
-        const utilityMult = Math.max(0.6, (shooter.utility || 100) / 100);
-        const nadeHitChance = Math.min(0.60, 0.35 * utilityMult);
+        const utilityMult = Math.max(0.7, (shooter.utility || 100) / 100);
+        const nadeHitChance = Math.min(0.50, 0.35 * utilityMult);
         if (this.random() < nadeHitChance) {
-            const nadeDamage = Math.floor((25 + this.random() * 25) * utilityMult);
+            const nadeDamage = Math.floor((15 + this.random() * 20) * utilityMult);
             const actualNade = Math.min(target.hp - 1, nadeDamage);
             if (actualNade > 0) {
                 target.hp -= actualNade;
@@ -233,9 +316,23 @@ export class CombatSystem {
         }
     }
     
-    if (roll < hitChance) {
+    // Lucky timing & situational randomness ("на лаки убьют"):
+    // In live CS2 matches, even an underdog or 101-rating player can hit a lucky 1-tap or timing,
+    // while favorites can occasionally whiff a spray.
+    let finalHitChance = hitChance;
+    const luckyRoll = this.random();
+    let isLuckyShot = false;
+    if (luckyRoll < 0.06) {
+      finalHitChance = Math.max(finalHitChance, 0.72);
+      isLuckyShot = true;
+    } else if (luckyRoll > 0.95) {
+      finalHitChance *= 0.65; // Whiff / unlucky spray transfer
+    }
+
+    if (roll < finalHitChance) {
       shooter.statistics.hits++;
       let baseHsChance = Math.min(0.50, Math.max(0.12, 0.24 + (aimRatio - 1.0) * 0.35));
+      if (isLuckyShot) baseHsChance = Math.max(baseHsChance, 0.55);
       if (shooter.perk?.hsMultiplier) {
         baseHsChance = Math.min(0.65, baseHsChance * shooter.perk.hsMultiplier);
       }
@@ -271,40 +368,35 @@ export class CombatSystem {
       });
       
       if (target.hp <= 0 && target.alive) {
-        // Mutual spray / return duel damage: Higher chance to trade or at least deal damage back
-        if (target.state === 'ENGAGING' && shooter.hp > 5 && (target.aimProgress || 0) > 0.50) {
+        // Mutual Fire logic: In a 1v1 duel, both players are usually shooting.
+        // If the target was also engaging the shooter, they deal some "trade damage" 
+        // during the final exchange before being eliminated.
+        if (target.state === 'ENGAGING' && target.targetEnemyId === shooter.id && shooter.hp > 2) {
           const targetWeapon = WEAPONS[target.weaponId] || WEAPONS['glock'];
-          if (targetWeapon.type !== 'KNIFE') {
-            const returnHitChance = 0.65 * (targetWeapon.accuracy / 100);
-            if (this.random() < returnHitChance) {
-              const isHs = this.random() < 0.20;
-              const returnDmg = isHs 
-                ? Math.floor(Math.min(shooter.hp, targetWeapon.damage * 3))
-                : Math.floor(Math.min(shooter.hp, (targetWeapon.damage * 0.85) + this.random() * 20));
+          
+          // Chance to land a final blow/damage depends on weapon type and reaction
+          const tradeChance = targetWeapon.type === 'SNIPER' ? 0.25 : 0.75;
+          
+          if (this.random() < tradeChance) {
+            // Scale damage by target's skill and duel intensity
+            const skillFactor = (target.aim || 100) / 100;
+            const finalExchangeDamage = Math.floor((12 + this.random() * 28) * skillFactor);
+            
+            // Strictly non-lethal to avoid frequent simultaneous deaths
+            const actualTradeDamage = Math.min(shooter.hp - 1, finalExchangeDamage);
+            
+            if (actualTradeDamage > 0) {
+              shooter.hp -= actualTradeDamage;
+              target.statistics.damage += actualTradeDamage;
+              (target as any).roundDamageDealt = ((target as any).roundDamageDealt || 0) + actualTradeDamage;
+              if (!shooter.damageTaken) shooter.damageTaken = new Map();
+              shooter.damageTaken.set(target.id, (shooter.damageTaken.get(target.id) || 0) + actualTradeDamage);
               
-              if (returnDmg > 0) {
-                shooter.hp -= returnDmg;
-                target.statistics.damage += returnDmg;
-                (target as any).roundDamageDealt = ((target as any).roundDamageDealt || 0) + returnDmg;
-                if (!shooter.damageTaken) shooter.damageTaken = new Map();
-                shooter.damageTaken.set(target.id, (shooter.damageTaken.get(target.id) || 0) + returnDmg);
-
-                if (shooter.hp <= 0 && shooter.alive) {
-                  shooter.alive = false;
-                  shooter.state = 'DEAD';
-                  shooter.hp = 0;
-                  target.statistics.kills++;
-                  (target as any).roundKills = ((target as any).roundKills || 0) + 1;
-                  shooter.statistics.deaths++;
-                  if (isHs) target.statistics.headshots++;
-                  
-                  state.events.push({
-                    type: 'PLAYER_KILLED',
-                    tick: state.tick,
-                    data: { killerId: target.id, victimId: shooter.id, isHeadshot: isHs }
-                  });
-                }
-              }
+              state.events.push({
+                type: 'DAMAGE',
+                tick: state.tick,
+                data: { shooterId: target.id, targetId: shooter.id, damage: actualTradeDamage, isHeadshot: false, isTradeExchange: true }
+              });
             }
           }
         }
@@ -370,6 +462,29 @@ export class CombatSystem {
             victimTeamId: target.teamId
         });
 
+        // Alert victim's nearby teammates for immediate trade opportunity
+        // (Allows trading star players so they are not immortal and die in realistic round skirmishes)
+        for (const tm of Object.values(state.players)) {
+          if (tm && tm.alive && tm.teamId === target.teamId && tm.id !== target.id) {
+            if (MapSystem.hasLineOfSight(tm.currentNodeId, shooter.currentNodeId) || tm.currentNodeId === target.currentNodeId) {
+              tm.targetEnemyId = shooter.id;
+              tm.state = 'ENGAGING';
+              tm.path = [];
+              tm.targetNodeId = null;
+              tm.knownEnemies.set(shooter.id, {
+                enemyId: shooter.id,
+                position: { ...shooter.position },
+                nodeId: shooter.currentNodeId,
+                timestamp: state.tick,
+                confidence: 1.0
+              });
+              // Immediate trade reaction advantage (peeker / trader swing)
+              tm.reactionTimer = state.tick;
+              tm.aimProgress = Math.max(0.85, tm.aimProgress || 0);
+            }
+          }
+        }
+
         // Round Swing calculation
         const pWinAfterKiller = RatingSystem.calculateWinProbability(state, shooter.teamId);
         const actionSwing = RatingSystem.calculateActionSwing(pWinBeforeKiller, pWinAfterKiller, shooter, target, isOpeningKill, isTrade);
@@ -386,6 +501,7 @@ export class CombatSystem {
         
         // Assist distribution (at least ASSIST_MIN_DAMAGE dealt by a teammate, modified by individual assist perk)
         let assistSwing = 0;
+        let assistCredited = false;
         if (target.damageTaken) {
             const minAssistDamage = RATING_CONFIG.ASSIST_MIN_DAMAGE;
             for (const [assisterId, dmg] of target.damageTaken.entries()) {
@@ -399,12 +515,30 @@ export class CombatSystem {
                             const share = Math.min(0.35, (dmg / 100) * (RATING_CONFIG.ASSIST_SWING_SHARE || 0.35));
                             assistSwing = actionSwing * share;
                             assister.statistics.roundSwing = (assister.statistics.roundSwing || 0) + assistSwing;
+                            assistCredited = true;
                             break; 
                         }
                     }
                 }
             }
         }
+
+        // Flash assist credit if victim was blinded by a teammate within the last 40 ticks and no regular damage assist was credited
+        if (!assistCredited && (target as any).flashedById && (state.tick - ((target as any).flashedTick || 0) <= 40)) {
+          const flasherId = (target as any).flashedById;
+          if (flasherId !== shooter.id) {
+            const flasher = state.players[flasherId];
+            if (flasher && flasher.teamId === shooter.teamId) {
+              flasher.statistics.assists++;
+              (flasher as any).roundAssists = ((flasher as any).roundAssists || 0) + 1;
+              const flashShare = 0.15;
+              assistSwing = actionSwing * flashShare;
+              flasher.statistics.roundSwing = (flasher.statistics.roundSwing || 0) + assistSwing;
+            }
+          }
+        }
+        (target as any).flashedById = null;
+        (target as any).flashedTick = 0;
 
         // Killer gets action swing minus assist share, ensuring total kill swing is conserved (HLTV 3.0 standard)
         const killerSwing = Math.max(0.02, actionSwing - assistSwing);
@@ -416,12 +550,32 @@ export class CombatSystem {
         // Killer recoil recovery and re-aiming delay
         if (weapon.type === 'SNIPER') {
           shooter.aimProgress = 0.85;
-          shooter.shootTimer = state.tick + 6;
+          shooter.shootTimer = state.tick + 7;
           // Sniper tactically steps behind cover / cycles bolt
           shooter.state = 'HOLDING';
         } else {
-          shooter.aimProgress = 0.50;
-          shooter.shootTimer = state.tick + 1;
+          shooter.aimProgress = 0.45;
+          shooter.shootTimer = state.tick + 6;
+        }
+
+        // Alert killer teammates to crossfire and engage remaining spotted enemies
+        for (const ally of Object.values(state.players)) {
+          if (ally.alive && ally.teamId === shooter.teamId && ally.id !== shooter.id) {
+            for (const [eId, mem] of ally.knownEnemies.entries()) {
+              if (mem.confidence > 0.5) {
+                const enemy = state.players[eId];
+                if (enemy && enemy.alive) {
+                  if (ally.state !== 'ENGAGING') {
+                    ally.state = 'ENGAGING';
+                    ally.targetEnemyId = eId;
+                    ally.aimProgress = 0.70;
+                    ally.reactionTimer = state.tick + 1;
+                    break;
+                  }
+                }
+              }
+            }
+          }
         }
 
         // Alert victim teammates about killer position for trade fragging

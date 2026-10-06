@@ -21,6 +21,7 @@ import News from './components/News';
 import SettingsComponent from './components/Settings';
 import TgUsers from './components/TgUsers';
 import Transfers from './components/Transfers';
+import TournamentsBeta from './components/TournamentsBeta';
 import AdminAnalytics from './components/AdminAnalytics';
 import ChannelLogin from './components/ChannelLogin';
 import AccessDenied from './components/AccessDenied';
@@ -39,6 +40,7 @@ function Sidebar({ isOpen, onClose, user, onOpenSo2Media }: { isOpen: boolean, o
     { icon: BarChart2, label: 'Статистика', path: '/stats' },
     { icon: Calendar, label: 'Матчи', path: '/matches' },
     { icon: Trophy, label: 'Турниры', path: '/tournaments' },
+    { icon: Sparkles, label: 'Турниры (Бета)', path: '/tournaments-beta' },
     { icon: Users, label: 'Команды', path: '/teams' },
     { icon: User, label: 'Игроки', path: '/players' },
     { icon: Newspaper, label: 'Новости', path: '/news' },
@@ -68,7 +70,28 @@ function Sidebar({ isOpen, onClose, user, onOpenSo2Media }: { isOpen: boolean, o
           </button>
         </div>
       
-        <div className="flex-1 py-6 px-4 flex flex-col gap-1.5 overflow-y-auto">
+        {/* Global Game Selector */}
+        <div className="px-4 pt-2 mb-4">
+          <div className="flex flex-col gap-2">
+            <span className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em] ml-1">Дисциплина</span>
+            <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
+              <button 
+                onClick={() => setGame('cs2')} 
+                className={`flex-1 py-2 rounded-lg text-xs font-black transition-all uppercase tracking-wider ${game === 'cs2' ? 'bg-[#ff8f00] text-black shadow-lg shadow-[#ff8f00]/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+              >
+                CS2
+              </button>
+              <button 
+                onClick={() => setGame('so2')} 
+                className={`flex-1 py-2 rounded-lg text-xs font-black transition-all uppercase tracking-wider ${game === 'so2' ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+              >
+                SO2
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 py-2 px-4 flex flex-col gap-1.5 overflow-y-auto">
           {navItems.map((item, idx) => {
             const isActive = location.pathname === item.path;
             return (
@@ -96,43 +119,6 @@ function Sidebar({ isOpen, onClose, user, onOpenSo2Media }: { isOpen: boolean, o
           })}
         </div>
 
-        {/* World / Discipline Selector Card */}
-        <div className="px-3 pt-2">
-          <div className="bg-black/40 border border-white/10 rounded-2xl p-3 shadow-inner">
-            <div className="text-[10px] text-white/40 uppercase font-black tracking-wider mb-2 flex items-center justify-between">
-              <span>Выбор мира</span>
-              <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded font-mono ${game === 'so2' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
-                {game === 'so2' ? 'Standoff 2' : 'CS2'}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                onClick={() => setGame('cs2')}
-                className={`py-1.5 px-2 rounded-xl text-xs font-black uppercase flex items-center justify-center transition-all cursor-pointer ${
-                  game === 'cs2'
-                    ? 'bg-[#ff8f00] text-black shadow-[0_0_12px_rgba(255,143,0,0.35)]'
-                    : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
-                }`}
-                title="Переключиться на Counter-Strike 2"
-              >
-                CS2
-              </button>
-              <button
-                onClick={() => setGame('so2')}
-                className={`py-1.5 px-2 rounded-xl text-xs font-black uppercase flex items-center justify-center transition-all cursor-pointer ${
-                  game === 'so2'
-                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-[0_0_12px_rgba(249,115,22,0.35)]'
-                    : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
-                }`}
-                title="Переключиться на Standoff 2"
-              >
-                SO2
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Current Room Info Card */}
         <div className="p-4 border-t border-white/5 bg-black/30 m-3 rounded-2xl">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
@@ -712,6 +698,7 @@ export default function App() {
               <Route path="/stats" element={<Statistics user={user} />} />
               <Route path="/matches" element={<Matches user={user} />} />
               <Route path="/tournaments" element={<TournamentBracket user={user} />} />
+              <Route path="/tournaments-beta" element={<TournamentsBeta user={user} />} />
               <Route path="/teams" element={<Teams user={user} />} />
               <Route path="/players" element={<Players user={user} />} />
               <Route path="/news" element={<News user={user} />} />

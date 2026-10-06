@@ -5,7 +5,7 @@ import { Trash2, ChevronUp, ChevronDown, Upload, Folder, X, HelpCircle, Check, S
 import TeamLogo from '../TeamLogo';
 import MatchCard from './MatchCard';
 import { getAutoMatchedVectorLogo } from '../../lib/logoMatcher';
-import { safeLocalStorageSet } from '../../lib/utils';
+import { safeLocalStorageSet, shuffleArray } from '../../lib/utils';
 import { getCanonicalRoomId } from './storage';
 import So2MediaLibraryModal from '../So2MediaLibraryModal';
 
@@ -253,7 +253,7 @@ export default function TournamentSettingsForm({
     for (let i = 0; i < gCount; i++) {
       next[`gsl-group-${i}`] = [];
     }
-    const shuffled = [...teams].sort(() => Math.random() - 0.5);
+    const shuffled = shuffleArray(teams);
     shuffled.forEach((team, idx) => {
       next[`gsl-group-${idx % gCount}`].push(team.id);
     });
@@ -1033,7 +1033,7 @@ export default function TournamentSettingsForm({
       {/* Seeding & Team Management */}
       <div>
           <label className="block text-white/50 font-bold mb-2">Тип жеребьевки</label>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
               <button 
                 onClick={() => {
                   setSettings({...settings, seedingType: 'random'});
@@ -1044,8 +1044,14 @@ export default function TournamentSettingsForm({
                   🎲 Рандомно (Случайно)
               </button>
               <button 
+                onClick={() => setSettings({...settings, seedingType: 'skill'})}
+                className={`flex-1 p-3 rounded-xl border ${settings.seedingType === 'skill' ? 'bg-emerald-600/30 border-emerald-400' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+              >
+                  📈 По скиллу (Rating)
+              </button>
+              <button 
                 onClick={() => setSettings({...settings, seedingType: 'manual'})}
-                className={`flex-1 p-3 rounded-xl border ${(settings.seedingType !== 'random') ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
+                className={`flex-1 p-3 rounded-xl border ${(settings.seedingType !== 'random' && settings.seedingType !== 'skill') ? 'bg-[#ff8f00]/20 border-[#ff8f00]' : 'bg-black/30 border-white/10'} transition-colors font-bold text-sm`}
               >
                   ✍️ Вручную (По группам / списку)
               </button>

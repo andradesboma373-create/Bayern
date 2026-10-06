@@ -2,7 +2,7 @@ import React from 'react';
 import { getAutoMatchedVectorLogo } from '../lib/logoMatcher';
 
 export interface TeamLogoProps {
-  game?: 'cs2' | 's2';
+  game?: 'cs2' | 's2' | 'so2';
   teamName: string;
   sizeClassName?: string;
   textClassName?: string;

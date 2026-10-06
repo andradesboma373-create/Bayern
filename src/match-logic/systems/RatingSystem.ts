@@ -402,7 +402,8 @@ export class RatingSystem {
       multiKillFactor * 0.20 +
       clutchFactor * 0.30 +
       openingFactor * 0.35;
-    const impact = Math.max(0.00, Number(rawImpact.toFixed(2)));
+    const impact = Math.max(0.10, Number(rawImpact.toFixed(2))); // Enforce 0.10 floor as requested
+    const finalImpact = Math.min(2.0, impact);
 
     // Final Unified Rating formula
     const w = RATING_CONFIG.RATING_WEIGHTS;
@@ -416,7 +417,7 @@ export class RatingSystem {
       w.KPR_COEFFICIENT * kpr -
       w.DPR_PENALTY * dpr +
       w.ADR_COEFFICIENT * adr +
-      0.15 * impact +
+      0.15 * finalImpact +
       w.SWING_COEFFICIENT * effectiveSwing +
       w.MULTI_KILL_COEFFICIENT * multiKillFactor +
       w.CLUTCH_COEFFICIENT * clutchFactor +
@@ -435,7 +436,7 @@ export class RatingSystem {
 
     return {
       rating: Number(computedRating.toFixed(2)),
-      impact: Number(Math.min(2.0, impact).toFixed(2)),
+      impact: Number(finalImpact.toFixed(2)),
       roundSwing: Number(avgRoundSwing.toFixed(2)),
       totalSwing: Number(finalSwingNum.toFixed(4)),
       kast: Number(kast.toFixed(1)),

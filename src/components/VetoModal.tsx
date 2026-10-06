@@ -206,7 +206,7 @@ const VetoModal: React.FC<VetoModalProps> = ({
           </div>
 
           {/* Actions Log */}
-          <div className="w-full max-w-4xl grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mt-4">
+          <div className="w-full max-w-4xl grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-3 mt-4">
             <AnimatePresence>
               {(game === 'cs2' ? cs2Pool : s2Pool).map((m, idx) => {
                 const action = actions.find(a => a.mapId === m.id);

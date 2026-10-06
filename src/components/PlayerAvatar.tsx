@@ -3,7 +3,7 @@ import { User } from 'lucide-react';
 
 export interface PlayerAvatarProps {
   key?: React.Key;
-  game?: 'cs2' | 's2';
+  game?: 'cs2' | 's2' | 'so2';
   playerName: string;
   sizeClassName?: string;
   className?: string;

@@ -1619,6 +1619,155 @@ app.post("/api/gemini/analyze", upload.single('media'), async (req, res) => {
   }
 });
 
+// Helper to extract match stats from screenshot with resilient model fallback
+async function extractMatchStatsFromBuffer(buffer: Buffer, originalMime: string) {
+  let imageBuffer = buffer;
+  let mimeType = originalMime || 'image/png';
+
+  // Optimize image size if needed while preserving scoreboard sharpness
+  try {
+    const metadata = await sharp(buffer).metadata();
+    if (metadata.width && (metadata.width > 2048 || metadata.height! > 2048 || buffer.length > 3.5 * 1024 * 1024)) {
+      imageBuffer = await sharp(buffer)
+        .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 92 })
+        .toBuffer();
+      mimeType = 'image/jpeg';
+    }
+  } catch (sharpErr) {
+    // fallback to original buffer
+  }
+
+  const prompt = `You are an expert esports analyzer and OCR specialist for CS2, CS:GO, Standoff 2, Faceit, HLTV, and competitive shooter match result scoreboards.
+Analyze this match scoreboard screenshot in extreme detail and extract all match information and player statistics.
+
+RULES FOR EXTRACTION:
+1. TEAMS: Extract the TWO actual team names playing (e.g. from team logos, headers, match title, or team abbreviations). If it's Counter-Terrorists vs Terrorists or CT vs T, identify them accurately.
+2. SCORES: Extract the final match score for each team (score1 for team1, score2 for team2).
+3. MAP: Extract the map name (e.g. Mirage, Inferno, Nuke, Dust II, Ancient, Anubis, Vertigo, Overpass, Train, Sakura, Rust, Province, Sandstone, etc.).
+4. PLAYERS: Extract EVERY single player shown in the scoreboard table for BOTH teams. Do not omit any players.
+5. FOR EACH PLAYER:
+   - "nickname": exact player name or gamertag (remove team clan tag prefix like [CLAN] if separate)
+   - "team": the team name they belong to (must match team1Name or team2Name)
+   - "kills": number of kills (K)
+   - "deaths": number of deaths (D)
+   - "assists": number of assists (A)
+   - "damage": average damage per round (ADR) or total damage
+   - "rating": HLTV rating (e.g. 1.25) or K/D ratio
+
+Return ONLY a valid JSON object without backticks, with this exact schema:
+{
+  "mapName": "string",
+  "team1Name": "string",
+  "team2Name": "string",
+  "score1": number,
+  "score2": number,
+  "players": [
+    {
+      "nickname": "string",
+      "team": "string",
+      "kills": number,
+      "deaths": number,
+      "assists": number,
+      "damage": number,
+      "rating": number
+    }
+  ]
+}`;
+
+  const imagePart = {
+    inlineData: {
+      data: imageBuffer.toString('base64'),
+      mimeType: mimeType,
+    }
+  };
+  const textPart = { text: prompt };
+
+  // Resilient multi-model fallback chain:
+  // 1. gemini-3.5-flash (fast, verified active)
+  // 2. gemini-3.1-flash-lite (fast lightweight fallback)
+  // 3. gemini-3.8-flash
+  const modelsToTry = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.8-flash"];
+  let lastError: any = null;
+
+  for (const modelName of modelsToTry) {
+    try {
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: { parts: [imagePart, textPart] },
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      let text = response.text || "";
+      const firstBrace = text.indexOf('{');
+      const lastBrace = text.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        text = text.substring(firstBrace, lastBrace + 1);
+      }
+
+      const parsed = JSON.parse(text);
+
+      // Normalize player objects in case model used 'name' instead of 'nickname'
+      if (Array.isArray(parsed.players)) {
+        parsed.players = parsed.players.map((p: any) => ({
+          nickname: String(p.nickname || p.name || p.playerName || 'Player').trim(),
+          team: String(p.team || '').trim(),
+          kills: Number(p.kills ?? p.k) || 0,
+          deaths: Number(p.deaths ?? p.d) || 0,
+          assists: Number(p.assists ?? p.a) || 0,
+          damage: Number(p.damage ?? p.adr ?? p.dmg) || 0,
+          rating: Number(p.rating ?? p.hltvRating ?? p.kd) || 1.0
+        }));
+
+        // If team names are generic or missing on players, assign based on first/second half
+        const t1 = parsed.team1Name || 'Команда 1';
+        const t2 = parsed.team2Name || 'Команда 2';
+        parsed.team1Name = t1;
+        parsed.team2Name = t2;
+        parsed.score1 = Number(parsed.score1) || 0;
+        parsed.score2 = Number(parsed.score2) || 0;
+        parsed.mapName = String(parsed.mapName || 'Карта 1');
+
+        parsed.players.forEach((p: any, idx: number) => {
+          if (!p.team) {
+            p.team = idx < Math.ceil(parsed.players.length / 2) ? t1 : t2;
+          }
+        });
+      }
+
+      return parsed;
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`Extraction with ${modelName} failed, trying next model:`, err.message?.substring(0, 100));
+    }
+  }
+
+  throw lastError || new Error("Не удалось обработать скриншот ни одной моделью ИИ");
+}
+
+app.post(["/api/gemini/extract-stats", "/api/extract-stats"], upload.single('media'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No image provided" });
+
+    const parsed = await extractMatchStatsFromBuffer(req.file.buffer, req.file.mimetype);
+    res.json(parsed);
+  } catch (error: any) {
+    console.error("Extraction error:", error);
+    const errMsg = String(error?.message || error || '');
+    if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota exceeded')) {
+      const retryMatch = errMsg.match(/retry in ([0-9.]+)s/i) || errMsg.match(/retryDelay":"([0-9]+)s/i);
+      const retrySec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 45;
+      return res.status(429).json({ 
+        error: `Лимит запросов к ИИ исчерпан. Пожалуйста, подождите ${retrySec} сек.`, 
+        retryAfter: retrySec 
+      });
+    }
+    res.status(500).json({ error: error.message || "Ошибка распознавания данных скриншота" });
+  }
+});
+
 // 8. Transcribe Audio
 app.post("/api/gemini/transcribe", upload.single('audio'), async (req, res) => {
   try {
@@ -4126,6 +4275,7 @@ async function loadAllBots() {
 // --- Auto-inject custom maps from public/maps ---
 let customMapsCS2: string[] = [];
 let customMapsS2: string[] = [];
+let customMapsListInServer: string[] = [];
 let allAvailableMapFiles = new Set<string>();
 
 const scanMapsDir = () => {

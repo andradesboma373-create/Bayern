@@ -8,14 +8,14 @@ interface Props {
   user: any;
   team1: Team;
   team2: Team;
-  game: 'cs2' | 's2';
+  game: 'cs2' | 's2' | 'so2';
   bo: number;
   tournamentId: string;
   onClose: () => void;
   onMatchComplete: (score1: number, score2: number) => void;
 }
 
-export function getVetoStepsLocal(format: 'bo1' | 'bo3' | 'bo5', game: 'cs2' | 's2') {
+export function getVetoStepsLocal(format: 'bo1' | 'bo3' | 'bo5', game: 'cs2' | 's2' | 'so2') {
   const mapCount = game === 'cs2' ? 7 : 6;
   if (mapCount === 7) {
     if (format === 'bo1') {
@@ -115,7 +115,11 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
     let nextStage = vetoStage + 1;
     if (nextStage <= steps.length && steps[nextStage - 1].action === 'auto_pick') {
        const remainingMaps = MAP_POOL.filter(m => !vetoBanned.includes(m.id) && !vetoPicked.some(p => p.mapId === m.id));
-       const autoPickedMap = remainingMaps.find(m => m.id !== mapId);
+       // Use proper random for auto-pick instead of always first
+       const eligibleMaps = remainingMaps.filter(m => m.id !== mapId);
+       const targetPool = eligibleMaps.length > 0 ? eligibleMaps : remainingMaps;
+       const autoPickedMap = targetPool[Math.floor(Math.random() * targetPool.length)];
+       
        if (autoPickedMap) {
          setVetoPicked(prev => [...prev, { mapId: autoPickedMap.id, pickedBy: 'AUTO' }]);
          setVetoLogs(prev => [...prev, `[СИСТЕМА] Авто-пик ${autoPickedMap.name}`]);

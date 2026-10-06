@@ -6,6 +6,7 @@ import { TeamAI } from '../ai/TeamAI';
 import { CombatSystem } from '../systems/CombatSystem';
 import { BombSystem } from '../systems/BombSystem';
 import { RATING_CONFIG } from '../config/RatingConfig';
+import { WEAPONS } from '../config/Weapons';
 
 export class RoundEngine {
   static startRound(state: MatchState) {
@@ -142,6 +143,10 @@ export class RoundEngine {
       p.hp = 100;
       p.state = 'IDLE';
       p.path = [];
+      if (p.originalRole) {
+        p.role = p.originalRole;
+        p.isAdaptedRole = false;
+      }
       p.targetNodeId = null;
       p.targetEnemyId = null;
       p.aimProgress = 0;
@@ -150,6 +155,8 @@ export class RoundEngine {
       p.actionTimer = 0;
       p.knownEnemies.clear();
       (p as any).damageTaken = new Map();
+      (p as any).flashedById = null;
+      (p as any).flashedTick = 0;
       
       const team = state.teams[p.teamId];
       p.side = team ? team.side : 'T';
@@ -164,7 +171,29 @@ export class RoundEngine {
     
     EconomySystem.processBuyPhase(state);
 
-    // Anti-Blowout & Competitive Realism: make 13:0 and 13:1 shutouts extremely rare
+    // Support role setup: in full buy rounds (not pistol or eco), support carries tactical flash/smoke
+    const t1Tactic = state.teams['t1']?.tactic;
+    const t2Tactic = state.teams['t2']?.tactic;
+    for (const p of Object.values(state.players)) {
+      if (!p) continue;
+      const rLower = (p.role || '').toLowerCase();
+      const isRifler = rLower.includes('rifler') || rLower.includes('рифлер');
+      const isSupport = rLower.includes('support') || rLower.includes('саппорт');
+      const teamTactic = p.teamId === 't1' ? t1Tactic : t2Tactic;
+      
+      if ((isSupport) && teamTactic !== 'ECO' && state.round > 1) {
+        if (!p.grenades || p.grenades.length === 0) {
+          p.grenades = ['flash'];
+        }
+      } else if (isRifler && teamTactic === 'FULL_BUY' && state.round > 1) {
+        // Riflers know basic utility, 40% chance to have a flash in full buy rounds
+        if ((!p.grenades || p.grenades.length === 0) && Math.random() < 0.40) {
+          p.grenades = ['flash'];
+        }
+      }
+    }
+
+    // Competitive Realism: Trailing teams adapt tactically and buy utility when trailing heavily
     const t1Score = state.teams['t1']?.score || 0;
     const t2Score = state.teams['t2']?.score || 0;
     const leaderTeamId = t1Score > t2Score ? 't1' : (t2Score > t1Score ? 't2' : null);
@@ -172,18 +201,14 @@ export class RoundEngine {
     const leaderScore = Math.max(t1Score, t2Score);
     const trailingScore = Math.min(t1Score, t2Score);
 
-    if (trailingTeamId && leaderScore >= 7 && trailingScore <= 1) {
+    if (trailingTeamId && trailingScore <= 1 && leaderScore >= 7) {
       for (const p of Object.values(state.players)) {
         if (!p) continue;
         if (p.teamId === trailingTeamId) {
-          p.focus = 1.15;
-          (p as any).isAntiBlowoutBuffed = true;
+          p.focus = 1.08;
           if (!p.grenades || p.grenades.length === 0) {
             p.grenades = ['flash', 'smoke'];
           }
-        } else if (leaderScore >= 11 && p.teamId === leaderTeamId) {
-          // Leading team experiences psychological pressure / anti-stratting on shutout verge
-          p.focus = 0.95;
         }
       }
     }
@@ -305,7 +330,39 @@ export class RoundEngine {
     } else if (reason === 'EXPLOSION' && tTeam) {
        winnerId = tTeam.id;
     }
-    
+
+    // 13:0 / 16:0 Shutout Guard:
+    // A complete shutout is strictly impossible if rating difference is < 20.
+    // Even if rating difference >= 20, 13:0 is extremely rare (~2.5% chance).
+    const regTarget = state.format === 'MR15' ? 16 : 13;
+    const opponentTeamId = winnerId === 't1' ? 't2' : (winnerId === 't2' ? 't1' : '');
+    const currentWinnerTeam = winnerId ? state.teams[winnerId] : null;
+    const opponentTeam = opponentTeamId ? state.teams[opponentTeamId] : null;
+
+    if (currentWinnerTeam && opponentTeam && currentWinnerTeam.score === regTarget - 1 && opponentTeam.score === 0) {
+      const t1Overall = (state as any).t1Overall || 100;
+      const t2Overall = (state as any).t2Overall || 100;
+      const leaderRating = winnerId === 't1' ? t1Overall : t2Overall;
+      const trailingRating = winnerId === 't1' ? t2Overall : t1Overall;
+      const ratingDiff = leaderRating - trailingRating;
+
+      let allowShutout = false;
+      if (ratingDiff >= 20) {
+        const seedVal = (state.seed || 12345) + (state.round * 137);
+        const rngRoll = ((seedVal * 9301 + 49297) % 233280) / 233280;
+        const shutoutChance = Math.min(0.04, 0.015 + (ratingDiff - 20) * 0.001);
+        if (rngRoll < shutoutChance) {
+          allowShutout = true;
+        }
+      }
+
+      if (!allowShutout) {
+        // Trailing team tactically breaks the shutout! Score becomes 12:1 (or 15:1)
+        winnerId = opponentTeamId;
+        reason = 'TIME';
+      }
+    }
+
     const winner = winnerId ? state.teams[winnerId] : null;
     if (winner) winner.score++;
     
@@ -354,65 +411,108 @@ export class RoundEngine {
       }
     }
 
-    // Exit Kills / Hunt Simulation: In winning rounds, some players of the losing team might 
-    // get a kill before dying or the winning team might lose players to bomb/hunt.
-    if (reason === 'EXPLOSION' || reason === 'DEFUSE' || reason === 'TIME') {
-      const losingTeamId = winnerId === tTeam?.id ? ctTeam?.id : tTeam?.id;
-      const winners = Object.values(state.players).filter(p => p && p.alive && p.teamId === winnerId);
-      const losers = Object.values(state.players).filter(p => p && p.alive && p.teamId === losingTeamId);
+    // Valuable Weapon Recovery Logic: If expensive weapons (AWP, AK, M4) are on the ground (fallen players),
+      // surviving players with cheaper weapons should try to recover them.
+      // This applies to ALL round end types, including ELIMINATION (winners scavenge before next round).
+      const valuableWeaponIds = ['awp', 'ak47', 'm4a1s', 'm4a4', 'aug', 'sg553'];
+      const allDeadBodies = Object.values(state.players).filter(p => !p.alive && p.primaryWeaponId && valuableWeaponIds.includes(p.primaryWeaponId));
       
-      // Bomb explosion mortality for anyone near site
-      if (reason === 'EXPLOSION') {
-        for (const p of winners) {
-          const distToBomb = MapSystem.getDistance(MapSystem.getNode(p.currentNodeId), MapSystem.getNode(state.bomb.nodeId || ''));
-          if (distToBomb < 60 && CombatSystem.random() < 0.45) {
-            p.alive = false;
-            p.hp = 0;
-            p.statistics.deaths++;
-          }
-        }
-      }
+      if (allDeadBodies.length > 0) {
+        const allSurvivors = Object.values(state.players).filter(p => p.alive);
+        
+        // Sort bodies by weapon value (most expensive first)
+        const sortedBodies = [...allDeadBodies].sort((a, b) => {
+          const priceA = WEAPONS[a.primaryWeaponId!]?.price || 0;
+          const priceB = WEAPONS[b.primaryWeaponId!]?.price || 0;
+          return priceB - priceA;
+        });
 
-      // Exit kills: surviving losers try to take someone with them
-      for (const loser of losers) {
-        if (winners.length > 0 && CombatSystem.random() < 0.35) {
-          const target = winners[Math.floor(CombatSystem.random() * winners.length)];
-          if (target && target.alive) {
-            target.alive = false;
-            target.hp = 0;
-            target.statistics.deaths++;
-            loser.statistics.kills++;
-            (loser as any).roundKills = ((loser as any).roundKills || 0) + 1;
-            
-            state.events.push({
-              type: 'PLAYER_KILLED',
-              tick: state.tick,
-              data: { killerId: loser.id, victimId: target.id, isHeadshot: CombatSystem.random() < 0.2 }
-            });
-          }
-        }
-      }
+        for (const deadBody of sortedBodies) {
+          const weaponId = deadBody.primaryWeaponId!;
+          const weaponPrice = WEAPONS[weaponId]?.price || 0;
 
-      // Hunt simulation: Winners hunt the saving losers
-      for (const loser of losers) {
-        if (winners.length >= 3 && loser.alive && CombatSystem.random() < 0.30) {
-          loser.alive = false;
-          loser.hp = 0;
-          loser.statistics.deaths++;
-          const killer = winners[Math.floor(CombatSystem.random() * winners.length)];
-          if (killer) {
-            killer.statistics.kills++;
-            (killer as any).roundKills = ((killer as any).roundKills || 0) + 1;
+          // Find the survivor who would benefit most from this weapon
+          // Rules:
+          // 1. Must be alive
+          // 2. Weapon must be a significant upgrade (+$500) OR the player has NO primary weapon
+          // 3. Snipers ALWAYS prioritize picking up an AWP if they don't have one
+          const candidate = allSurvivors
+            .filter(s => {
+              const rLower = (s.role || '').toLowerCase();
+              const isSniper = rLower.includes('sniper') || rLower.includes('awp') || rLower.includes('снайпер');
+              
+              if (isSniper && weaponId === 'awp' && s.primaryWeaponId !== 'awp') return true;
+              
+              const myWeaponPrice = s.primaryWeaponId ? (WEAPONS[s.primaryWeaponId]?.price || 0) : 0;
+              return myWeaponPrice < (weaponPrice - 500);
+            })
+            .sort((a, b) => {
+              const rA = (a.role || '').toLowerCase();
+              const rB = (b.role || '').toLowerCase();
+              const isSniperA = rA.includes('sniper') || rA.includes('awp');
+              const isSniperB = rB.includes('sniper') || rB.includes('awp');
+
+              // Snipers get priority for AWP
+              if (weaponId === 'awp') {
+                if (isSniperA && !isSniperB) return -1;
+                if (!isSniperA && isSniperB) return 1;
+              }
+
+              // Otherwise prioritize players with NO primary weapon
+              const hasA = !!a.primaryWeaponId;
+              const hasB = !!b.primaryWeaponId;
+              if (hasA !== hasB) return hasA ? 1 : -1;
+
+              // Then by price (poorer players first)
+              const priceA = a.primaryWeaponId ? (WEAPONS[a.primaryWeaponId]?.price || 0) : 0;
+              const priceB = b.primaryWeaponId ? (WEAPONS[b.primaryWeaponId]?.price || 0) : 0;
+              if (priceA !== priceB) return priceA - priceB;
+              
+              // Then by proximity
+              const distA = MapSystem.getDistance(MapSystem.getNode(a.currentNodeId), MapSystem.getNode(deadBody.currentNodeId));
+              const distB = MapSystem.getDistance(MapSystem.getNode(b.currentNodeId), MapSystem.getNode(deadBody.currentNodeId));
+              return distA - distB;
+            })[0];
+
+          if (candidate) {
+            const dist = MapSystem.getDistance(MapSystem.getNode(candidate.currentNodeId), MapSystem.getNode(deadBody.currentNodeId));
             
-            state.events.push({
-              type: 'PLAYER_KILLED',
-              tick: state.tick,
-              data: { killerId: killer.id, victimId: loser.id, isHeadshot: CombatSystem.random() < 0.25 }
-            });
+            // Pickup chance:
+            // Winners always pick up if they are reasonably close (< 100 distance).
+            // Losers only pick up if they are very close or it's a non-elimination round (saving).
+            const isWinner = candidate.teamId === winnerId;
+            let baseChance = isWinner ? 0.98 : 0.4;
+            if (reason === 'TIME' || reason === 'DEFUSE' || reason === 'EXPLOSION') {
+               if (!isWinner) baseChance = 0.85; // Losers saving in non-elimination rounds
+            }
+
+            const distPenalty = Math.max(0, (dist - 60) / 400);
+            const pickupChance = Math.max(0.1, baseChance - distPenalty);
+            
+            if (CombatSystem.random() < pickupChance) {
+              const oldWeapon = candidate.primaryWeaponId;
+              candidate.primaryWeaponId = weaponId;
+              deadBody.primaryWeaponId = null; 
+              
+              state.events.push({
+                type: 'WEAPON_SAVED',
+                tick: state.tick,
+                data: { 
+                  playerId: candidate.id, 
+                  weaponId: weaponId, 
+                  fromPlayerId: deadBody.id,
+                  droppedWeaponId: oldWeapon,
+                  isEnemyWeapon: deadBody.teamId !== candidate.teamId
+                }
+              });
+              
+              // Remove candidate from scavengers list so they don't pick up 2 guns
+              const idx = allSurvivors.indexOf(candidate);
+              if (idx > -1) allSurvivors.splice(idx, 1);
+            }
           }
         }
       }
-    }
 
     const teamsList = Object.values(state.teams);
     
