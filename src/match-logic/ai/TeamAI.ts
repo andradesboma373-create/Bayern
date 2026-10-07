@@ -82,9 +82,9 @@ export class TeamAI {
         const hasExpensiveWeapon = alivePlayers.some(p => p.primaryWeaponId && expensiveWeapons.includes(p.primaryWeaponId));
         
         if (tCount <= 2 && disadvantage >= 2 && hasExpensiveWeapon) {
-          let tSaveChance = 0.5;
-          if (tCount === 1 && disadvantage >= 3) tSaveChance = 0.9;
-          if (state.tick > 750) tSaveChance += 0.15; // Late round, low hope
+          let tSaveChance = 0.80;
+          if (tCount === 1 && disadvantage >= 2) tSaveChance = 0.95;
+          if (state.tick > 700) tSaveChance += 0.15; // Late round, low hope
           
           if (CombatSystem.random() < tSaveChance) {
             team.strategy = 'SAVE';
@@ -104,11 +104,11 @@ export class TeamAI {
         
         const disadvantage = tCount - ctCount;
         let saveChance = 0;
-        if (disadvantage >= 3) saveChance = 0.85;
-        else if (disadvantage === 2) saveChance = 0.65;
-        else if (disadvantage === 1) saveChance = 0.25;
+        if (disadvantage >= 3) saveChance = 0.95;
+        else if (disadvantage === 2) saveChance = 0.85;
+        else if (disadvantage === 1 && state.tick > 650) saveChance = 0.50;
         
-        if (team.tactic === 'ECO') saveChance -= 0.6; 
+        if (team.tactic === 'ECO') saveChance -= 0.5; 
         else if (team.tactic === 'FULL_BUY') saveChance += 0.15; 
         
         if (CombatSystem.random() < saveChance) {

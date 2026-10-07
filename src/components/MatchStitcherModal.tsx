@@ -2,14 +2,15 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   X, Upload, Trash2, Trophy, User, Calendar, Sparkles, Loader2, 
   ChevronRight, BarChart3, Image as ImageIcon, Download, Database, 
-  Plus, FolderOpen, Search, ArrowRight, Shield, Check, Edit2, Copy, AlertCircle
+  Plus, FolderOpen, Search, ArrowRight, Shield, Check, Edit2, Copy, AlertCircle,
+  Layers, LayoutGrid, FolderPlus, Cloud, Save
 } from 'lucide-react';
 import PlayerAvatar from './PlayerAvatar';
 import TeamLogo from './TeamLogo';
-import { getKdColorClass } from '../lib/utils';
+import { getKdColorClass, compressImage } from '../lib/utils';
 import { downloadElementAsImage } from '../lib/exportImage';
 import { loadTournaments, getCanonicalRoomId } from './setka_tourn/storage';
-import { db, doc, deleteDoc, setDoc } from '../firebase';
+import { db, doc, deleteDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc } from '../firebase';
 
 export interface ExtractedMatch {
   id: string;
@@ -20,6 +21,8 @@ export interface ExtractedMatch {
   players: any[];
   fileName?: string;
   date?: string;
+  stageId?: string; // New field for stage organization
+  priority?: number; // 1 = Regular, 2 = Semi-final, 3 = Final
 }
 
 export interface StitcherTop {
@@ -30,6 +33,26 @@ export interface StitcherTop {
   top1?: string | null;
   discipline?: 'cs2' | 's2' | 'all';
   description?: string;
+  folderId?: string; // New field for folder organization
+}
+
+export interface StitcherFolder {
+  id: string;
+  name: string;
+  userId: string;
+  createdAt: number;
+  priority?: number;
+  isExcluded?: boolean;
+}
+
+export interface StitcherStage {
+  id: string;
+  name: string;
+  topId: string; // Belongs to a top
+  userId: string;
+  createdAt: number;
+  priority?: number;
+  isExcluded?: boolean;
 }
 
 interface DeletionTarget {
@@ -239,8 +262,28 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
     'Игрок1: 22k 14d 5a 1.25\nИгрок2: 18k 15d 3a 1.10\nИгрок3: 16k 16d 4a 1.02\nИгрок4: 14k 17d 6a 0.95\nИгрок5: 11k 18d 8a 0.85\nОппонент1: 21k 16d 4a 1.18\nОппонент2: 19k 17d 3a 1.05\nОппонент3: 17k 18d 5a 0.98\nОппонент4: 15k 19d 6a 0.90\nОппонент5: 12k 20d 7a 0.80'
   );
 
+  // Folder & Stage States
+  const [folders, setFolders] = useState<StitcherFolder[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [stages, setStages] = useState<StitcherStage[]>([]);
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderPriority, setNewFolderPriority] = useState(2);
+  const [newFolderExcluded, setNewFolderExcluded] = useState(false);
+  const [isCreatingStage, setIsCreatingStage] = useState(false);
+  const [newStageName, setNewStageName] = useState('');
+  const [newStagePriority, setNewStagePriority] = useState(2);
+  const [newStageExcluded, setNewStageExcluded] = useState(false);
+  
+  const [movingTopId, setMovingTopId] = useState<string | null>(null);
+  const [movingMatchToStageId, setMovingMatchToStageId] = useState<string | null>(null);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSavingCloud, setIsSavingCloud] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [selectedProfilePlayer, setSelectedProfilePlayer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewLimit, setViewLimit] = useState<'all' | 'top20' | 'top10'>('all');
@@ -249,6 +292,8 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
   const [tempTopName, setTempTopName] = useState('');
 
   const skleykaRef = useRef<HTMLDivElement>(null);
+  // Track changes for manual save
+  const isInitialMount = useRef(true);
 
   // Active top reference
   const activeTop = useMemo<StitcherTop>(() => {
@@ -275,7 +320,7 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
       .catch(() => {});
   }, [user]);
 
-  // Sync to localStorage and database
+  // Sync to localStorage and manual cloud save
   useEffect(() => {
     try {
       localStorage.setItem('skleyka_all_tops', JSON.stringify(tops));
@@ -285,18 +330,125 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
       if (activeTop.top1) localStorage.setItem('skleyka_top1', activeTop.top1);
       else localStorage.removeItem('skleyka_top1');
 
-      // Database sync
-      const uid = user?.uid || 'guest';
-      const roomId = getCanonicalRoomId(uid);
-      setDoc(doc(db, 'skleyka_meta', roomId), {
-        allTopsData: tops,
-        activeTopId: activeTop.id,
-        updatedAt: new Date().toISOString()
-      }).catch(() => {});
+      // Database sync removed - now manual via handleSaveToCloud
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+      } else {
+        setHasUnsavedChanges(true);
+      }
     } catch (e) {
       console.warn('LocalStorage save error:', e);
     }
-  }, [tops, activeTop, user]);
+  }, [tops, activeTop]);
+
+  const handleSaveToCloud = async () => {
+    setIsSavingCloud(true);
+    try {
+      const uid = user?.uid || 'guest';
+      const roomId = getCanonicalRoomId(uid);
+      await setDoc(doc(db, 'skleyka_meta', roomId), {
+        allTopsData: tops,
+        activeTopId: activeTop.id,
+        updatedAt: new Date().toISOString()
+      });
+      setHasUnsavedChanges(false);
+      setDeleteNotice('✓ Сохранено в облако!');
+    } catch (e) {
+      console.error('Cloud save error:', e);
+      setError('Ошибка сохранения');
+    } finally {
+      setIsSavingCloud(false);
+      setTimeout(() => setDeleteNotice(null), 3000);
+    }
+  };
+
+  // Fetch Folders & Stages
+  useEffect(() => {
+    const uid = user?.uid || 'guest';
+    const roomId = getCanonicalRoomId(uid);
+    
+    const fetchFoldersAndStages = async () => {
+      try {
+        const fq = query(collection(db, 'stitcherFolders'), where('userId', '==', roomId));
+        const fSnap = await getDocs(fq);
+        const fetchedFolders = fSnap.docs.map(d => ({ id: d.id, ...d.data() } as StitcherFolder));
+        setFolders(fetchedFolders);
+
+        const sq = query(collection(db, 'stitcherStages'), where('userId', '==', roomId));
+        const sSnap = await getDocs(sq);
+        const fetchedStages = sSnap.docs.map(d => ({ id: d.id, ...d.data() } as StitcherStage));
+        setStages(fetchedStages);
+      } catch (e) {
+        console.warn('Error fetching folders/stages:', e);
+      }
+    };
+
+    fetchFoldersAndStages();
+  }, [user]);
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    const uid = user?.uid || 'guest';
+    const roomId = getCanonicalRoomId(uid);
+    const folder: Partial<StitcherFolder> = {
+      name: newFolderName.trim(),
+      userId: roomId,
+      createdAt: Date.now(),
+      priority: newFolderPriority,
+      isExcluded: newFolderExcluded
+    };
+    try {
+      const res = await addDoc(collection(db, 'stitcherFolders'), folder);
+      setFolders(prev => [...prev, { id: res.id, ...folder } as StitcherFolder]);
+      setNewFolderName('');
+      setNewFolderPriority(2);
+      setNewFolderExcluded(false);
+      setIsCreatingFolder(false);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleCreateStage = async () => {
+    if (!newStageName.trim() || !activeTop.id) return;
+    const uid = user?.uid || 'guest';
+    const roomId = getCanonicalRoomId(uid);
+    const stage: Partial<StitcherStage> = {
+      name: newStageName.trim(),
+      topId: activeTop.id,
+      userId: roomId,
+      createdAt: Date.now(),
+      priority: newStagePriority,
+      isExcluded: newStageExcluded
+    };
+    try {
+      const res = await addDoc(collection(db, 'stitcherStages'), stage);
+      setStages(prev => [...prev, { id: res.id, ...stage } as StitcherStage]);
+      setNewStageName('');
+      setNewStagePriority(2);
+      setNewStageExcluded(false);
+      setIsCreatingStage(false);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleMoveTopToFolder = (topId: string, folderId: string | null) => {
+    const updatedTops = tops.map(t => t.id === topId ? { ...t, folderId: folderId || undefined } : t);
+    setTops(updatedTops);
+    setMovingTopId(null);
+  };
+
+  const handleMoveMatchToStage = (matchId: string, stageId: string | null) => {
+    updateActiveTop(prev => ({
+      ...prev,
+      matches: prev.matches.map(m => m.id === matchId ? { ...m, stageId: stageId || undefined } : m)
+    }));
+    setMovingMatchToStageId(null);
+  };
+
+  const handleSetMatchPriority = (matchId: string, priority: number) => {
+    updateActiveTop(prev => ({
+      ...prev,
+      matches: prev.matches.map(m => m.id === matchId ? { ...m, priority } : m)
+    }));
+  };
 
   // Helper to update active top
   const updateActiveTop = (updater: (prev: StitcherTop) => StitcherTop) => {
@@ -320,7 +472,8 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
       discipline: newTopDiscipline,
       matches: [],
       top1: null,
-      description: 'Пользовательский турнир'
+      description: 'Пользовательский турнир',
+      folderId: selectedFolderId || undefined
     };
     const updated = [newTop, ...tops];
     setTops(updated);
@@ -620,7 +773,8 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
       score1: manualScore1,
       score2: manualScore2,
       players,
-      fileName: 'Ручной ввод'
+      fileName: 'Ручной ввод',
+      stageId: selectedStageId || undefined
     };
 
     updateActiveTop(prev => ({
@@ -644,12 +798,22 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
 
     for (const file of fileList) {
       try {
+        console.log(`[OCR] Processing file: ${file.name} (${file.size} bytes)`);
+        
+        // 1. Compress image to max 1600px width (quality 0.8) before sending
+        // This solves payload issues in dev environment proxies
+        const compressedBlob = await compressImage(file, 1600, 0.82);
+        console.log(`[OCR] Compressed: ${compressedBlob.size} bytes`);
+
         const formData = new FormData();
-        formData.append('media', file);
+        formData.append('media', compressedBlob, file.name.replace(/\.[^.]+$/, '.jpg'));
 
         const resp = await fetch('/api/gemini/extract-stats', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
         });
 
         let data;
@@ -658,7 +822,12 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
           data = await resp.json();
         } else {
           const text = await resp.text();
-          console.error("Non-JSON response:", text);
+          console.error("Non-JSON response from Gemini OCR:", text);
+          
+          if (text.includes('Cookie check') || text.includes('doctype html')) {
+            throw new Error(`Ошибка авторизации сессии (Cookie check). Попробуйте обновить страницу.`);
+          }
+          
           throw new Error(`Ошибка обработки изображения (${resp.status})`);
         }
 
@@ -669,7 +838,8 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
         newMatches.push({
           ...data,
           id: Math.random().toString(36).substr(2, 9),
-          fileName: file.name
+          fileName: file.name,
+          stageId: selectedStageId || undefined
         });
       } catch (err: any) {
         console.error(err);
@@ -710,7 +880,15 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
   const aggregatedStats = useMemo(() => {
     const statsMap = new Map<string, any>();
 
+    // Determine which stages are excluded from global view
+    const excludedStageIds = new Set(stages.filter(s => s.isExcluded && s.topId === activeTop.id).map(s => s.id));
+
     activeTop.matches.forEach(m => {
+      // If we are in "All Stages" view, exclude matches from excluded stages
+      if (!selectedStageId && m.stageId && excludedStageIds.has(m.stageId)) {
+        return;
+      }
+
       if (!m.players || !Array.isArray(m.players)) return;
       m.players.forEach(p => {
         if (!p || !p.nickname) return;
@@ -725,6 +903,7 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
             damage: 0,
             matchesCount: 0,
             ratingSum: 0,
+            highestMatchPriority: 1, // Track if they played in semis/finals
             history: []
           });
         }
@@ -736,6 +915,12 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
         curr.damage += (Number(p.damage) || 0);
         curr.matchesCount += 1;
         curr.ratingSum += (Number(p.rating) || 1.0);
+        
+        const matchPriority = m.priority || 1;
+        if (matchPriority > curr.highestMatchPriority) {
+          curr.highestMatchPriority = matchPriority;
+        }
+
         if (p.team && curr.team === 'Свободный агент') curr.team = p.team;
 
         curr.history.push({
@@ -745,22 +930,56 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
           kills: p.kills || 0,
           deaths: p.deaths || 0,
           assists: p.assists || 0,
-          rating: p.rating || 1.0
+          rating: p.rating || 1.0,
+          priority: matchPriority
         });
       });
     });
 
     const result = Array.from(statsMap.values())
-      .map(p => ({
-        ...p,
-        rating: p.ratingSum / Math.max(1, p.matchesCount),
-        kd: p.kills / Math.max(1, p.deaths),
-        adr: p.damage / Math.max(1, p.matchesCount * 18)
-      }))
-      .sort((a, b) => b.rating - a.rating || b.kd - a.kd || b.kills - a.kills);
+      .map(p => {
+        const rating = p.ratingSum / Math.max(1, p.matchesCount);
+        const kd = p.kills / Math.max(1, p.deaths);
+        const rounds = p.matchesCount * 18;
+        const kpr = p.kills / Math.max(1, rounds);
+        const apr = p.assists / Math.max(1, rounds);
+        const adr = p.damage / Math.max(1, rounds);
+        const impact = Math.max(0.5, 2.13 * kpr + 0.12 * apr - 0.41);
+
+        // Weighted Ranking logic
+        let weightedRating = rating;
+        
+        // 1. Boost for Finals (priority 3) and Semis (priority 2)
+        if (p.highestMatchPriority === 3) weightedRating += 0.04;
+        else if (p.highestMatchPriority === 2) weightedRating += 0.02;
+
+        // 2. Penalty for low game count if didn't reach high stages
+        if (p.matchesCount < 2 && p.highestMatchPriority < 2) {
+          weightedRating -= 0.08;
+        } else if (p.matchesCount >= 3) {
+          weightedRating += 0.01; // Loyalty/Experience bonus
+        }
+
+        // Competitive Balance Guard: Negative K/D cannot hold top-tier rating
+        if (kd < 0.85 && kpr < 0.55) {
+          weightedRating = Math.min(0.92, weightedRating);
+        } else if (kd < 0.92 && kpr < 0.60) {
+          weightedRating = Math.min(0.98, weightedRating);
+        }
+
+        return {
+          ...p,
+          rating,
+          weightedRating,
+          kd,
+          adr,
+          impact
+        };
+      })
+      .sort((a, b) => b.weightedRating - a.weightedRating || b.rating - a.rating || b.kd - a.kd);
 
     return result;
-  }, [activeTop.matches]);
+  }, [activeTop.matches, selectedStageId, stages, activeTop.id]);
 
   // Displayed players filtered by view mode & search
   const displayedPlayers = useMemo(() => {
@@ -804,18 +1023,57 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
 
   // Export JSON
   const handleExportJson = () => {
+    const folder = folders.find(f => f.id === activeTop.folderId);
+    
+    // Resolve matches with stage names and priority labels
+    const enrichedMatches = activeTop.matches.map(m => {
+      const stage = stages.find(s => s.id === m.stageId);
+      return {
+        ...m,
+        stageName: stage ? stage.name : 'Без стадии',
+        priorityLabel: m.priority === 3 ? 'FINAL' : m.priority === 2 ? 'SEMI-FINAL' : 'REGULAR'
+      };
+    });
+
+    const totalKills = aggregatedStats.reduce((sum, p) => sum + p.kills, 0);
+    const avgRating = aggregatedStats.length > 0 
+      ? aggregatedStats.reduce((sum, p) => sum + p.rating, 0) / aggregatedStats.length 
+      : 0;
+
     const data = {
-      tournamentName: activeTop.name,
-      topId: activeTop.id,
-      createdAt: activeTop.createdAt,
-      totalPlayers: aggregatedStats.length,
-      matchesCount: activeTop.matches.length,
-      top1Player: currentTop1Player?.nickname || null,
-      top1PlayerDetails: currentTop1Player,
-      allPlayers: aggregatedStats,
-      matches: activeTop.matches,
-      exportedAt: new Date().toISOString()
+      tournament: {
+        name: activeTop.name,
+        id: activeTop.id,
+        folder: folder ? folder.name : 'Без папки',
+        discipline: activeTop.discipline || 'all',
+        createdAt: new Date(activeTop.createdAt).toLocaleString(),
+      },
+      summary: {
+        totalMatches: activeTop.matches.length,
+        totalUniquePlayers: aggregatedStats.length,
+        totalKills: totalKills,
+        averageRating: Number(avgRating.toFixed(2)),
+        top1Player: currentTop1Player?.nickname || 'N/A'
+      },
+      leaderboard: displayedPlayers.map((p, idx) => ({
+        rank: idx + 1,
+        nickname: p.nickname,
+        team: p.team,
+        rating: Number(p.rating.toFixed(2)),
+        weightedRating: Number(p.weightedRating.toFixed(2)),
+        kd: Number(p.kd.toFixed(2)),
+        adr: Math.round(p.adr),
+        matchesPlayed: p.matchesCount,
+        totalKills: p.kills,
+        totalDeaths: p.deaths,
+        totalAssists: p.assists,
+        reachedHighStage: p.highestMatchPriority > 1
+      })),
+      matches: enrichedMatches,
+      exportedAt: new Date().toISOString(),
+      format: "MatchStitcher_v2_Export"
     };
+    
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -902,6 +1160,24 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
           </div>
 
           <div className="flex items-center flex-wrap gap-2.5">
+            {/* Save to Cloud Button */}
+            <button 
+              onClick={handleSaveToCloud}
+              disabled={isSavingCloud || !hasUnsavedChanges}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all shadow-lg ${
+                hasUnsavedChanges 
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20 animate-pulse' 
+                  : 'bg-white/5 text-white/20 border border-white/5 cursor-default'
+              }`}
+            >
+              {isSavingCloud ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Cloud className="w-4 h-4" />
+              )}
+              <span>{hasUnsavedChanges ? 'Сохранить изменения' : 'Сохранено'}</span>
+            </button>
+
             {/* Top Selector / Switcher */}
             <button 
               onClick={() => { setShowTopSelector(true); setSelectorTab('choose'); }}
@@ -992,43 +1268,127 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                 </div>
               )}
 
-              {activeTop.matches.map((m, idx) => (
-                <div key={m.id || idx} className="bg-white/5 border border-white/5 rounded-xl p-3 hover:border-white/10 transition-all flex flex-col justify-between group">
-                  <div className="flex justify-between items-start mb-1.5 gap-2">
-                    <div className="flex flex-col max-w-[170px]">
-                      <span className="text-[9px] text-white/40 font-mono truncate">{m.fileName || `Матч ${idx + 1}`}</span>
-                      <span className="text-xs font-bold text-white truncate">{m.team1Name} vs {m.team2Name}</span>
+              {activeTop.matches
+                .slice()
+                .reverse()
+                .filter(m => !selectedStageId || m.stageId === selectedStageId)
+                .map((m, idx) => {
+                  const stage = stages.find(s => s.id === m.stageId);
+                  return (
+                    <div key={m.id || idx} className="bg-white/5 border border-white/5 rounded-xl p-3 hover:border-white/10 transition-all flex flex-col justify-between group">
+                      <div className="flex justify-between items-start mb-1.5 gap-2">
+                        <div className="flex flex-col max-w-[140px]">
+                          <span className="text-[9px] text-white/40 font-mono truncate">{m.fileName || `Матч ${idx + 1}`}</span>
+                          <span className="text-xs font-bold text-white truncate">{m.team1Name} vs {m.team2Name}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Priority Selector (Gold/Silver/Blue dots) */}
+                          <div className="flex items-center gap-1 bg-black/20 p-1 rounded-lg mr-1">
+                            <button 
+                              onClick={() => handleSetMatchPriority(m.id, 1)}
+                              className={`w-3 h-3 rounded-full transition-all ${m.priority === 1 || !m.priority ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-blue-500/20 hover:bg-blue-500/40'}`}
+                              title="Обычный матч"
+                            />
+                            <button 
+                              onClick={() => handleSetMatchPriority(m.id, 2)}
+                              className={`w-3 h-3 rounded-full transition-all ${m.priority === 2 ? 'bg-slate-300 shadow-[0_0_8px_rgba(203,213,225,0.5)]' : 'bg-slate-300/20 hover:bg-slate-300/40'}`}
+                              title="Полуфинал (Серебро)"
+                            />
+                            <button 
+                              onClick={() => handleSetMatchPriority(m.id, 3)}
+                              className={`w-3 h-3 rounded-full transition-all ${m.priority === 3 ? 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]' : 'bg-yellow-400/20 hover:bg-yellow-400/40'}`}
+                              title="Финал (Золото)"
+                            />
+                          </div>
+
+                          <div className="relative">
+                            <button 
+                              onClick={() => setMovingMatchToStageId(movingMatchToStageId === m.id ? null : m.id)}
+                              className={`p-1.5 rounded-lg transition-all ${m.stageId ? 'text-blue-400 bg-blue-500/10' : 'text-white/20 hover:text-blue-400 hover:bg-white/5'}`}
+                              title="Назначить стадию (Группа, Плей-офф и т.д.)"
+                            >
+                              <Layers className="w-3.5 h-3.5" />
+                            </button>
+                            {movingMatchToStageId === m.id && (
+                              <div className="absolute right-0 top-full mt-1 w-44 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl z-50 p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                                <div className="px-2 py-1.5 text-[9px] font-black text-white/30 uppercase tracking-widest border-b border-white/5 mb-1">
+                                  Выберите стадию
+                                </div>
+                                <button 
+                                  onClick={() => handleMoveMatchToStage(m.id, null)}
+                                  className="w-full text-left px-2 py-2 text-[10px] font-bold text-white/60 hover:bg-white/5 rounded-lg flex items-center gap-2"
+                                >
+                                  <X className="w-3 h-3" /> Без стадии
+                                </button>
+                                {stages.filter(s => s.topId === activeTop.id).map(s => (
+                                  <button 
+                                    key={s.id}
+                                    onClick={() => handleMoveMatchToStage(m.id, s.id)}
+                                    className="w-full text-left px-2 py-2 text-[10px] font-bold text-white/60 hover:bg-white/5 rounded-lg flex items-center gap-2"
+                                  >
+                                    <div className="w-2 h-2 rounded-full bg-blue-500" /> {s.name}
+                                  </button>
+                                ))}
+                                {stages.filter(s => s.topId === activeTop.id).length === 0 && (
+                                  <div className="px-2 py-2 text-[9px] text-white/30 italic">
+                                    Сначала создайте стадии в правой панели
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <button 
+                            onClick={(e) => promptDeleteMatch(m, e)}
+                            className="p-1.5 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-all border border-red-500/10 hover:border-red-500/30"
+                            title="Удалить этот матч"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center bg-black/40 px-2.5 py-1.5 rounded-lg border border-white/5 mb-1.5">
+                        <span className="text-xs font-black text-white font-mono">{m.score1}:{m.score2}</span>
+                        <span className="text-[9px] text-white/30 font-bold uppercase tracking-widest">{m.players?.length || 0} игроков</span>
+                      </div>
+                      {stage && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="bg-blue-500/10 text-blue-400 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-blue-500/20">
+                            {stage.name}
+                          </span>
+                          {m.priority === 3 && (
+                            <span className="bg-yellow-500/20 text-yellow-500 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-yellow-500/30">
+                              ФИНАЛ
+                            </span>
+                          )}
+                          {m.priority === 2 && (
+                            <span className="bg-slate-300/20 text-slate-300 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-slate-300/30">
+                              ПОЛУФИНАЛ
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {!stage && (m.priority === 2 || m.priority === 3) && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {m.priority === 3 && (
+                            <span className="bg-yellow-500/20 text-yellow-500 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-yellow-500/30">
+                              ФИНАЛ
+                            </span>
+                          )}
+                          {m.priority === 2 && (
+                            <span className="bg-slate-300/20 text-slate-300 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-slate-300/30">
+                              ПОЛУФИНАЛ
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-xs font-black text-yellow-400 font-mono bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">
-                        {m.score1}:{m.score2}
-                      </span>
-                      {/* Trash can icon is always clearly clickable! */}
-                      <button 
-                        onClick={(e) => promptDeleteMatch(m, e)}
-                        className="p-1.5 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-all border border-red-500/10 hover:border-red-500/30"
-                        title="Удалить этот матч из базы данных и сайта"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-[9px] text-white/30 font-medium pt-1.5 border-t border-white/5">
-                    <span>Игроков: {m.players?.length || 0}</span>
-                    <button 
-                      onClick={() => promptDeleteMatch(m)} 
-                      className="text-red-400/80 hover:text-red-300 font-bold uppercase tracking-wider hover:underline"
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
             </div>
           </div>
 
           {/* Main Area: Top Stats, Top-1 Banner, Full Player Table */}
-          <div className="flex-1 flex flex-col bg-black/60 overflow-hidden">
+          <div className="flex-1 flex flex-col bg-black/60 overflow-hidden relative">
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
               {activeTop.matches.length > 0 ? (
                 <div className="space-y-6">
@@ -1092,74 +1452,80 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                   </div>
 
                   {/* Renderable Container for PNG Export */}
-                  <div ref={skleykaRef} className="border border-white/5 rounded-2xl bg-[#0a0a0f] p-6 shadow-2xl relative">
+                  <div ref={skleykaRef} className="border border-white/10 rounded-3xl bg-[#0a0a0f] p-8 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 opacity-50" />
+                    
+                    {/* Background decorations like in MatchDetails */}
+                    <div className="absolute top-0 left-0 w-96 h-96 bg-yellow-500/5 blur-[120px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2" />
+                    <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/5 blur-[120px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2" />
                     
                     {/* Header in Export View */}
-                    <div className="mb-6 text-center border-b border-white/5 pb-6">
-                      <span className="text-[10px] text-yellow-500 font-black uppercase tracking-[0.4em] block mb-1">
-                        ОБЪЕДИНЕННАЯ СТАТИСТИКА СКЛЕЙКИ
-                      </span>
-                      <h4 className="text-3xl font-black text-white uppercase tracking-[0.25em]">
+                    <div className="mb-10 text-center relative z-10">
+                      <div className="inline-block px-4 py-1.5 bg-yellow-500/10 border border-yellow-500/20 rounded-full mb-4">
+                        <span className="text-[10px] text-yellow-500 font-black uppercase tracking-[0.4em]">
+                          ОБЪЕДИНЕННАЯ СТАТИСТИКА СКЛЕЙКИ
+                        </span>
+                      </div>
+                      <h4 className="text-4xl font-black text-white uppercase tracking-[0.15em] drop-shadow-2xl">
                         {activeTop.name}
                       </h4>
-                      <p className="text-[10px] text-white/30 font-bold uppercase tracking-[0.3em] mt-1">
-                        Всего сыграно матчей: {activeTop.matches.length} • Уникальных игроков: {aggregatedStats.length}
+                      <div className="h-1 w-24 bg-yellow-500 mx-auto mt-4 rounded-full opacity-50" />
+                      <p className="text-[11px] text-white/30 font-bold uppercase tracking-[0.2em] mt-4">
+                        Всего сыграно матчей: <span className="text-white/60">{activeTop.matches.length}</span> • Уникальных игроков: <span className="text-white/60">{aggregatedStats.length}</span>
                       </p>
                     </div>
 
                     {/* Top-1 Tournament Showcase Banner */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12 relative z-10">
                       {/* Top-1 Hero Card */}
-                      <div className="md:col-span-1 bg-gradient-to-b from-yellow-500/15 via-white/[0.02] to-transparent border border-yellow-500/30 rounded-2xl p-6 flex flex-col items-center text-center relative overflow-hidden shadow-xl shadow-yellow-500/5">
-                        <div className="absolute top-3 left-3 bg-yellow-500 text-black text-[9px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider shadow">
+                      <div className="md:col-span-1 bg-gradient-to-b from-[#1a1a24] to-[#12121a] border border-white/10 rounded-3xl p-8 flex flex-col items-center text-center relative overflow-hidden shadow-2xl shadow-black/50">
+                        <div className="absolute top-4 left-4 bg-yellow-500 text-black text-[9px] font-black uppercase px-2.5 py-1 rounded-full tracking-wider shadow-lg">
                           🏆 ТОП-1 ТУРНИРА
                         </div>
-                        {activeTop.top1 && (
-                          <div className="absolute top-3 right-3 text-[9px] text-yellow-400/80 font-mono">
-                            (выбор пользователя)
-                          </div>
-                        )}
-                        <div className="relative mt-4">
-                          <PlayerAvatar playerName={currentTop1Player?.nickname || 'Top1'} sizeClassName="w-24 h-24 rounded-full ring-4 ring-yellow-500/60 p-1 bg-black shadow-2xl" />
-                          <div className="absolute -top-2 -right-2 bg-yellow-500 text-black p-1.5 rounded-full shadow-lg">
-                            <Trophy className="w-4 h-4 fill-black" />
+                        
+                        <div className="relative mt-6">
+                          <PlayerAvatar playerName={currentTop1Player?.nickname || 'Top1'} sizeClassName="w-28 h-28 rounded-full ring-4 ring-yellow-500/40 p-1.5 bg-black shadow-2xl" />
+                          <div className="absolute -top-1 -right-1 bg-yellow-500 text-black p-2 rounded-full shadow-lg border-2 border-black">
+                            <Trophy className="w-5 h-5 fill-black" />
                           </div>
                         </div>
-                        <h5 className="text-xl font-black text-white mt-4 uppercase tracking-widest">
+                        
+                        <h5 className="text-2xl font-black text-white mt-6 uppercase tracking-widest drop-shadow-md">
                           {currentTop1Player?.nickname || '—'}
                         </h5>
-                        <div className="flex items-center gap-2 mt-1 text-white/50 text-xs font-bold uppercase">
-                          <TeamLogo teamName={currentTop1Player?.team || ''} sizeClassName="w-4 h-4 opacity-70" />
+                        <div className="flex items-center gap-2 mt-2 text-white/40 text-xs font-bold uppercase tracking-wider">
+                          <TeamLogo teamName={currentTop1Player?.team || ''} sizeClassName="w-4 h-4 opacity-50" />
                           {currentTop1Player?.team || 'Свободный агент'}
                         </div>
-                        <div className="mt-4 pt-4 border-t border-white/5 w-full grid grid-cols-3 gap-2 text-center">
+                        
+                        <div className="mt-8 pt-6 border-t border-white/5 w-full grid grid-cols-3 gap-3 text-center">
                           <div>
-                            <span className="text-[9px] uppercase text-white/30 font-bold block">Rating</span>
-                            <span className="text-base font-black text-yellow-400 font-mono">{currentTop1Player?.rating.toFixed(2) || '0.00'}</span>
+                            <span className="text-[9px] uppercase text-white/20 font-black block mb-1">Rating</span>
+                            <span className="text-lg font-black text-yellow-500 font-mono">{currentTop1Player?.rating.toFixed(2) || '0.00'}</span>
                           </div>
                           <div>
-                            <span className="text-[9px] uppercase text-white/30 font-bold block">K/D</span>
-                            <span className={`text-base font-black font-mono ${getKdColorClass(currentTop1Player?.kd || 1)}`}>{currentTop1Player?.kd.toFixed(2) || '0.00'}</span>
+                            <span className="text-[9px] uppercase text-white/20 font-black block mb-1">K/D</span>
+                            <span className={`text-lg font-black font-mono ${getKdColorClass(currentTop1Player?.kd || 1)}`}>{currentTop1Player?.kd.toFixed(2) || '0.00'}</span>
                           </div>
                           <div>
-                            <span className="text-[9px] uppercase text-white/30 font-bold block">Киллов</span>
-                            <span className="text-base font-black text-white font-mono">{currentTop1Player?.kills || 0}</span>
+                            <span className="text-[9px] uppercase text-white/20 font-black block mb-1">Киллов</span>
+                            <span className="text-lg font-black text-white font-mono">{currentTop1Player?.kills || 0}</span>
                           </div>
                         </div>
                         
                         {/* Selector for custom Top 1 */}
-                        <div className="mt-4 w-full">
-                          <label className="text-[9px] font-black text-white/30 uppercase tracking-wider block mb-1">
-                            Назначить Топ-1 вручную:
+                        <div className="mt-8 w-full">
+                          <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">
+                            Сменить лидера вручную:
                           </label>
                           <select 
                             value={activeTop.top1 || currentTop1Player?.nickname || ''}
                             onChange={e => handleSelectTop1(e.target.value)}
-                            className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white outline-none focus:border-yellow-500/50"
+                            className="w-full bg-black/60 border border-white/5 rounded-xl px-3 py-2 text-[10px] font-bold text-white outline-none focus:border-yellow-500/40 transition-all cursor-pointer"
                           >
                             {aggregatedStats.map(p => (
                               <option key={p.nickname} value={p.nickname}>
-                                {p.nickname} ({p.team}) — {p.rating.toFixed(2)}
+                                {p.nickname} ({p.team})
                               </option>
                             ))}
                           </select>
@@ -1167,110 +1533,109 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                       </div>
 
                       {/* Stat Tiles */}
-                      <div className="md:col-span-2 grid grid-cols-2 gap-4">
-                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 flex flex-col justify-center items-center">
-                          <span className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-1">Всего Убийств</span>
-                          <span className="text-3xl font-black text-white font-mono">{aggregatedStats.reduce((sum, p) => sum + p.kills, 0)}</span>
-                          <span className="text-[9px] text-white/20 mt-1 uppercase font-bold">по всем матчам</span>
+                      <div className="md:col-span-2 grid grid-cols-2 gap-6">
+                        <div className="bg-[#12121a] border border-white/5 rounded-3xl p-6 flex flex-col justify-center items-center shadow-xl hover:border-white/10 transition-colors group">
+                          <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-2 group-hover:text-white/40 transition-colors">Всего Убийств</span>
+                          <span className="text-4xl font-black text-white font-mono drop-shadow-lg">{aggregatedStats.reduce((sum, p) => sum + p.kills, 0)}</span>
+                          <div className="h-0.5 w-8 bg-yellow-500/30 mt-3 rounded-full" />
                         </div>
-                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 flex flex-col justify-center items-center">
-                          <span className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-1">Матчей В Склейке</span>
-                          <span className="text-3xl font-black text-blue-400 font-mono">{activeTop.matches.length}</span>
-                          <span className="text-[9px] text-white/20 mt-1 uppercase font-bold">обработано ИИ / вручную</span>
+                        <div className="bg-[#12121a] border border-white/5 rounded-3xl p-6 flex flex-col justify-center items-center shadow-xl hover:border-white/10 transition-colors group">
+                          <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-2 group-hover:text-white/40 transition-colors">Матчей В Склейке</span>
+                          <span className="text-4xl font-black text-blue-400 font-mono drop-shadow-lg">{activeTop.matches.length}</span>
+                          <div className="h-0.5 w-8 bg-blue-500/30 mt-3 rounded-full" />
                         </div>
-                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 flex flex-col justify-center items-center">
-                          <span className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-1">Средний Рейтинг</span>
-                          <span className="text-3xl font-black text-yellow-500 font-mono">
+                        <div className="bg-[#12121a] border border-white/5 rounded-3xl p-6 flex flex-col justify-center items-center shadow-xl hover:border-white/10 transition-colors group">
+                          <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-2 group-hover:text-white/40 transition-colors">Средний Рейтинг</span>
+                          <span className="text-4xl font-black text-yellow-500 font-mono drop-shadow-lg">
                             {(aggregatedStats.reduce((sum, p) => sum + p.rating, 0) / Math.max(1, aggregatedStats.length)).toFixed(2)}
                           </span>
-                          <span className="text-[9px] text-white/20 mt-1 uppercase font-bold">по всем игрокам</span>
+                          <div className="h-0.5 w-8 bg-yellow-500/30 mt-3 rounded-full" />
                         </div>
-                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 flex flex-col justify-center items-center">
-                          <span className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-1">Всего Игроков</span>
-                          <span className="text-3xl font-black text-emerald-400 font-mono">{aggregatedStats.length}</span>
-                          <span className="text-[9px] text-white/20 mt-1 uppercase font-bold">без ограничений (все)</span>
+                        <div className="bg-[#12121a] border border-white/5 rounded-3xl p-6 flex flex-col justify-center items-center shadow-xl hover:border-white/10 transition-colors group">
+                          <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-2 group-hover:text-white/40 transition-colors">Всего Игроков</span>
+                          <span className="text-4xl font-black text-emerald-400 font-mono drop-shadow-lg">{aggregatedStats.length}</span>
+                          <div className="h-0.5 w-8 bg-emerald-500/30 mt-3 rounded-full" />
                         </div>
                       </div>
                     </div>
 
                     {/* Table of ALL players */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
+                    <div className="overflow-x-auto relative z-10 bg-[#12121a]/50 border border-white/5 rounded-3xl p-4">
+                      <table className="w-full text-left border-separate border-spacing-y-1.5">
                         <thead>
-                          <tr className="bg-white/5 text-[10px] font-black text-white/40 uppercase tracking-widest">
-                            <th className="px-3 py-3 text-center">#</th>
-                            <th className="px-4 py-3">Игрок</th>
-                            <th className="px-3 py-3">Команда</th>
-                            <th className="px-3 py-3 text-center">Матчей</th>
-                            <th className="px-3 py-3 text-center">K/D</th>
-                            <th className="px-3 py-3 text-center">K - D</th>
-                            <th className="px-3 py-3 text-center">ADR</th>
-                            <th className="px-3 py-3 text-center text-yellow-500/90">Rating</th>
-                            <th className="px-3 py-3 text-center">Топ-1</th>
+                          <tr className="text-white/30 uppercase tracking-wider text-[10px] border-b border-white/5">
+                            <th className="px-4 py-3 text-center font-medium">#</th>
+                            <th className="px-4 py-3 font-medium">Игрок</th>
+                            <th className="px-4 py-3 font-medium">Команда</th>
+                            <th className="px-4 py-3 text-center font-medium">Матчей</th>
+                            <th className="px-4 py-3 text-center font-medium">K-A-D</th>
+                            <th className="px-4 py-3 text-center font-medium">+/-</th>
+                            <th className="px-4 py-3 text-center font-medium" title="Average Damage per Round">ADR</th>
+                            <th className="px-4 py-3 text-center font-medium" title="Impact Rating">Impact</th>
+                            <th className="px-4 py-3 text-center font-medium">K/D</th>
+                            <th className="px-4 py-3 text-right font-medium">Rating</th>
+                            <th className="px-4 py-3 text-center font-medium">Топ-1</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/5">
+                        <tbody>
                           {displayedPlayers.map((p, idx) => {
                             const isChosenTop1 = (activeTop.top1 ? activeTop.top1.toLowerCase() === p.nickname.toLowerCase() : idx === 0);
                             return (
                               <tr 
                                 key={p.nickname + idx} 
-                                className={`transition-colors group hover:bg-white/5 ${
-                                  isChosenTop1 ? 'bg-yellow-500/10 border-l-4 border-l-yellow-500' : ''
+                                className={`transition-all duration-200 group hover:scale-[1.005] ${
+                                  isChosenTop1 ? 'bg-yellow-500/10 shadow-[0_0_20px_rgba(234,179,8,0.05)]' : 'bg-white/[0.02] hover:bg-white/5'
                                 }`}
                               >
-                                <td className="px-3 py-3 text-center font-black text-xs font-mono">
-                                  {isChosenTop1 ? (
-                                    <span className="text-yellow-400">👑 1</span>
-                                  ) : idx === 0 ? (
-                                    <span className="text-yellow-500">🥇 1</span>
-                                  ) : idx === 1 ? (
-                                    <span className="text-slate-300">🥈 2</span>
-                                  ) : idx === 2 ? (
-                                    <span className="text-amber-600">🥉 3</span>
-                                  ) : (
-                                    <span className="text-white/30">{idx + 1}</span>
-                                  )}
+                                <td className="px-4 py-4 text-center first:rounded-l-2xl">
+                                  <span className={`font-bold text-xs font-mono ${isChosenTop1 ? 'text-yellow-400' : 'text-white/20'}`}>
+                                    {isChosenTop1 ? '👑 1' : idx + 1}
+                                  </span>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-4">
                                   <div 
-                                    className="flex items-center gap-2.5 cursor-pointer" 
+                                    className="flex items-center gap-3 cursor-pointer" 
                                     onClick={() => setSelectedProfilePlayer(p.nickname)}
                                   >
-                                    <PlayerAvatar playerName={p.nickname} sizeClassName="w-8 h-8 rounded-lg" />
+                                    <PlayerAvatar playerName={p.nickname} sizeClassName="w-9 h-9 rounded-xl shadow-lg border border-white/5" />
                                     <div className="flex flex-col">
-                                      <span className="text-sm font-bold text-white group-hover:text-yellow-400 transition-colors">
+                                      <span className="text-sm font-bold text-white/90 group-hover:text-yellow-400 transition-colors uppercase tracking-wider">
                                         {p.nickname}
                                       </span>
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-3 py-3">
-                                  <div className="flex items-center gap-1.5 text-xs text-white/60 font-semibold">
-                                    <TeamLogo teamName={p.team} sizeClassName="w-4 h-4 opacity-60" />
+                                <td className="px-4 py-4">
+                                  <div className="flex items-center gap-2 text-xs text-white/40 font-bold uppercase tracking-tight">
+                                    <TeamLogo teamName={p.team} sizeClassName="w-4 h-4 opacity-40 group-hover:opacity-100 transition-opacity" />
                                     <span className="truncate max-w-[120px]">{p.team}</span>
                                   </div>
                                 </td>
-                                <td className="px-3 py-3 text-center text-xs font-mono text-white/60">{p.matchesCount}</td>
-                                <td className={`px-3 py-3 text-center text-xs font-mono font-bold ${getKdColorClass(p.kd)}`}>
+                                <td className="px-4 py-4 text-center text-xs font-mono text-white/40">{p.matchesCount}</td>
+                                <td className="px-4 py-4 text-center text-white/70 font-mono text-xs">
+                                  {p.kills}-{p.assists}-{p.deaths}
+                                </td>
+                                <td className={`px-4 py-4 text-center font-mono text-xs ${p.kills - p.deaths > 0 ? 'text-green-400' : p.kills - p.deaths < 0 ? 'text-red-400' : 'text-white/50'}`}>
+                                  {p.kills - p.deaths > 0 ? `+${p.kills - p.deaths}` : p.kills - p.deaths}
+                                </td>
+                                <td className="px-4 py-4 text-center text-white/50 font-mono text-xs">{Math.round(p.adr)}</td>
+                                <td className="px-4 py-4 text-center text-white/50 font-mono text-xs">{p.impact.toFixed(2)}</td>
+                                <td className={`px-4 py-4 text-center font-mono text-xs ${getKdColorClass(p.kd)}`}>
                                   {p.kd.toFixed(2)}
                                 </td>
-                                <td className="px-3 py-3 text-center text-xs font-mono text-white/70">
-                                  {p.kills} - {p.deaths}
+                                <td className="px-4 py-4 text-right last:rounded-r-2xl">
+                                  <span className="text-sm font-bold text-yellow-500/80 font-mono">
+                                    {p.rating.toFixed(2)}
+                                  </span>
                                 </td>
-                                <td className="px-3 py-3 text-center text-xs font-mono text-white/50">{Math.round(p.adr)}</td>
-                                <td className="px-3 py-3 text-center text-sm font-black font-mono text-yellow-400">
-                                  {p.rating.toFixed(2)}
-                                </td>
-                                <td className="px-3 py-3 text-center">
+                                <td className="px-4 py-4 text-center">
                                   <button 
                                     onClick={() => handleSelectTop1(p.nickname)}
-                                    className={`p-1.5 rounded-lg border transition-all ${
+                                    className={`p-2 rounded-xl border transition-all ${
                                       isChosenTop1
-                                        ? 'bg-yellow-500 text-black border-yellow-500 shadow-md' 
-                                        : 'bg-white/5 text-white/20 border-white/5 hover:text-yellow-400 hover:border-yellow-500/30'
+                                        ? 'bg-yellow-500 text-black border-yellow-500 shadow-xl' 
+                                        : 'bg-white/5 text-white/10 border-white/5 hover:text-yellow-400 hover:border-yellow-500/30'
                                     }`}
-                                    title={isChosenTop1 ? "Выбран как Топ-1 этого турнира" : "Назначить Топ-1 турнира"}
                                   >
                                     <Trophy className="w-3.5 h-3.5" />
                                   </button>
@@ -1311,6 +1676,131 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                       </button>
                     </div>
                   </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT SIDEBAR: STAGES (User specifically asked for this) */}
+          <div className="w-64 border-l border-white/5 bg-[#0a0a0f] flex flex-col shrink-0">
+            <div className="p-4 border-b border-white/5 bg-[#12121a] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-400" />
+                <span className="text-[11px] font-black text-white/60 uppercase tracking-widest">Стадии (Папки)</span>
+              </div>
+              <button 
+                onClick={() => setIsCreatingStage(true)}
+                className="p-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 rounded-lg transition-all border border-blue-500/20"
+                title="Добавить новую стадию (папку для матчей)"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
+              {isCreatingStage && (
+                <div className="bg-blue-600/10 border border-blue-500/30 p-3 rounded-xl mb-3 space-y-2.5 animate-in slide-in-from-top-2 duration-200 shadow-xl">
+                  <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Новая стадия</div>
+                  <input 
+                    autoFocus
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 text-[11px] font-bold text-white outline-none focus:border-blue-500/50"
+                    value={newStageName}
+                    onChange={e => setNewStageName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreateStage()}
+                    placeholder="Например: Плей-офф..."
+                  />
+                  
+                  <div className="space-y-1">
+                    <div className="text-[9px] font-black text-white/30 uppercase tracking-widest">Важность стадии</div>
+                    <div className="flex gap-1.5">
+                      {[1, 2, 3].map(p => (
+                        <button
+                          key={p}
+                          onClick={() => setNewStagePriority(p)}
+                          className={`flex-1 py-1 rounded text-[9px] font-black border transition-all ${newStagePriority === p ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-transparent text-white/30 hover:bg-white/10'}`}
+                        >
+                          {p === 1 ? 'LOW' : p === 2 ? 'MID' : 'HIGH'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => setNewStageExcluded(!newStageExcluded)}
+                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg border transition-all ${newStageExcluded ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'}`}
+                  >
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Исключить из общего топа</span>
+                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${newStageExcluded ? 'bg-red-500 border-red-500 text-black' : 'border-white/20'}`}>
+                      {newStageExcluded && <X className="w-2.5 h-2.5 stroke-[4]" />}
+                    </div>
+                  </button>
+
+                  <div className="flex gap-2 pt-1">
+                    <button 
+                      onClick={handleCreateStage}
+                      className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase py-2 rounded-lg transition-all"
+                    >
+                      Создать
+                    </button>
+                    <button 
+                      onClick={() => setIsCreatingStage(false)}
+                      className="px-3 bg-white/10 hover:bg-white/20 text-white text-[10px] font-black uppercase rounded-lg transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <button 
+                  onClick={() => setSelectedStageId(null)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all border ${
+                    !selectedStageId 
+                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 shadow-lg shadow-blue-500/5' 
+                      : 'border-transparent text-white/40 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                  <span>Все матчи</span>
+                  <span className="ml-auto bg-white/5 px-2 py-0.5 rounded text-[9px] font-mono">{activeTop.matches.length}</span>
+                </button>
+
+                {stages.filter(s => s.topId === activeTop.id).map(stage => {
+                  const count = activeTop.matches.filter(m => m.stageId === stage.id).length;
+                  return (
+                    <button 
+                      key={stage.id}
+                      onClick={() => setSelectedStageId(stage.id)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all border group ${
+                        selectedStageId === stage.id 
+                          ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 shadow-lg shadow-blue-500/5' 
+                          : 'border-transparent text-white/40 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${selectedStageId === stage.id ? 'bg-blue-400 animate-pulse' : 'bg-blue-500/30'}`} />
+                      <span className={`truncate ${stage.isExcluded ? 'line-through opacity-50' : ''}`}>{stage.name}</span>
+                      {stage.isExcluded && (
+                        <span title="Исключено из общего топа">
+                          <X className="w-2.5 h-2.5 text-red-500/50 ml-1" />
+                        </span>
+                      )}
+                      {stage.priority === 3 && <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 shadow-[0_0_5px_rgba(250,204,21,0.5)] ml-1" />}
+                      {stage.priority === 1 && <div className="w-1.5 h-1.5 rounded-full bg-white/20 ml-1" />}
+                      <span className="ml-auto bg-white/5 px-2 py-0.5 rounded text-[9px] font-mono group-hover:bg-white/10 transition-colors">
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {stages.filter(s => s.topId === activeTop.id).length === 0 && !isCreatingStage && (
+                <div className="mt-8 text-center px-4 py-8 border border-dashed border-white/5 rounded-2xl">
+                  <Layers className="w-8 h-8 text-white/5 mx-auto mb-3" />
+                  <p className="text-[10px] text-white/20 font-bold uppercase leading-relaxed tracking-wider">
+                    Разделите матчи на стадии (Группы, Квалы, Плей-офф).<br/>Нажмите +, чтобы добавить первую стадию.
+                  </p>
                 </div>
               )}
             </div>
@@ -1438,98 +1928,208 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-6">
-                    {/* User Saved Tops */}
-                    <div>
-                      <h4 className="text-[11px] font-black text-white/40 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                        <FolderOpen className="w-3.5 h-3.5" />
-                        Ваши созданные и сохранённые топы
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {tops.map(t => {
-                          const isActive = t.id === activeTop.id;
-                          return (
-                            <div 
-                              key={t.id}
-                              onClick={() => handleSelectTop(t.id)}
-                              className={`p-4 rounded-xl border transition-all cursor-pointer group relative flex flex-col justify-between ${
-                                isActive 
-                                  ? 'bg-yellow-500/10 border-yellow-500/50 shadow-lg shadow-yellow-500/5' 
-                                  : 'bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10'
-                              }`}
-                            >
-                              <div>
-                                <div className="flex justify-between items-start mb-1">
-                                  <h5 className="font-bold text-white group-hover:text-yellow-400 transition-colors text-sm">
-                                    {t.name}
-                                  </h5>
-                                  {isActive && (
-                                    <span className="bg-yellow-500 text-black text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
-                                      Активный
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[10px] text-white/40 mb-3">
-                                  {t.description || 'Пользовательский топ'}
-                                </p>
-                              </div>
-
-                              <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[10px] font-mono text-white/50">
-                                <span>Матчей: <strong className="text-white">{t.matches.length}</strong></span>
-                                {t.top1 && <span>Топ-1: <strong className="text-yellow-400">{t.top1}</strong></span>}
-                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                  <button
-                                    onClick={e => handleDuplicateTop(t, e)}
-                                    className="p-1.5 text-white/30 hover:text-white rounded hover:bg-white/5 cursor-pointer"
-                                    title="Дублировать топ"
-                                  >
-                                    <Copy className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button 
-                                    onClick={e => promptDeleteTop(t, e)}
-                                    className="p-1.5 text-red-400/60 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-colors border border-red-500/10 hover:border-red-500/30 cursor-pointer"
-                                    title="Удалить топ из базы данных и сайта"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                  <div className="flex gap-6 h-full">
+                    {/* Folder Sidebar for Tops */}
+                    <div className="w-48 shrink-0 flex flex-col gap-3 border-r border-white/5 pr-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">Папки</span>
+                        <button 
+                          onClick={() => setIsCreatingFolder(true)}
+                          className="p-1 hover:text-yellow-400 transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
                       </div>
+
+                      {isCreatingFolder && (
+                        <div className="bg-black/60 p-2.5 rounded-xl border border-yellow-500/30 space-y-2 mb-2">
+                          <input 
+                            autoFocus
+                            className="bg-black/40 border border-white/10 outline-none text-[11px] font-bold text-white w-full px-2 py-1.5 rounded-lg"
+                            value={newFolderName}
+                            onChange={e => setNewFolderName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
+                            placeholder="Имя папки..."
+                          />
+                          
+                          <div className="space-y-1">
+                            <div className="text-[8px] font-black text-white/30 uppercase tracking-widest">Важность</div>
+                            <div className="flex gap-1">
+                              {[1, 2, 3].map(p => (
+                                <button
+                                  key={p}
+                                  onClick={() => setNewFolderPriority(p)}
+                                  className={`flex-1 py-1 rounded text-[8px] font-black border transition-all ${newFolderPriority === p ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-500' : 'bg-white/5 border-transparent text-white/30 hover:bg-white/10'}`}
+                                >
+                                  {p === 1 ? 'LOW' : p === 2 ? 'MID' : 'HIGH'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <button 
+                            onClick={() => setNewFolderExcluded(!newFolderExcluded)}
+                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg border transition-all ${newFolderExcluded ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'}`}
+                          >
+                            <span className="text-[9px] font-bold uppercase tracking-wider">Скрыть из общего</span>
+                            <div className={`w-3 h-3 rounded border flex items-center justify-center transition-all ${newFolderExcluded ? 'bg-red-500 border-red-500 text-black' : 'border-white/20'}`}>
+                              {newFolderExcluded && <X className="w-2 h-2 stroke-[4]" />}
+                            </div>
+                          </button>
+
+                          <div className="flex gap-1.5 pt-1">
+                            <button onClick={handleCreateFolder} className="flex-1 bg-yellow-500 text-black text-[9px] font-black uppercase py-1.5 rounded-lg">Создать</button>
+                            <button onClick={() => setIsCreatingFolder(false)} className="px-2 bg-white/10 text-white rounded-lg"><X className="w-3 h-3" /></button>
+                          </div>
+                        </div>
+                      )}
+
+                      <button 
+                        onClick={() => setSelectedFolderId(null)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${!selectedFolderId ? 'bg-yellow-500/20 text-yellow-500' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        <span>Все топы</span>
+                      </button>
+
+                      {folders.map(folder => (
+                        <button 
+                          key={folder.id}
+                          onClick={() => setSelectedFolderId(folder.id)}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${selectedFolderId === folder.id ? 'bg-yellow-500/20 text-yellow-500' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                        >
+                          <FolderOpen className="w-3.5 h-3.5" />
+                          <span className={`truncate ${folder.isExcluded ? 'line-through opacity-50' : ''}`}>{folder.name}</span>
+                          {folder.isExcluded && <X className="w-2.5 h-2.5 text-red-500/50 ml-auto mr-1" />}
+                          {folder.priority === 3 && <div className="w-1 h-1 rounded-full bg-yellow-400 ml-auto mr-1" />}
+                          {folder.priority === 1 && <div className="w-1 h-1 rounded-full bg-white/20 ml-auto mr-1" />}
+                        </button>
+                      ))}
                     </div>
 
-                    {/* App Tournaments section */}
-                    {appTournaments.length > 0 && (
+                    <div className="flex-1 space-y-6">
+                      {/* User Saved Tops */}
                       <div>
                         <h4 className="text-[11px] font-black text-white/40 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                          <Trophy className="w-3.5 h-3.5 text-yellow-400" />
-                          Импортировать из турниров приложения ({appTournaments.length})
+                          <Trophy className="w-3.5 h-3.5" />
+                          {selectedFolderId ? folders.find(f => f.id === selectedFolderId)?.name : 'Ваши топы'}
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {appTournaments.map((t: any) => (
-                            <div 
-                              key={t.id}
-                              onClick={() => handleImportAppTournament(t)}
-                              className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-yellow-500/30 transition-all cursor-pointer flex items-center justify-between group"
-                            >
-                              <div>
-                                <h5 className="font-bold text-white text-xs group-hover:text-yellow-400 transition-colors">
-                                  {t.name || 'Турнир'}
-                                </h5>
-                                <span className="text-[10px] text-white/40">
-                                  Формат: {t.format || 'Double Elim'} • Команд: {t.teams?.length || 0}
-                                </span>
+                          {tops.filter(t => !selectedFolderId || t.folderId === selectedFolderId).map(t => {
+                            const isActive = t.id === activeTop.id;
+                            return (
+                              <div 
+                                key={t.id}
+                                onClick={() => handleSelectTop(t.id)}
+                                className={`p-4 rounded-xl border transition-all cursor-pointer group relative flex flex-col justify-between ${
+                                  isActive 
+                                    ? 'bg-yellow-500/10 border-yellow-500/50 shadow-lg shadow-yellow-500/5' 
+                                    : 'bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex justify-between items-start mb-1">
+                                    <h5 className="font-bold text-white group-hover:text-yellow-400 transition-colors text-sm">
+                                      {t.name}
+                                    </h5>
+                                    <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                                      {isActive && (
+                                        <span className="bg-yellow-500 text-black text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
+                                          Активный
+                                        </span>
+                                      )}
+                                      <div className="relative">
+                                        <button 
+                                          onClick={() => setMovingTopId(movingTopId === t.id ? null : t.id)}
+                                          className="p-1 text-white/20 hover:text-yellow-400 transition-colors"
+                                          title="Переместить в папку"
+                                        >
+                                          <FolderPlus className="w-3.5 h-3.5" />
+                                        </button>
+                                        {movingTopId === t.id && (
+                                          <div className="absolute right-0 top-full mt-1 w-40 bg-[#1a1a24] border border-white/10 rounded-lg shadow-2xl z-50 p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                                            <button 
+                                              onClick={() => handleMoveTopToFolder(t.id, null)}
+                                              className="w-full text-left px-2 py-1.5 text-[10px] font-bold text-white/60 hover:bg-white/5 rounded flex items-center gap-2"
+                                            >
+                                              <X className="w-3 h-3" /> Без папки
+                                            </button>
+                                            {folders.map(f => (
+                                              <button 
+                                                key={f.id}
+                                                onClick={() => handleMoveTopToFolder(t.id, f.id)}
+                                                className="w-full text-left px-2 py-1.5 text-[10px] font-bold text-white/60 hover:bg-white/5 rounded flex items-center gap-2"
+                                              >
+                                                <FolderOpen className="w-3 h-3 text-yellow-500" /> {f.name}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <p className="text-[10px] text-white/40 mb-3">
+                                    {t.description || 'Пользовательский топ'}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[10px] font-mono text-white/50">
+                                  <span>Матчей: <strong className="text-white">{t.matches.length}</strong></span>
+                                  {t.top1 && <span>Топ-1: <strong className="text-yellow-400">{t.top1}</strong></span>}
+                                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                    <button
+                                      onClick={e => handleDuplicateTop(t, e)}
+                                      className="p-1.5 text-white/30 hover:text-white rounded hover:bg-white/5 cursor-pointer"
+                                      title="Дублировать топ"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button 
+                                      onClick={e => promptDeleteTop(t, e)}
+                                      className="p-1.5 text-red-400/60 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-colors border border-red-500/10 hover:border-red-500/30 cursor-pointer"
+                                      title="Удалить топ из базы данных и сайта"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
-                              <span className="text-[10px] font-black text-yellow-400 uppercase bg-yellow-500/10 px-2 py-1 rounded border border-yellow-500/20 group-hover:bg-yellow-500 group-hover:text-black transition-all">
-                                Импорт
-                              </span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
+
+                      {/* App Tournaments section */}
+                      {!selectedFolderId && appTournaments.length > 0 && (
+                        <div>
+                          <h4 className="text-[11px] font-black text-white/40 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                            <Trophy className="w-3.5 h-3.5 text-yellow-400" />
+                            Импортировать из турниров приложения ({appTournaments.length})
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {appTournaments.map((t: any) => (
+                              <div 
+                                key={t.id}
+                                onClick={() => handleImportAppTournament(t)}
+                                className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-yellow-500/30 transition-all cursor-pointer flex items-center justify-between group"
+                              >
+                                <div>
+                                  <h5 className="font-bold text-white text-xs group-hover:text-yellow-400 transition-colors">
+                                    {t.name || 'Турнир'}
+                                  </h5>
+                                  <span className="text-[10px] text-white/40">
+                                    Формат: {t.format || 'Double Elim'} • Команд: {t.teams?.length || 0}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] font-black text-yellow-400 uppercase bg-yellow-500/10 px-2 py-1 rounded border border-yellow-500/20 group-hover:bg-yellow-500 group-hover:text-black transition-all">
+                                  Импорт
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -24,6 +24,29 @@ export interface MatchResult {
   timestamp?: number;
   t1StartedAs?: string;
   t2StartedAs?: string;
+  folderId?: string;
+  stageId?: string; // New field for stage organization
+  priority?: number; // Importance level 1-3
+}
+
+export interface MatchFolder {
+  id: string;
+  name: string;
+  userId: string;
+  gameMode: string;
+  createdAt: number;
+  priority?: number; // 1 = Low, 2 = Medium, 3 = High
+  isExcluded?: boolean; // Exclude from global counts
+}
+
+export interface MatchStage {
+  id: string;
+  name: string;
+  folderId: string; // Belongs to a folder
+  userId: string;
+  createdAt: number;
+  priority?: number;
+  isExcluded?: boolean;
 }
 
 export interface PlayerStat {

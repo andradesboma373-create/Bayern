@@ -19,7 +19,8 @@ import {
   trackRoomRequest,
   syncRooms,
   deleteRoom,
-  deleteAllRooms
+  deleteAllRooms,
+  logAudit
 } from "./server/roomsManager";
 import { 
   recordFirestoreRead, 
@@ -1684,10 +1685,15 @@ Return ONLY a valid JSON object without backticks, with this exact schema:
   const textPart = { text: prompt };
 
   // Resilient multi-model fallback chain:
-  // 1. gemini-3.5-flash (fast, verified active)
-  // 2. gemini-3.1-flash-lite (fast lightweight fallback)
-  // 3. gemini-3.8-flash
-  const modelsToTry = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.8-flash"];
+  // We try basic flash models first, then specialized image/lite models, then finally Pro as ultimate fallback
+  const modelsToTry = [
+    "gemini-3.8-flash", 
+    "gemini-flash-latest", 
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-lite-image",
+    "gemini-3.1-flash-image",
+    "gemini-3.1-pro-preview"
+  ];
   let lastError: any = null;
 
   for (const modelName of modelsToTry) {
@@ -1741,20 +1747,33 @@ Return ONLY a valid JSON object without backticks, with this exact schema:
     } catch (err: any) {
       lastError = err;
       console.warn(`Extraction with ${modelName} failed, trying next model:`, err.message?.substring(0, 100));
+      
+      // If it's a 503 (high demand), wait a bit before trying the next model
+      if (err.message?.includes('503') || err.message?.includes('high demand')) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
     }
   }
 
   throw lastError || new Error("Не удалось обработать скриншот ни одной моделью ИИ");
 }
 
-app.post(["/api/gemini/extract-stats", "/api/extract-stats"], upload.single('media'), async (req, res) => {
+app.post(["/api/gemini/extract-stats", "/api/extract-stats"], (req, res, next) => {
+  console.log(`[API] Gemini extraction request received. Content-Type: ${req.headers['content-type']}, Length: ${req.headers['content-length']}`);
+  next();
+}, upload.single('media'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No image provided" });
+    if (!req.file) {
+      console.warn("[API] Extraction failed: No file provided in request.");
+      return res.status(400).json({ error: "No image provided" });
+    }
+    console.log(`[API] Processing image for extraction: ${req.file.originalname} (${req.file.size} bytes)`);
 
     const parsed = await extractMatchStatsFromBuffer(req.file.buffer, req.file.mimetype);
+    console.log(`[API] Successfully extracted stats for ${parsed.team1Name} vs ${parsed.team2Name}`);
     res.json(parsed);
   } catch (error: any) {
-    console.error("Extraction error:", error);
+    console.error("[API] Extraction error:", error);
     const errMsg = String(error?.message || error || '');
     if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('Quota exceeded')) {
       const retryMatch = errMsg.match(/retry in ([0-9.]+)s/i) || errMsg.match(/retryDelay":"([0-9]+)s/i);
@@ -1774,7 +1793,7 @@ app.post("/api/gemini/transcribe", upload.single('audio'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No audio provided" });
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-3.5-transcribe",
       contents: {
         parts: [
           { inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } },
@@ -1793,7 +1812,7 @@ app.post("/api/gemini/transcribe", upload.single('audio'), async (req, res) => {
 wss.on("connection", async (clientWs) => {
   try {
     const session = await ai.live.connect({
-      model: "gemini-3.1-flash-live-preview",
+      model: "gemini-3.8-live",
       callbacks: {
         onmessage: (message: LiveServerMessage) => {
           const audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
@@ -4489,6 +4508,27 @@ app.post("/api/settings/save", async (req, res) => {
   }
 });
 
+function isDeepEqual(obj1: any, obj2: any): boolean {
+  if (obj1 === obj2) return true;
+  if (!obj1 || !obj2 || typeof obj1 !== 'object' || typeof obj2 !== 'object') return false;
+  
+  const keys1 = Object.keys(obj1);
+  const keys2 = Object.keys(obj2);
+  if (keys1.length !== keys2.length) return false;
+  
+  for (const key of keys1) {
+    if (!Object.prototype.hasOwnProperty.call(obj2, key)) return false;
+    const v1 = obj1[key];
+    const v2 = obj2[key];
+    if (typeof v1 === 'object' && typeof v2 === 'object') {
+      if (!isDeepEqual(v1, v2)) return false;
+    } else if (v1 !== v2) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Sync client-side localStorage cache to the resilient fallback DB
 app.post("/api/sync-cache", async (req, res) => {
   try {
@@ -4499,14 +4539,14 @@ app.post("/api/sync-cache", async (req, res) => {
 
     const { canonicalId, aliases } = getRoomAliases(userId);
 
-    // Rate-limiting & Quota abuse tracking check
+    // Rate-limiting check with 'sync' action (does NOT record as DATA_WRITE in audit unless documents actually change)
     const tracking = trackRoomRequest(
       canonicalId, 
       'POST', 
       '/api/sync-cache', 
       req.ip || 'unknown', 
-      'write', 
-      `Синхронизация данных: ${teams?.length || 0} команд, ${players?.length || 0} игроков`
+      'sync', 
+      `Синхронизация кэша: ${teams?.length || 0} команд, ${players?.length || 0} игроков (в память сервера, 0 квоты Firestore)`
     );
     if (!tracking.isAllowed) {
       console.warn(`Blocked sync request from room ${canonicalId}: ${tracking.error}`);
@@ -4514,15 +4554,14 @@ app.post("/api/sync-cache", async (req, res) => {
     }
 
     console.log(`Received cache sync request for user: ${userId} -> canonical room: ${canonicalId}`);
-    recordFirestoreWrite(Math.max(1, (teams?.length || 0) + (players?.length || 0)), canonicalId, 'sync-cache');
+    let totalCloudWrites = 0;
 
-    // Helper to merge items into fallbackDb and Firestore to keep all databases up to date
+    // Helper to merge items into fallbackDb and ONLY write to Firestore if the item actually changed or is new
     const syncCollection = async (collectionName: string, incomingItems: any[], userField: string) => {
       if (!Array.isArray(incomingItems)) return;
       
-      loadedCollections.add(collectionName); // Mark as loaded since we are syncing it!
+      loadedCollections.add(collectionName);
       
-      // Add or update all incoming items in the server's fast local cache & Firestore
       for (const item of incomingItems) {
         if (!item) continue;
         const itemId = item.id || (item.chatId ? `${canonicalId}_${item.chatId}` : null);
@@ -4545,14 +4584,22 @@ app.post("/api/sync-cache", async (req, res) => {
           channelId: itemChannel, 
           userId: item.userId || itemChannel 
         };
+
+        const existing = fallbackDb.get(collectionName, itemId);
+        const hasChanged = !existing || !isDeepEqual(existing, enhancedItem);
+
+        // Always update fast in-memory server cache (0 quota cost)
         fallbackDb.set(collectionName, itemId, enhancedItem);
 
-        // Crucial: also save to Firestore so queries from client never revert to old rating!
-        try {
-          const itemForFirestore = sanitizeForFirestore(enhancedItem);
-          setDoc(doc(db, collectionName, itemId), itemForFirestore, { merge: true }).catch(() => {});
-        } catch (e) {
-          // ignore doc errors
+        // CRUCIAL: Only write to Google Cloud Firestore if the document actually changed or is brand new!
+        if (hasChanged) {
+          totalCloudWrites++;
+          try {
+            const itemForFirestore = sanitizeForFirestore(enhancedItem);
+            setDoc(doc(db, collectionName, itemId), itemForFirestore, { merge: true }).catch(() => {});
+          } catch (e) {
+            // ignore doc errors
+          }
         }
       }
     };
@@ -4560,14 +4607,21 @@ app.post("/api/sync-cache", async (req, res) => {
     // 1. Sync settings
     if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
       loadedCollections.add('settings');
-      console.log(`Sync settings for user: ${canonicalId}`);
-      fallbackDb.set('settings', canonicalId, { userId: canonicalId, ...settings });
+      const enhancedSettings = { userId: canonicalId, ...settings };
+      const existingSettings = fallbackDb.get('settings', canonicalId);
+      const settingsChanged = !existingSettings || !isDeepEqual(existingSettings, enhancedSettings);
+
+      fallbackDb.set('settings', canonicalId, enhancedSettings);
       for (const a of aliases) {
-        fallbackDb.set('settings', a, { userId: canonicalId, ...settings });
+        fallbackDb.set('settings', a, enhancedSettings);
       }
-      try {
-        setDoc(doc(db, 'settings', canonicalId), { userId: canonicalId, ...settings }, { merge: true }).catch(() => {});
-      } catch (e) {}
+
+      if (settingsChanged) {
+        totalCloudWrites++;
+        try {
+          setDoc(doc(db, 'settings', canonicalId), enhancedSettings, { merge: true }).catch(() => {});
+        } catch (e) {}
+      }
 
       // If the botToken has changed, restart the bot with the new token
       const token = settings.botToken?.trim();
@@ -4605,7 +4659,7 @@ app.post("/api/sync-cache", async (req, res) => {
       for (const item of currentItems) {
         if (item && item.id && !incomingIds.has(item.id)) {
           fallbackDb.delete('players', item.id);
-          // Also delete from Firestore to keep it in sync!
+          totalCloudWrites++;
           try {
             deleteDoc(doc(db, 'players', item.id)).catch(() => {});
           } catch (e) {}
@@ -4623,7 +4677,7 @@ app.post("/api/sync-cache", async (req, res) => {
       for (const item of currentItems) {
         if (item && item.id && !incomingIds.has(item.id)) {
           fallbackDb.delete('teams', item.id);
-          // Also delete from Firestore
+          totalCloudWrites++;
           try {
             deleteDoc(doc(db, 'teams', item.id)).catch(() => {});
           } catch (e) {}
@@ -4647,6 +4701,7 @@ app.post("/api/sync-cache", async (req, res) => {
           const mId = m.id || m._id;
           if (m && mId && !incomingIds.has(mId)) {
             fallbackDb.delete('matches', mId);
+            totalCloudWrites++;
             try {
               deleteDoc(doc(db, 'matches', mId)).catch(() => {});
             } catch (e) {}
@@ -4658,6 +4713,22 @@ app.post("/api/sync-cache", async (req, res) => {
     if (tgUsers) await syncCollection('tgUsers', tgUsers, 'botUserId');
     if (tgVetos) await syncCollection('tgVetos', tgVetos, 'userId');
     if (mapStats) await syncCollection('mapStats', mapStats, 'userId');
+
+    // Only record Firestore writes if documents actually changed!
+    if (totalCloudWrites > 0) {
+      recordFirestoreWrite(totalCloudWrites, canonicalId, 'sync-cache');
+      logAudit({
+        roomId: canonicalId,
+        username: canonicalId,
+        action: 'DATA_WRITE',
+        method: 'POST',
+        path: '/api/sync-cache',
+        ip: req.ip || 'unknown',
+        details: `Синхронизировано ${totalCloudWrites} измененных записей в облако Firestore (остальные ${teams?.length || 0} команд и ${players?.length || 0} игроков взяты из кэша без расхода квоты)`
+      });
+    } else {
+      console.log(`[sync-cache] 0 documents modified for room ${canonicalId}. Cloud Firestore quota preserved (0 writes used).`);
+    }
 
     // 3. Fallback start Telegram Bot if settings are in database but it isn't running yet
     const finalSettings = fallbackDb.get('settings', canonicalId);
@@ -4674,8 +4745,8 @@ app.post("/api/sync-cache", async (req, res) => {
     }
 
     fallbackDb.flush();
-    console.log(`Successfully synced cache for user ${userId} (canonical room: ${canonicalId})`);
-    res.json({ success: true, canonicalId });
+    console.log(`Successfully synced cache for user ${userId} (canonical room: ${canonicalId}, cloud writes: ${totalCloudWrites})`);
+    res.json({ success: true, canonicalId, totalCloudWrites });
   } catch (err: any) {
     console.error("Error in sync-cache API:", err.message);
     res.status(500).json({ error: err.message });
@@ -4825,52 +4896,6 @@ app.get("/api/backup-data/:userId", async (req, res) => {
     let players = fallbackDb.getAll('players').filter(isRoomMatch);
     let teams = fallbackDb.getAll('teams').filter(isRoomMatch);
 
-    // Auto-recovery: If room teams or players are empty, ONLY seed if it's really initialized for the first time
-    if (teams.length === 0 && !loadedCollections.has('teams')) {
-      console.log(`Initializing default teams and players for room: ${canonicalId}`);
-      const initial = getInitialRosterForRoom(canonicalId);
-      teams = initial.teams;
-      initial.teams.forEach(t => fallbackDb.set('teams', t.id, t));
-
-      const allRosterPlayers = initial.teams.flatMap(t => t.players);
-      players = [...allRosterPlayers, ...initial.freeAgents];
-      players.forEach(p => fallbackDb.set('players', p.id, p));
-    } else if (players.length === 0) {
-      console.log(`Rehydrating players from team rosters for room: ${canonicalId}`);
-      const pMap = new Map();
-      teams.forEach((t: any) => {
-        if (t && Array.isArray(t.players)) {
-          t.players.forEach((p: any) => {
-            if (p && (p.id || p.nickname)) {
-              const pId = p.id || 'p_' + Math.random().toString(36).substring(2, 9);
-              pMap.set(pId, {
-                id: pId,
-                channelId: canonicalId,
-                userId: canonicalId,
-                nickname: p.nickname,
-                role: p.role || 'rifler',
-                rating: Number(p.rating) || 100,
-                valRating: Number(p.valRating) || 0,
-                isAcademy: !!p.isAcademy,
-                avatarUrl: p.avatarUrl || '',
-                team: t.name || p.team,
-                teamId: t.id || p.teamId,
-                createdAt: new Date().toISOString()
-              });
-            }
-          });
-        }
-      });
-      const initial = getInitialRosterForRoom(canonicalId);
-      initial.freeAgents.forEach(fa => {
-        if (!pMap.has(fa.id)) {
-          pMap.set(fa.id, fa);
-        }
-      });
-      players = Array.from(pMap.values());
-      players.forEach(p => fallbackDb.set('players', p.id, p));
-    }
-
     const swapOffers = fallbackDb.getAll('swapOffers').filter(isRoomMatch);
     const tournaments = fallbackDb.getAll('tournaments').filter(isRoomMatch);
 
@@ -4926,6 +4951,146 @@ app.post("/api/matches/clear/:userId", async (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     console.error("Error in matches clear API:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Team deletion API Endpoint
+app.post("/api/teams/delete", async (req, res) => {
+  try {
+    const { userId, teamId } = req.body;
+    if (!teamId) {
+      return res.status(400).json({ error: "Missing teamId" });
+    }
+    const { canonicalId } = getRoomAliases(userId || '');
+    fallbackDb.delete('teams', teamId);
+
+    // Also remove team affiliation from players in memory
+    const allPlayers = fallbackDb.getAll('players');
+    for (const p of allPlayers) {
+      if (p && (p.teamId === teamId || p.team === teamId)) {
+        fallbackDb.set('players', p.id, { ...p, teamId: '', team: 'Без команды' });
+      }
+    }
+
+    try {
+      if (db) {
+        deleteDoc(doc(db, 'teams', teamId)).catch(() => {});
+      }
+    } catch (e) {}
+
+    fallbackDb.flush();
+    console.log(`[API] Successfully deleted team ${teamId} for user ${userId || canonicalId}`);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error in team delete API:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clear all teams API Endpoint
+app.post("/api/teams/clear/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+    const { canonicalId, aliases } = getRoomAliases(userId);
+    loadedCollections.add('teams');
+    for (const a of aliases) {
+      fallbackDb.deleteAllForUser('teams', a);
+    }
+    fallbackDb.deleteAllForUser('teams', canonicalId);
+
+    // Also delete from Firestore if active
+    try {
+      if (db) {
+        const q = query(collection(db, 'teams'), where('channelId', '==', canonicalId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const batch = writeBatch(db);
+          snap.docs.forEach(docSnap => batch.delete(docSnap.ref));
+          await batch.commit();
+        }
+      }
+    } catch (e) {}
+
+    fallbackDb.flush();
+    console.log(`[API] Successfully cleared all teams for user ${userId}`);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error in teams clear API:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Player deletion API Endpoint
+app.post("/api/players/delete", async (req, res) => {
+  try {
+    const { userId, playerId } = req.body;
+    if (!playerId) {
+      return res.status(400).json({ error: "Missing playerId" });
+    }
+    const { canonicalId } = getRoomAliases(userId || '');
+    fallbackDb.delete('players', playerId);
+
+    // Remove player from team rosters in memory
+    const allTeams = fallbackDb.getAll('teams');
+    for (const t of allTeams) {
+      if (t && Array.isArray(t.players) && t.players.some((p: any) => p && p.id === playerId)) {
+        const updatedRoster = t.players.map((p: any) => p && p.id === playerId ? { id: '' } : p);
+        const totalVal = updatedRoster.slice(0, 5).reduce((acc: number, p: any) => acc + (p?.valRating || 0), 0);
+        fallbackDb.set('teams', t.id, { ...t, players: updatedRoster, totalValRating: totalVal });
+      }
+    }
+
+    try {
+      if (db) {
+        deleteDoc(doc(db, 'players', playerId)).catch(() => {});
+      }
+    } catch (e) {}
+
+    fallbackDb.flush();
+    console.log(`[API] Successfully deleted player ${playerId} for user ${userId || canonicalId}`);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error in player delete API:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clear all players API Endpoint
+app.post("/api/players/clear/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+    const { canonicalId, aliases } = getRoomAliases(userId);
+    loadedCollections.add('players');
+    for (const a of aliases) {
+      fallbackDb.deleteAllForUser('players', a);
+    }
+    fallbackDb.deleteAllForUser('players', canonicalId);
+
+    // Also delete from Firestore if active
+    try {
+      if (db) {
+        const q = query(collection(db, 'players'), where('channelId', '==', canonicalId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const batch = writeBatch(db);
+          snap.docs.forEach(docSnap => batch.delete(docSnap.ref));
+          await batch.commit();
+        }
+      }
+    } catch (e) {}
+
+    fallbackDb.flush();
+    console.log(`[API] Successfully cleared all players for user ${userId}`);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error in players clear API:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -5361,6 +5526,16 @@ async function startServer() {
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+
+  // Global Error Handler
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("[Server] Unhandled error:", err);
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      message: err.message,
+      path: req.path
+    });
   });
 }
 

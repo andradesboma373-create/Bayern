@@ -12,9 +12,10 @@ interface Props {
   onVetoMatch?: (team1: Team, team2: Team, matchInfo?: any) => void;
   isExporting?: boolean;
   isSwapMode?: boolean;
+  onToggleImportance?: (type: 'gf' | 'winners' | 'losers', rIdx: number, mIdx: number) => void;
 }
 
-export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, isExporting, isSwapMode }: Props) {
+export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, isExporting, isSwapMode, onToggleImportance }: Props) {
   const rounds = tournament.tieredBracketRounds || [];
   const settings = tournament.settings;
   const boxCls = getBoxStyle(settings.boxStyle || 'dark', settings.cardThemeColor, settings.btnStyle);

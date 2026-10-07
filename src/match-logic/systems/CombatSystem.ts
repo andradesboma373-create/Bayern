@@ -158,28 +158,19 @@ export class CombatSystem {
 
     // Role-specific Hit Chance Tweaks
     if (isShooterEntry) {
-      // Entry fraggers: Strong opening duel potential
-      hitChance = 0.58 + (aimRatio - 1.0) * 0.50 * progress;
+      // Entry fraggers: slightly sharper on first contact, but without god-mode accuracy
+      hitChance = 0.52 + (aimRatio - 1.0) * 0.45 * progress;
       if (state.tick < (shooter.reactionTimer + 15)) {
-        hitChance *= 1.10; // Extra sharp at the very start of entry
+        hitChance *= 1.05; // Subtle opening duel sharpness
       }
     } else if (isShooterSupport) {
       // Support players are standard riflers, no artificial penalty
     }
 
-    // Captain / IGL balance: standard captains focus on tactical commands rather than over-fragging
-    if (isShooterCaptain && (shooter.rating || 100) < 112) {
-      const rKills = (shooter as any).roundKills || 0;
-      if (rKills >= 1) {
-        hitChance *= 0.85;
-      }
-    }
-
-    // Soft multi-kill fatigue (scales after each kill in the round so aces are rare and teammates contribute)
+    // Soft multi-kill fatigue (scales after each kill in round so teammates contribute and rounds are shared)
     const roundKills = (shooter as any).roundKills || 0;
     if (roundKills >= 1) {
-      // Entry fraggers have slightly better multi-kill stamina to avoid "sucking" too hard after 1st kill
-      const multiKillPenalty = isShooterEntry ? 0.08 : 0.12;
+      const multiKillPenalty = 0.10;
       hitChance *= (1.0 - (Math.min(4, roundKills) * multiKillPenalty));
     }
     
@@ -207,34 +198,24 @@ export class CombatSystem {
     const targetEvasion = Math.max(0.82, Math.min(1.15, 1.0 - (targetIqRatio - 1.0) * 0.05 - (targetMoveRatio - 1.0) * 0.04));
     hitChance *= targetEvasion;
     
-    // Support teammate flash utility: support throws flashbang to set up teammate
-    const supportMates = Object.values(state.players).filter(pl => 
-      pl.alive && pl.teamId === shooter.teamId && pl.id !== shooter.id &&
-      ((pl.role || '').toLowerCase().includes('support') || (pl.role || '').toLowerCase().includes('саппорт')) &&
-      pl.grenades && pl.grenades.includes('flash')
-    );
-    if (supportMates.length > 0) {
-      const supp = supportMates[0];
-      const utilityMult = Math.max(0.5, (supp.utility || 100) / 100);
-      const flashChance = 0.20 * utilityMult; // Supports (135 utility) will flash ~27% of the time, Riflers ~20%
-      
-      if (this.random() < flashChance) {
-        supp.grenades = supp.grenades.filter(g => g !== 'flash');
-        hitChance *= 1.15; // Flashed target!
-        // Record flash assist attribution with timestamp
-        (target as any).flashedById = supp.id;
-        (target as any).flashedTick = state.tick;
-      }
-    }
-    
     // Stationary / angle holding advantage
+    const isEnemyExecuting = targetTeam?.strategy?.includes('EXECUTE') || targetTeam?.strategy?.includes('FAST');
     if (shooter.state === 'HOLDING') {
-        hitChance *= isShooterSniper ? 1.10 : 1.14;
+        // If enemy is executing with flashes/smokes, holding stationary angle has reduced advantage
+        const holdMult = isEnemyExecuting ? (isShooterSniper ? 1.04 : 1.06) : (isShooterSniper ? 1.10 : 1.14);
+        hitChance *= holdMult;
+    }
+
+    // Exit frag / saving ambush defensive advantage: saving player holding an ambush corner against greedy hunters
+    const shooterTeamObj = state.teams[shooter.teamId];
+    if (shooter.state === 'HOLDING' && (shooterTeamObj?.strategy === 'SAVE' || state.phase === 'POST_ROUND_COMBAT')) {
+      hitChance *= 1.18; // Ambushing greedy exit hunters
     }
 
     // Site anchor defensive advantage: CT holding site zone against attackers emerging from chokes
+    // Suppressed when T is executing with full utility
     if (shooter.side === 'CT' && shooter.state === 'HOLDING' && (shooter.currentNodeId === 'a_site' || shooter.currentNodeId === 'b_site' || shooter.currentNodeId === 'jungle' || shooter.currentNodeId === 'window')) {
-        hitChance *= 1.15;
+        hitChance *= isEnemyExecuting ? 1.05 : 1.14;
     }
 
     // Attacking through narrow choke entries penalty while moving
@@ -301,10 +282,10 @@ export class CombatSystem {
     // Utility usage: HE grenade in contested node (scaled by player's utility stat)
     if (shooter.grenades && shooter.grenades.includes('he') && !target.damageTaken.has(shooter.id)) {
         shooter.grenades = shooter.grenades.filter(g => g !== 'he');
-        const utilityMult = Math.max(0.7, (shooter.utility || 100) / 100);
-        const nadeHitChance = Math.min(0.50, 0.35 * utilityMult);
+        const utilityMult = Math.max(0.8, (shooter.utility || 100) / 100);
+        const nadeHitChance = Math.min(0.28, 0.20 * utilityMult);
         if (this.random() < nadeHitChance) {
-            const nadeDamage = Math.floor((15 + this.random() * 20) * utilityMult);
+            const nadeDamage = Math.floor((10 + this.random() * 14) * utilityMult);
             const actualNade = Math.min(target.hp - 1, nadeDamage);
             if (actualNade > 0) {
                 target.hp -= actualNade;
@@ -375,7 +356,7 @@ export class CombatSystem {
           const targetWeapon = WEAPONS[target.weaponId] || WEAPONS['glock'];
           
           // Chance to land a final blow/damage depends on weapon type and reaction
-          const tradeChance = targetWeapon.type === 'SNIPER' ? 0.25 : 0.75;
+          const tradeChance = targetWeapon.type === 'SNIPER' ? 0.10 : 0.20;
           
           if (this.random() < tradeChance) {
             // Scale damage by target's skill and duel intensity
@@ -499,20 +480,22 @@ export class CombatSystem {
             }
         }
         
-        // Assist distribution (at least ASSIST_MIN_DAMAGE dealt by a teammate, modified by individual assist perk)
+        // Assist distribution: requires genuine heavy damage (at least 50 HP)
         let assistSwing = 0;
         let assistCredited = false;
         if (target.damageTaken) {
-            const minAssistDamage = RATING_CONFIG.ASSIST_MIN_DAMAGE;
+            const minAssistDamage = RATING_CONFIG.ASSIST_MIN_DAMAGE || 50;
             for (const [assisterId, dmg] of target.damageTaken.entries()) {
                 if (assisterId !== shooter.id) {
                     const assister = state.players[assisterId];
                     if (assister && assister.teamId === shooter.teamId) {
-                        const threshold = assister.perk?.assistMultiplier ? Math.max(20, Math.floor(minAssistDamage / assister.perk.assistMultiplier)) : minAssistDamage;
+                        // Strict threshold: never drops below 48 HP to prevent chip-damage assists
+                        const threshold = Math.max(48, minAssistDamage);
                         if (dmg >= threshold) {
                             assister.statistics.assists++;
                             (assister as any).roundAssists = ((assister as any).roundAssists || 0) + 1;
-                            const share = Math.min(0.35, (dmg / 100) * (RATING_CONFIG.ASSIST_SWING_SHARE || 0.35));
+                            // Modest assist swing: assist is supporting, killer did the frag
+                            const share = Math.min(0.10, (dmg / 100) * (RATING_CONFIG.ASSIST_SWING_SHARE || 0.10));
                             assistSwing = actionSwing * share;
                             assister.statistics.roundSwing = (assister.statistics.roundSwing || 0) + assistSwing;
                             assistCredited = true;
@@ -522,23 +505,6 @@ export class CombatSystem {
                 }
             }
         }
-
-        // Flash assist credit if victim was blinded by a teammate within the last 40 ticks and no regular damage assist was credited
-        if (!assistCredited && (target as any).flashedById && (state.tick - ((target as any).flashedTick || 0) <= 40)) {
-          const flasherId = (target as any).flashedById;
-          if (flasherId !== shooter.id) {
-            const flasher = state.players[flasherId];
-            if (flasher && flasher.teamId === shooter.teamId) {
-              flasher.statistics.assists++;
-              (flasher as any).roundAssists = ((flasher as any).roundAssists || 0) + 1;
-              const flashShare = 0.15;
-              assistSwing = actionSwing * flashShare;
-              flasher.statistics.roundSwing = (flasher.statistics.roundSwing || 0) + assistSwing;
-            }
-          }
-        }
-        (target as any).flashedById = null;
-        (target as any).flashedTick = 0;
 
         // Killer gets action swing minus assist share, ensuring total kill swing is conserved (HLTV 3.0 standard)
         const killerSwing = Math.max(0.02, actionSwing - assistSwing);

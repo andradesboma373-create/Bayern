@@ -1006,10 +1006,18 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
                     >
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="flex items-center gap-2">
-                          <span className={`px-1.5 py-0.5 rounded font-bold ${
-                            log.isAbuse ? 'bg-red-500 text-black' : 'bg-white/10 text-white/70'
+                          <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                            log.isAbuse 
+                              ? 'bg-red-500 text-black' 
+                              : log.action === 'CACHE_SYNC'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : log.action === 'DATA_WRITE'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : log.action === 'DATA_READ'
+                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              : 'bg-white/10 text-white/70'
                           }`}>
-                            {log.action}
+                            {log.action === 'CACHE_SYNC' ? 'КЭШ СИНХР (0 КВОТЫ)' : log.action}
                           </span>
                           <span className="text-white/40">{log.method} {log.path}</span>
                         </span>

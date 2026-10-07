@@ -146,14 +146,18 @@ export class PlayerAI {
        } else {
           // Dynamic tactical retreat: if team strategy is SAVE or heavily wounded
           if (team.strategy === 'SAVE') {
-              // Forced fight while saving? Only if target is extremely close, otherwise retreat
-              const dist = MapSystem.getDistance(MapSystem.getNode(p.currentNodeId), MapSystem.getNode(target.currentNodeId));
-              if (dist > 40) {
-                p.state = 'MOVING';
-                p.targetEnemyId = null;
-                PlayerAI.routeTo(p, PlayerAI.getSafeNode(p));
-                return;
+              // If already holding a safe position or in post-round, hold angle and ambush greedy hunters!
+              const isHoldingSafe = !!(p as any).wasHoldingBeforeEngage || p.currentNodeId === PlayerAI.getSafeNode(p) || state.phase === 'POST_ROUND_COMBAT';
+              if (!isHoldingSafe) {
+                const dist = MapSystem.getDistance(MapSystem.getNode(p.currentNodeId), MapSystem.getNode(target.currentNodeId));
+                if (dist > 40) {
+                  p.state = 'MOVING';
+                  p.targetEnemyId = null;
+                  PlayerAI.routeTo(p, PlayerAI.getSafeNode(p));
+                  return;
+                }
               }
+              // If holding safe spot, stay engaged and ambush the hunter!
           } else if (p.hp < 30 && priorities.caution > 0.75 && CombatSystem.random() < 0.20) {
               p.state = 'MOVING';
               p.targetEnemyId = null;
@@ -226,18 +230,25 @@ export class PlayerAI {
 
     if (bestEnemyId) {
        const wasHolding = p.state === 'HOLDING';
+       (p as any).wasHoldingBeforeEngage = wasHolding;
        p.state = 'ENGAGING';
        p.targetEnemyId = bestEnemyId;
        p.path = [];
        p.targetNodeId = null;
        
        const playerAimRatio = ((p.aim || 100) - 100) * 0.002;
-       p.aimProgress = wasHolding 
-         ? Math.min(0.96, Math.max(0.82, 0.90 + playerAimRatio)) 
-         : Math.min(0.92, Math.max(0.75, 0.85 + playerAimRatio));
+       const isEntry = pRole.includes('entry') || pRole.includes('opener') || pRole.includes('энтри');
+       if (wasHolding) {
+         p.aimProgress = Math.min(0.96, Math.max(0.82, 0.90 + playerAimRatio));
+       } else if (isEntry) {
+         p.aimProgress = Math.min(0.95, Math.max(0.86, 0.90 + playerAimRatio));
+       } else {
+         p.aimProgress = Math.min(0.92, Math.max(0.75, 0.85 + playerAimRatio));
+       }
        
        let delay = 1.0 - ((p.reaction || 100) / 160);
        if (wasHolding) delay -= 0.25;
+       else if (isEntry) delay -= 0.15;
        p.reactionTimer = state.tick + Math.max(0, Math.round(delay));
        return;
     }
@@ -405,14 +416,18 @@ export class PlayerAI {
             return;
         }
 
-        // Aggressive Entry logic: Entry Fragger pushes site first
+        // Aggressive Entry logic: Entry Fragger pushes site on execution
         const isEntry = pRoleLower.includes('entry') || pRoleLower.includes('opener') || pRoleLower.includes('энтри');
         if (isEntry || priorities.aggression > 0.90) {
             const myEntryNode = entryNodes[myIdx % entryNodes.length];
-            // If at entry node and team is holding/defaulting, Entry Fragger should actively peek for information
-            if (p.currentNodeId === myEntryNode && !isExecuting) {
-                p.state = 'HOLDING';
-                p.actionTimer = state.tick + 15; // Shorter hold to keep moving/peeking
+            // If defaulting/holding, stay with team at entry node rather than solo-rushing
+            if (isHolding && !isExecuting) {
+                if (p.currentNodeId === myEntryNode) {
+                    p.state = 'HOLDING';
+                    p.actionTimer = state.tick + 35;
+                    return;
+                }
+                PlayerAI.routeTo(p, myEntryNode);
                 return;
             }
             PlayerAI.routeTo(p, targetSite);
@@ -478,22 +493,23 @@ export class PlayerAI {
             return;
         }
 
-        // Defensive positioning
-        if (priorities.caution > 0.6 || isSniper) {
-            // Snipers and cautious players prefer strong holding positions
-            const strongSpots = ['window', 'a_site', 'b_site', 'jungle'];
-            const mySpot = isSniper ? 'window' : strongSpots[myIdx % strongSpots.length];
-            if (p.currentNodeId === mySpot) {
-                p.state = 'HOLDING';
-                p.actionTimer = state.tick + (isEntry ? 60 : 40); // Entry fraggers hold LONGER on CT
-            } else {
-                PlayerAI.routeTo(p, mySpot);
-            }
+        // Defensive positioning: Every CT is assigned to hold a key site or zone
+        const ctPositions = [
+          'a_site',       // A Site anchor
+          'connector',    // A rotator / Connector
+          'window',       // Mid sniper / window
+          'b_site',       // B Site anchor
+          'short'         // B Short / Catwalk
+        ];
+        
+        let assignedSpot = isSniper ? 'window' : ctPositions[myIdx % ctPositions.length];
+        
+        if (p.currentNodeId === assignedSpot) {
+            p.state = 'HOLDING';
+            // Hold angle defensively and wait for enemy contact or rotation trigger
+            p.actionTimer = state.tick + 100;
         } else {
-            // Aggressive or support CTs play more dynamic spots
-            // Entry fraggers on CT should prefer active but not suicidal spots
-            const dynamicSpots = isEntry ? ['connector', 'short', 'mid', 'window'] : ['connector', 'short', 'mid', 'a_main', 'b_apps_entrance'];
-            PlayerAI.routeTo(p, dynamicSpots[myIdx % dynamicSpots.length]);
+            PlayerAI.routeTo(p, assignedSpot);
         }
      }
   }

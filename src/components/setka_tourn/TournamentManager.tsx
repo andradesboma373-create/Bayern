@@ -851,6 +851,30 @@ export default function TournamentManager({ user }: { user: any }) {
     }
   };
 
+  const handleToggleMatchImportance = (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number) => {
+    if (!activeTournament) return;
+    const updated = JSON.parse(JSON.stringify(activeTournament)) as Tournament;
+    
+    let match: Match | undefined;
+    if (type === 'winners') {
+        match = (updated.bracketRounds?.[rIdx]?.[mIdx]) || (updated.tieredBracketRounds?.[rIdx]?.[mIdx]);
+    } else if (type === 'losers') {
+        match = updated.losersBracketRounds?.[rIdx]?.[mIdx];
+    } else if (type === 'gf') {
+        match = updated.grandFinal?.[mIdx];
+    }
+
+    if (match) {
+        // Cycle importance: none -> semi -> final -> none
+        const current = match.importance || 'none';
+        if (current === 'none') match.importance = 'semi';
+        else if (current === 'semi') match.importance = 'final';
+        else match.importance = 'none';
+        
+        handleUpdateActive(updated);
+    }
+  };
+
   const handleUpdateActive = (updated: Tournament) => {
       if (activeTournament) {
         setHistoryStack(prev => {
@@ -2325,9 +2349,9 @@ export default function TournamentManager({ user }: { user: any }) {
                                   {/* STAGE 2 OR SINGLE STAGE PLAYOFF (FAIL-SAFE BRACKET RENDERING) */}
                                   {(effectiveStage === 2 || !hasGroupStage) && (
                                       activeTournament.tieredBracketRounds && activeTournament.tieredBracketRounds.length > 0 ? (
-                                          <TieredPlayoffStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                          <TieredPlayoffStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} onToggleImportance={handleToggleMatchImportance} />
                                       ) : (
-                                          <SingleEliminationStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                          <SingleEliminationStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} onToggleImportance={handleToggleMatchImportance} />
                                       )
                                   )}
 

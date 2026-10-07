@@ -29,6 +29,7 @@ export default function Teams({ user }: { user: any }) {
   const itemsPerPage = 50;
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>(['', '', '', '', '']);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [activeGame, setActiveGame] = useGameUniverse();
   
@@ -172,12 +173,21 @@ export default function Teams({ user }: { user: any }) {
     const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
     const loadData = () => {
       try {
+        const delTeamsRaw = localStorage.getItem(`deleted_teams_${roomId}`) || localStorage.getItem(`deleted_teams_${user.uid}`);
+        const delTeamsSet = new Set<string>(delTeamsRaw ? JSON.parse(delTeamsRaw) : []);
+        const delPlayersRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
+        const delPlayersSet = new Set<string>(delPlayersRaw ? JSON.parse(delPlayersRaw) : []);
+
         const p = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
-        if (p) setPlayers(JSON.parse(p));
+        if (p) {
+          const rawP = JSON.parse(p);
+          setPlayers((rawP || []).filter((item: any) => item && item.id && !delPlayersSet.has(item.id)));
+        }
         const t = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
         let currentTeams: any[] = [];
         if (t) {
-          currentTeams = JSON.parse(t);
+          const rawT = JSON.parse(t);
+          currentTeams = (rawT || []).filter((item: any) => item && item.id && !delTeamsSet.has(item.id));
           setTeams(currentTeams);
         }
 
@@ -210,6 +220,11 @@ export default function Teams({ user }: { user: any }) {
       .then(res => res.json())
       .then(data => {
         if (data && data.success) {
+          const delTeamsRaw = localStorage.getItem(`deleted_teams_${roomId}`) || localStorage.getItem(`deleted_teams_${user.uid}`);
+          const delTeamsSet = new Set<string>(delTeamsRaw ? JSON.parse(delTeamsRaw) : []);
+          const delPlayersRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
+          const delPlayersSet = new Set<string>(delPlayersRaw ? JSON.parse(delPlayersRaw) : []);
+
           if (Array.isArray(data.teams) && data.teams.length > 0) {
             setTeams(prevTeams => {
               const localRaw = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
@@ -217,21 +232,22 @@ export default function Teams({ user }: { user: any }) {
               try { localTeams = localRaw ? JSON.parse(localRaw) : prevTeams; } catch (e) { localTeams = prevTeams; }
 
               const mergedMap = new Map<string, any>();
-              // 1. Server teams first
+              // 1. Server teams first, excluding deleted teams
               data.teams.forEach((t: any) => {
-                if (t && (t.id || t.name)) {
+                if (t && (t.id || t.name) && !delTeamsSet.has(t.id)) {
                   mergedMap.set(t.id || t.name.toLowerCase(), t);
                 }
               });
               // 2. Local / user-added teams second (authoritative: keeps custom created teams!)
               (Array.isArray(localTeams) ? localTeams : []).forEach((t: any) => {
-                if (t && (t.id || t.name)) {
+                if (t && (t.id || t.name) && !delTeamsSet.has(t.id)) {
                   const key = t.id || t.name.toLowerCase();
                   const existing = mergedMap.get(key);
                   mergedMap.set(key, existing ? { ...existing, ...t } : t);
                 }
               });
-              const merged = filterItemsForRoom(Array.from(mergedMap.values()), roomId);
+              const merged = filterItemsForRoom(Array.from(mergedMap.values()), roomId)
+                .filter((t: any) => t && t.id && !delTeamsSet.has(t.id));
               safeLocalStorageSet(`teams_${roomId}`, merged);
               return merged;
             });
@@ -244,18 +260,19 @@ export default function Teams({ user }: { user: any }) {
 
               const mergedMap = new Map<string, any>();
               data.players.forEach((p: any) => {
-                if (p && (p.id || p.nickname)) {
+                if (p && (p.id || p.nickname) && !delPlayersSet.has(p.id)) {
                   mergedMap.set(p.id || p.nickname.toLowerCase(), p);
                 }
               });
               (Array.isArray(localPlayers) ? localPlayers : []).forEach((p: any) => {
-                if (p && (p.id || p.nickname)) {
+                if (p && (p.id || p.nickname) && !delPlayersSet.has(p.id)) {
                   const key = p.id || p.nickname.toLowerCase();
                   const existing = mergedMap.get(key);
                   mergedMap.set(key, existing ? { ...existing, ...p } : p);
                 }
               });
-              const merged = filterItemsForRoom(Array.from(mergedMap.values()), roomId);
+              const merged = filterItemsForRoom(Array.from(mergedMap.values()), roomId)
+                .filter((p: any) => p && p.id && !delPlayersSet.has(p.id));
               safeLocalStorageSet(`players_${roomId}`, merged);
               return merged;
             });
@@ -419,12 +436,31 @@ export default function Teams({ user }: { user: any }) {
 
   const handleDeleteTeam = async (id: string) => {
     const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
+    
+    // 1. Tombstone in localStorage so background sync never resurrects it
+    try {
+      const prevRaw = localStorage.getItem(`deleted_teams_${roomId}`) || '[]';
+      const prevList = JSON.parse(prevRaw);
+      const updatedDeleted = Array.from(new Set([...prevList, id]));
+      localStorage.setItem(`deleted_teams_${roomId}`, JSON.stringify(updatedDeleted));
+      if (roomId !== user.uid) {
+        localStorage.setItem(`deleted_teams_${user.uid}`, JSON.stringify(updatedDeleted));
+      }
+    } catch (e) {}
+
     const updated = teams.filter(t => t.id !== id);
     setTeams(updated);
     safeLocalStorageSet(`teams_${user.uid}`, updated);
     if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updated);
     window.dispatchEvent(new Event("db-user-updated"));
     
+    // 2. Explicit server deletion endpoint
+    fetch('/api/teams/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: roomId, teamId: id })
+    }).catch(() => {});
+
     if (user && !user.isLocalDemo) {
       deleteDoc(doc(db, 'teams', id)).catch(e => console.warn(e));
       fetch('/api/sync-cache', {
@@ -435,6 +471,39 @@ export default function Teams({ user }: { user: any }) {
     }
     
     setConfirmDeleteId(null);
+  };
+
+  const handleClearAllTeams = async () => {
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
+    
+    // Tombstone all current team IDs
+    try {
+      const prevRaw = localStorage.getItem(`deleted_teams_${roomId}`) || '[]';
+      const prevList = JSON.parse(prevRaw);
+      const allIds = teams.map(t => t.id).filter(Boolean);
+      const updatedDeleted = Array.from(new Set([...prevList, ...allIds]));
+      localStorage.setItem(`deleted_teams_${roomId}`, JSON.stringify(updatedDeleted));
+      if (roomId !== user.uid) {
+        localStorage.setItem(`deleted_teams_${user.uid}`, JSON.stringify(updatedDeleted));
+      }
+    } catch (e) {}
+
+    setTeams([]);
+    safeLocalStorageSet(`teams_${user.uid}`, []);
+    if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, []);
+    window.dispatchEvent(new Event("db-user-updated"));
+
+    // Server clear endpoint
+    fetch(`/api/teams/clear/${roomId}`, { method: 'POST' }).catch(() => {});
+
+    // Sync empty array
+    fetch('/api/sync-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: roomId, teams: [] })
+    }).catch(() => {});
+
+    setConfirmClearAll(false);
   };
 
   const handleUpdateTeamRoster = async () => {
@@ -727,6 +796,17 @@ export default function Teams({ user }: { user: any }) {
             <FileUp className="w-4 h-4 text-emerald-400" />
             <span>Импорт JSON</span>
           </button>
+          {teams.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setConfirmClearAll(true)}
+              className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              title="Очистить все команды"
+            >
+              <Trash2 className="w-4 h-4 text-red-400" />
+              <span>Очистить ({teams.length})</span>
+            </button>
+          )}
           <button
             onClick={() => {
               setEditingTeamId(null);
@@ -1134,6 +1214,24 @@ export default function Teams({ user }: { user: any }) {
               </button>
               <button onClick={() => handleDeleteTeam(confirmDeleteId)} className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all uppercase tracking-wider text-sm shadow-[0_0_20px_rgba(220,38,38,0.3)]">
                 Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmClearAll && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-red-950/40 p-8 rounded-2xl max-w-sm w-full border border-red-500/20 relative shadow-[0_0_50px_rgba(239,68,68,0.15)] text-center">
+            <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-2xl font-black uppercase tracking-wider text-white mb-2">Очистить все команды?</h3>
+            <p className="text-red-200/60 text-sm font-bold mb-6">Будут удалены все команды ({teams.length} шт.) из базы данных. Это действие нельзя отменить.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmClearAll(false)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all uppercase tracking-wider text-sm cursor-pointer">
+                Отмена
+              </button>
+              <button onClick={handleClearAllTeams} className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all uppercase tracking-wider text-sm shadow-[0_0_20px_rgba(220,38,38,0.3)] cursor-pointer">
+                Очистить всё
               </button>
             </div>
           </div>

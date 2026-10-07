@@ -481,7 +481,7 @@ export function trackRoomRequest(
   method: string,
   path: string,
   ip: string,
-  opType: 'read' | 'write' = 'read',
+  opType: 'read' | 'write' | 'sync' = 'read',
   details?: string
 ): { isAllowed: boolean; error?: string } {
   ensureStorage();
@@ -545,7 +545,7 @@ export function trackRoomRequest(
     logAudit({
       roomId: room.id,
       username: room.username,
-      action: opType === 'write' ? 'DATA_WRITE' : 'DATA_READ',
+      action: opType === 'write' ? 'DATA_WRITE' : (opType === 'sync' ? 'CACHE_SYNC' : 'DATA_READ'),
       method,
       path,
       ip,

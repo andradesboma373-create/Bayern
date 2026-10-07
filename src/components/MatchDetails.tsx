@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { X, Download } from 'lucide-react';
 import TeamLogo from './TeamLogo';
 import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
+import { RatingSystem } from '../match-logic/systems/RatingSystem';
 import { getKdColorClass, getSwingColorClass } from '../lib/utils';
 
 function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: string, colorClass: string, borderClass: string, stats?: any[] }) {
@@ -19,21 +20,19 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
         let hltv = p?.hltvRating;
         if (!hltv && p?.rating && Number(p.rating) < 10) hltv = p.rating;
         if (!hltv) {
-            const kills = p?.kills ?? 0;
-            const deaths = p?.deaths ?? 0;
-            const assists = p?.assists ?? 0;
-            const rounds = p?.totalRounds || Math.max(1, kills / 0.7);
-            const kpr = kills / rounds;
-            const dpr = deaths / rounds;
-            const apr = assists / rounds;
-            const impact = 2.13 * kpr + 0.42 * apr - 0.41;
-            const adrFloat = p?.adr ? Number(p.adr) : (85 * kpr + 15);
-            const baseHltv = 0.30 * (kpr / 0.68) + 0.20 * (adrFloat / 72) + 0.10 * (Math.max(0, impact) / 0.8) + 0.25 * (1 - dpr);
-            hltv = Math.max(0.65, Math.min(2.15, baseHltv * 1.04)).toFixed(2);
+            const breakdown = RatingSystem.calculatePlayerRating(p, p?.totalRounds);
+            hltv = breakdown.rating.toFixed(2);
         }
         return parseFloat(hltv || '0');
     };
-    return getHltv(b) - getHltv(a);
+    const diffHltv = getHltv(b) - getHltv(a);
+    if (Math.abs(diffHltv) > 0.001) return diffHltv;
+    // Tie-breaker: K-D differential (+/-)
+    const diffA = (a?.kills ?? 0) - (a?.deaths ?? 0);
+    const diffB = (b?.kills ?? 0) - (b?.deaths ?? 0);
+    if (diffB !== diffA) return diffB - diffA;
+    // Secondary tie-breaker: Total kills
+    return (b?.kills ?? 0) - (a?.kills ?? 0);
   });
 
   return (
@@ -71,14 +70,8 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
               const kd = p?.kd || (deaths > 0 ? (kills / deaths).toFixed(2) : kills.toFixed(2));
               
               if (!hltv) {
-                  const rounds = p?.totalRounds || Math.max(1, kills / 0.7);
-                  const kpr = kills / rounds;
-                  const dpr = deaths / rounds;
-                  const apr = assists / rounds;
-                  const impact = 2.13 * kpr + 0.42 * apr - 0.41;
-                  const adrFloat = p?.adr ? Number(p.adr) : (85 * kpr + 15);
-                  const baseHltv = 0.30 * (kpr / 0.68) + 0.20 * (adrFloat / 72) + 0.10 * (Math.max(0, impact) / 0.8) + 0.25 * (1 - dpr);
-                  hltv = Math.max(0.65, Math.min(2.15, baseHltv * 1.04)).toFixed(2);
+                  const breakdown = RatingSystem.calculatePlayerRating(p, p?.totalRounds);
+                  hltv = breakdown.rating.toFixed(2);
               }
 
               return (

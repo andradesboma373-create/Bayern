@@ -21,6 +21,7 @@ export default function Players({ user }: { user: any }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ nickname: '', role: 'rifler', rating: 100, valRating: 0, isAcademy: false, avatarUrl: '' });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   const [selectedProfilePlayer, setSelectedProfilePlayer] = useState<any | null>(null);
 
@@ -132,34 +133,14 @@ export default function Players({ user }: { user: any }) {
       return;
     }
     const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
-    let localPlayers = JSON.parse(localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`) || '[]');
+    const deletedRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
+    const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
+
+    let rawLocalPlayers = JSON.parse(localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`) || '[]');
+    let localPlayers = (rawLocalPlayers || []).filter((p: any) => p && p.id && !deletedSet.has(p.id));
     let localTeams = JSON.parse(localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`) || '[]');
 
-    // Auto-rehydrate players from teams if players collection was accidentally wiped
-    if (!localPlayers.length && localTeams.length) {
-      const playerMap = new Map();
-      localTeams.forEach((t: any) => {
-        if (t && Array.isArray(t.players)) {
-          t.players.forEach((p: any) => {
-            if (p && (p.id || p.nickname)) {
-              playerMap.set(p.id || p.nickname, {
-                ...p,
-                team: t.name || p.team,
-                teamId: t.id || p.teamId
-              });
-            }
-          });
-        }
-      });
-      const rehydrated = Array.from(playerMap.values());
-      if (rehydrated.length) {
-        localPlayers = rehydrated;
-        safeLocalStorageSet(`players_${user.uid}`, rehydrated);
-        if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, rehydrated);
-      }
-    }
-
-    if (localPlayers.length) setPlayers(localPlayers);
+    setPlayers(localPlayers);
     if (localTeams.length) setTeams(localTeams);
 
     // If local players is incomplete or empty, fetch resilient server backup and merge
@@ -174,23 +155,22 @@ export default function Players({ user }: { user: any }) {
         }
         if (Array.isArray(data.players) && data.players.length > 0) {
           const pMap = new Map();
-          // Server items first
+          // Server items first, strictly excluding deleted players
           data.players.forEach((p: any) => {
-            if (p && (p.id || p.nickname)) pMap.set(p.id || p.nickname, p);
+            if (p && p.id && !deletedSet.has(p.id)) pMap.set(p.id, p);
           });
           // Local items overlay
           localPlayers.forEach((p: any) => {
-            if (p && (p.id || p.nickname)) {
-              const existing = pMap.get(p.id || p.nickname);
-              pMap.set(p.id || p.nickname, existing ? { ...existing, ...p } : p);
+            if (p && p.id && !deletedSet.has(p.id)) {
+              const existing = pMap.get(p.id);
+              pMap.set(p.id, existing ? { ...existing, ...p } : p);
             }
           });
-          const mergedPlayers = filterItemsForRoom(Array.from(pMap.values()), roomId);
-          if (mergedPlayers.length > 0) {
-            setPlayers(mergedPlayers);
-            safeLocalStorageSet(`players_${roomId}`, mergedPlayers);
-            localPlayers = mergedPlayers;
-          }
+          const mergedPlayers = filterItemsForRoom(Array.from(pMap.values()), roomId)
+            .filter((p: any) => p && p.id && !deletedSet.has(p.id));
+          setPlayers(mergedPlayers);
+          safeLocalStorageSet(`players_${roomId}`, mergedPlayers);
+          localPlayers = mergedPlayers;
         }
       }
     } catch (err) {}
@@ -204,7 +184,8 @@ export default function Players({ user }: { user: any }) {
       // Query players for canonical roomId
       const qPlayers = query(collection(db, 'players'), where('channelId', '==', roomId));
       const qsPlayers = await getDocs(qPlayers);
-      const dbPlayers = filterItemsForRoom(qsPlayers.docs.map(d => ({ id: d.id, ...d.data() })), roomId);
+      const dbPlayers = filterItemsForRoom(qsPlayers.docs.map(d => ({ id: d.id, ...d.data() })), roomId)
+        .filter((p: any) => p && p.id && !deletedSet.has(p.id));
       
       // CRITICAL: Only overwrite local data if Firestore returned ACTUAL non-empty records!
       if (dbPlayers.length > 0) {
@@ -237,35 +218,17 @@ export default function Players({ user }: { user: any }) {
     const handleDbUpdated = () => {
       try {
         const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
+        const delRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
+        const delSet = new Set<string>(delRaw ? JSON.parse(delRaw) : []);
+
         let cachedPlayers = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
         let cachedTeams = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
 
-        let pList = cachedPlayers ? JSON.parse(cachedPlayers) : [];
+        let rawPList = cachedPlayers ? JSON.parse(cachedPlayers) : [];
+        let pList = (rawPList || []).filter((p: any) => p && p.id && !delSet.has(p.id));
         let tList = cachedTeams ? JSON.parse(cachedTeams) : [];
 
-        if (!pList.length && tList.length) {
-          const playerMap = new Map();
-          tList.forEach((t: any) => {
-            if (t && Array.isArray(t.players)) {
-              t.players.forEach((p: any) => {
-                if (p && (p.id || p.nickname)) {
-                  playerMap.set(p.id || p.nickname, {
-                    ...p,
-                    team: t.name || p.team,
-                    teamId: t.id || p.teamId
-                  });
-                }
-              });
-            }
-          });
-          pList = Array.from(playerMap.values());
-          if (pList.length) {
-            safeLocalStorageSet(`players_${user.uid}`, pList);
-            if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, pList);
-          }
-        }
-
-        if (pList.length) setPlayers(pList);
+        setPlayers(pList);
         if (tList.length) setTeams(tList);
         setLoading(false);
       } catch (e) {
@@ -359,13 +322,24 @@ export default function Players({ user }: { user: any }) {
   const handleDeletePlayer = async (id: string) => {
     const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
     
-    // 1. Filter out player from global players list
+    // 1. Tombstone in localStorage so background backup never resurrects it
+    try {
+      const prevRaw = localStorage.getItem(`deleted_players_${roomId}`) || '[]';
+      const prevList = JSON.parse(prevRaw);
+      const updatedDeleted = Array.from(new Set([...prevList, id]));
+      localStorage.setItem(`deleted_players_${roomId}`, JSON.stringify(updatedDeleted));
+      if (roomId !== user.uid) {
+        localStorage.setItem(`deleted_players_${user.uid}`, JSON.stringify(updatedDeleted));
+      }
+    } catch (e) {}
+
+    // 2. Filter out player from global players list
     const filteredPlayers = players.filter((p: any) => p.id !== id);
     setPlayers(filteredPlayers);
     safeLocalStorageSet(`players_${user.uid}`, filteredPlayers);
     if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, filteredPlayers);
 
-    // 2. Remove player from any team rosters locally
+    // 3. Remove player from any team rosters locally
     const teamsToUpdateDocs: string[] = [];
     const updatedTeams = teams.map((t: any) => {
       if (t.players && t.players.some((p: any) => p.id === id)) {
@@ -383,7 +357,14 @@ export default function Players({ user }: { user: any }) {
       if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updatedTeams);
     }
 
-    // 3. Sync to server cache
+    // 4. Delete on server backend
+    fetch('/api/players/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: roomId, playerId: id })
+    }).catch(() => {});
+
+    // 5. Sync to server cache
     fetch('/api/sync-cache', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -394,7 +375,7 @@ export default function Players({ user }: { user: any }) {
       })
     }).catch(() => {});
 
-    // 4. Update Firestore
+    // 6. Update Firestore
     try {
       if (!user.isLocalDemo) {
         await deleteDoc(doc(db, 'players', id));
@@ -417,6 +398,53 @@ export default function Players({ user }: { user: any }) {
       setConfirmDeleteId(null);
       window.dispatchEvent(new Event("db-user-updated"));
     }
+  };
+
+  const handleClearAllPlayers = async () => {
+    const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
+
+    // Tombstone all current player IDs
+    try {
+      const prevRaw = localStorage.getItem(`deleted_players_${roomId}`) || '[]';
+      const prevList = JSON.parse(prevRaw);
+      const allIds = players.map(p => p.id).filter(Boolean);
+      const updatedDeleted = Array.from(new Set([...prevList, ...allIds]));
+      localStorage.setItem(`deleted_players_${roomId}`, JSON.stringify(updatedDeleted));
+      if (roomId !== user.uid) {
+        localStorage.setItem(`deleted_players_${user.uid}`, JSON.stringify(updatedDeleted));
+      }
+    } catch (e) {}
+
+    setPlayers([]);
+    safeLocalStorageSet(`players_${user.uid}`, []);
+    if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, []);
+
+    // Also strip players from all teams
+    const clearedTeams = teams.map((t: any) => ({
+      ...t,
+      players: (t.players || []).map(() => ({ id: '' })),
+      totalValRating: 0
+    }));
+    setTeams(clearedTeams);
+    safeLocalStorageSet(`teams_${user.uid}`, clearedTeams);
+    if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, clearedTeams);
+
+    // Server clear endpoint
+    fetch(`/api/players/clear/${roomId}`, { method: 'POST' }).catch(() => {});
+
+    // Sync to cache
+    fetch('/api/sync-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        userId: roomId, 
+        players: [],
+        teams: clearedTeams 
+      })
+    }).catch(() => {});
+
+    setConfirmClearAll(false);
+    window.dispatchEvent(new Event("db-user-updated"));
   };
 
   if (!user || !user.isCustom) {
@@ -464,6 +492,17 @@ export default function Players({ user }: { user: any }) {
           <RefreshCw className="w-5 h-5" />
           <span>Трансферы</span>
         </Link>
+        {players.length > 0 && (
+          <button 
+            type="button"
+            onClick={() => setConfirmClearAll(true)}
+            className="ml-4 flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 px-4 py-4 rounded-2xl font-bold transition-all cursor-pointer"
+            title="Очистить всех игроков"
+          >
+            <Trash2 className="w-5 h-5 text-red-400" />
+            <span>Очистить ({players.length})</span>
+          </button>
+        )}
       </div>
 
       {showAddForm && (
@@ -739,6 +778,24 @@ export default function Players({ user }: { user: any }) {
           </div>
         );
       })()}
+      {confirmClearAll && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-red-950/40 p-8 rounded-2xl max-w-sm w-full border border-red-500/20 relative shadow-[0_0_50px_rgba(239,68,68,0.15)] text-center">
+            <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-2xl font-black uppercase tracking-wider text-white mb-2">Очистить всех игроков?</h3>
+            <p className="text-red-200/60 text-sm font-bold mb-6">Будут удалены все игроки ({players.length} шт.) из базы данных и отвязаны от составов. Это действие нельзя отменить.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmClearAll(false)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all uppercase tracking-wider text-sm cursor-pointer">
+                Отмена
+              </button>
+              <button onClick={handleClearAllPlayers} className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all uppercase tracking-wider text-sm shadow-[0_0_20px_rgba(220,38,38,0.3)] cursor-pointer">
+                Очистить всё
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedProfilePlayer && (
         <PlayerProfileModal
           player={selectedProfilePlayer}

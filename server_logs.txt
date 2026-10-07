@@ -1,55 +1,97 @@
-=== Server Log Started at 2026-10-06T13:00:58.524Z ===
-[2026-10-06T13:00:58.533Z] [INFO] Successfully loaded local database cache from disk.
-[2026-10-06T13:00:58.540Z] [INFO] [Maps] Scanning maps directory...
-[2026-10-06T13:00:58.541Z] [INFO] [Maps] Found 2 files in root (/app/applet/public/maps)
-[2026-10-06T13:00:58.541Z] [INFO] [Maps] Found 7 files in cs2 (/app/applet/public/maps/cs2)
-[2026-10-06T13:00:58.541Z] [INFO] [Maps] Found 7 files in so2 (/app/applet/public/maps/so2)
-[2026-10-06T13:00:58.542Z] [INFO] [Maps] Total unique map files detected: 14
-[2026-10-06T13:00:58.542Z] [INFO] Restoring custom maps from LocalDB...
-[2026-10-06T13:00:58.546Z] [INFO] Custom maps restored.
-[2026-10-06T13:00:58.547Z] [INFO] Loaded 0 Telegram bots from LocalDB.
-[2026-10-06T13:00:58.903Z] [INFO] Server running on http://0.0.0.0:3000
-[2026-10-06T13:01:05.023Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:01:05.033Z] [INFO] [Maps] Scanning maps directory...
-[2026-10-06T13:01:05.034Z] [INFO] [Maps] Found 2 files in root (/app/applet/public/maps)
-[2026-10-06T13:01:05.034Z] [INFO] [Maps] Found 7 files in cs2 (/app/applet/public/maps/cs2)
-[2026-10-06T13:01:05.034Z] [INFO] [Maps] Found 7 files in so2 (/app/applet/public/maps/so2)
-[2026-10-06T13:01:05.034Z] [INFO] [Maps] Total unique map files detected: 14
-[2026-10-06T13:01:05.034Z] [INFO] [Maps] Base pools: CS2=7, S2=7
-[2026-10-06T13:01:05.034Z] [INFO] [Maps] After filtering: CS2=7, S2=7
-[2026-10-06T13:01:05.035Z] [INFO] [Maps] Final pools: CS2=7, S2=7
-[2026-10-06T13:01:05.148Z] [INFO] [Maps] Scanning maps directory...
-[2026-10-06T13:01:05.149Z] [INFO] [Maps] Found 2 files in root (/app/applet/public/maps)
-[2026-10-06T13:01:05.149Z] [INFO] [Maps] Found 7 files in cs2 (/app/applet/public/maps/cs2)
-[2026-10-06T13:01:05.149Z] [INFO] [Maps] Found 7 files in so2 (/app/applet/public/maps/so2)
-[2026-10-06T13:01:05.149Z] [INFO] [Maps] Total unique map files detected: 14
-[2026-10-06T13:01:05.149Z] [INFO] [Maps] Base pools: CS2=7, S2=7
-[2026-10-06T13:01:05.149Z] [INFO] [Maps] After filtering: CS2=7, S2=7
-[2026-10-06T13:01:05.150Z] [INFO] [Maps] Final pools: CS2=7, S2=7
-[2026-10-06T13:01:06.899Z] [INFO] Received cache sync request for user: channel_bamep_cs2 -> canonical room: channel_bamep_cs2
-[2026-10-06T13:01:06.899Z] [INFO] Sync settings for user: channel_bamep_cs2
-[2026-10-06T13:01:07.031Z] [INFO] Successfully synced cache for user channel_bamep_cs2 (canonical room: channel_bamep_cs2)
-[2026-10-06T13:01:34.960Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:02:04.988Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:02:34.965Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:03:04.963Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:03:35.005Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:04:05.959Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:04:35.009Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:05:04.969Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:05:34.972Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:06:04.965Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:06:34.982Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:06:37.090Z] [INFO] Received cache sync request for user: channel_bamep_cs2 -> canonical room: channel_bamep_cs2
-[2026-10-06T13:06:37.111Z] [INFO] Successfully synced cache for user channel_bamep_cs2 (canonical room: channel_bamep_cs2)
-[2026-10-06T13:06:57.527Z] [INFO] Received cache sync request for user: channel_bamep_cs2 -> canonical room: channel_bamep_cs2
-[2026-10-06T13:06:57.536Z] [INFO] Successfully synced cache for user channel_bamep_cs2 (canonical room: channel_bamep_cs2)
-[2026-10-06T13:07:04.963Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:07:35.002Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:08:04.970Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:08:33.509Z] [INFO] Received cache sync request for user: channel_bamep_cs2 -> canonical room: channel_bamep_cs2
-[2026-10-06T13:08:33.515Z] [INFO] Successfully synced cache for user channel_bamep_cs2 (canonical room: channel_bamep_cs2)
-[2026-10-06T13:08:34.969Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-06T13:08:38.923Z] [INFO] Received cache sync request for user: channel_bamep_cs2 -> canonical room: channel_bamep_cs2
-[2026-10-06T13:08:38.929Z] [INFO] Successfully synced cache for user channel_bamep_cs2 (canonical room: channel_bamep_cs2)
-[2026-10-06T13:09:04.973Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+=== Server Log Started at 2026-10-07T07:46:50.289Z ===
+[2026-10-07T07:46:50.292Z] [INFO] Successfully loaded local database cache from disk.
+[2026-10-07T07:46:50.301Z] [INFO] [Maps] Scanning maps directory...
+[2026-10-07T07:46:50.301Z] [INFO] [Maps] Found 2 files in root (/app/applet/public/maps)
+[2026-10-07T07:46:50.301Z] [INFO] [Maps] Found 7 files in cs2 (/app/applet/public/maps/cs2)
+[2026-10-07T07:46:50.302Z] [INFO] [Maps] Found 7 files in so2 (/app/applet/public/maps/so2)
+[2026-10-07T07:46:50.302Z] [INFO] [Maps] Total unique map files detected: 14
+[2026-10-07T07:46:50.303Z] [INFO] Restoring custom maps from LocalDB...
+[2026-10-07T07:46:50.307Z] [INFO] Custom maps restored.
+[2026-10-07T07:46:50.308Z] [INFO] Loaded 0 Telegram bots from LocalDB.
+[2026-10-07T07:46:50.634Z] [INFO] Server running on http://0.0.0.0:3000
+[2026-10-07T07:46:56.424Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:46:57.863Z] [INFO] [Maps] Scanning maps directory...
+[2026-10-07T07:46:57.863Z] [INFO] [Maps] Found 2 files in root (/app/applet/public/maps)
+[2026-10-07T07:46:57.864Z] [INFO] [Maps] Found 7 files in cs2 (/app/applet/public/maps/cs2)
+[2026-10-07T07:46:57.864Z] [INFO] [Maps] Found 7 files in so2 (/app/applet/public/maps/so2)
+[2026-10-07T07:46:57.864Z] [INFO] [Maps] Total unique map files detected: 14
+[2026-10-07T07:46:57.864Z] [INFO] [Maps] Base pools: CS2=7, S2=7
+[2026-10-07T07:46:57.864Z] [INFO] [Maps] After filtering: CS2=7, S2=7
+[2026-10-07T07:46:57.864Z] [INFO] [Maps] Final pools: CS2=7, S2=7
+[2026-10-07T07:46:57.867Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:46:57.955Z] [INFO] [Maps] Scanning maps directory...
+[2026-10-07T07:46:57.955Z] [INFO] [Maps] Found 2 files in root (/app/applet/public/maps)
+[2026-10-07T07:46:57.955Z] [INFO] [Maps] Found 7 files in cs2 (/app/applet/public/maps/cs2)
+[2026-10-07T07:46:57.956Z] [INFO] [Maps] Found 7 files in so2 (/app/applet/public/maps/so2)
+[2026-10-07T07:46:57.956Z] [INFO] [Maps] Total unique map files detected: 14
+[2026-10-07T07:46:57.956Z] [INFO] [Maps] Base pools: CS2=7, S2=7
+[2026-10-07T07:46:57.956Z] [INFO] [Maps] After filtering: CS2=7, S2=7
+[2026-10-07T07:46:57.956Z] [INFO] [Maps] Final pools: CS2=7, S2=7
+[2026-10-07T07:46:59.679Z] [INFO] Received cache sync request for user: channel_bamep_cs2 -> canonical room: channel_bamep_cs2
+[2026-10-07T07:46:59.680Z] [INFO] Sync settings for user: channel_bamep_cs2
+[2026-10-07T07:46:59.788Z] [INFO] Successfully synced cache for user channel_bamep_cs2 (canonical room: channel_bamep_cs2)
+[2026-10-07T07:47:27.838Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:47:57.898Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:48:27.881Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:48:58.466Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:49:27.840Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:49:57.840Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:50:06.560Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:50:06.567Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:50:18.201Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:50:18.207Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:50:27.836Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:50:29.035Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:50:29.041Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:50:38.639Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:50:38.643Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:50:49.244Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:50:49.250Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:50:57.836Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:51:00.085Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:51:00.091Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:51:04.477Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:51:04.482Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:51:15.712Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:51:15.718Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:51:27.413Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:51:27.419Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:51:27.837Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:51:35.169Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:51:35.177Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:51:46.655Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:51:46.662Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:51:49.939Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:51:49.946Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:51:57.857Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:52:01.110Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:52:01.117Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:52:14.720Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:52:14.729Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:52:20.200Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:52:20.206Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:52:27.574Z] [INFO] Received cache sync request for user: channel_bamep_so2 -> canonical room: channel_bamep_so2
+[2026-10-07T07:52:27.583Z] [INFO] Successfully synced cache for user channel_bamep_so2 (canonical room: channel_bamep_so2)
+[2026-10-07T07:52:27.837Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:52:58.581Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:53:28.554Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:53:57.842Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:54:28.522Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:54:57.843Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:55:27.845Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:55:57.872Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:56:27.845Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:56:57.841Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:57:28.552Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:57:57.846Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:58:27.844Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:58:57.844Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:59:27.843Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T07:59:58.450Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T08:00:27.884Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T08:00:57.842Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T08:01:27.869Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T08:01:57.846Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T08:02:27.866Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T08:02:57.848Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-07T08:03:27.848Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)

@@ -171,28 +171,6 @@ export class RoundEngine {
     
     EconomySystem.processBuyPhase(state);
 
-    // Support role setup: in full buy rounds (not pistol or eco), support carries tactical flash/smoke
-    const t1Tactic = state.teams['t1']?.tactic;
-    const t2Tactic = state.teams['t2']?.tactic;
-    for (const p of Object.values(state.players)) {
-      if (!p) continue;
-      const rLower = (p.role || '').toLowerCase();
-      const isRifler = rLower.includes('rifler') || rLower.includes('рифлер');
-      const isSupport = rLower.includes('support') || rLower.includes('саппорт');
-      const teamTactic = p.teamId === 't1' ? t1Tactic : t2Tactic;
-      
-      if ((isSupport) && teamTactic !== 'ECO' && state.round > 1) {
-        if (!p.grenades || p.grenades.length === 0) {
-          p.grenades = ['flash'];
-        }
-      } else if (isRifler && teamTactic === 'FULL_BUY' && state.round > 1) {
-        // Riflers know basic utility, 40% chance to have a flash in full buy rounds
-        if ((!p.grenades || p.grenades.length === 0) && Math.random() < 0.40) {
-          p.grenades = ['flash'];
-        }
-      }
-    }
-
     // Competitive Realism: Trailing teams adapt tactically and buy utility when trailing heavily
     const t1Score = state.teams['t1']?.score || 0;
     const t2Score = state.teams['t2']?.score || 0;
@@ -259,6 +237,16 @@ export class RoundEngine {
       if (state.tick >= 1150 && state.phase === 'LIVE' && state.bomb.state !== 'PLANTED' && state.bomb.state !== 'DEFUSING') { 
          this.endRound(state, 'TIME');
       }
+    } else if (state.phase === 'POST_ROUND_COMBAT') {
+      // Continue simulation for 5 seconds (50 ticks) after round end for exit kills
+      TeamAI.update(state);
+      PlayerAI.update(state);
+      CombatSystem.update(state);
+      
+      const startTick = (state as any).postRoundTickStart || 0;
+      if (state.tick - startTick >= 50) {
+        state.phase = 'ROUND_END';
+      }
     }
     state.tick++;
   }
@@ -304,8 +292,6 @@ export class RoundEngine {
   }
   
   static endRound(state: MatchState, reason: 'ELIMINATION' | 'DEFUSE' | 'EXPLOSION' | 'TIME') {
-    state.phase = 'ROUND_END';
-    
     const tTeam = state.teams['t1']?.side === 'T' ? state.teams['t1'] : state.teams['t2'];
     const ctTeam = state.teams['t1']?.side === 'CT' ? state.teams['t1'] : state.teams['t2'];
     
@@ -318,6 +304,10 @@ export class RoundEngine {
         else if (ctTeam && p.teamId === ctTeam.id) ctAlive++;
       }
     }
+
+    const hasBothAlive = tAlive > 0 && ctAlive > 0;
+    state.phase = (reason !== 'ELIMINATION' && hasBothAlive) ? 'POST_ROUND_COMBAT' : 'ROUND_END';
+    (state as any).postRoundTickStart = state.tick;
     
     let winnerId = '';
     if (reason === 'ELIMINATION') {

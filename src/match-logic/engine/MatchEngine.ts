@@ -220,27 +220,25 @@ export class MatchEngine {
       const synergyMod = teamId === t1Id ? t1SynergyMod : t2SynergyMod;
       const mapExpMod = teamId === t1Id ? t1MapExpMod : t2MapExpMod;
       
+      // Team-wide influence (Captain's calls / Team cohesion):
+      const teamOverallWeight = isCS2 ? 0.22 : 0.20; // Increased to 0.22/0.20 to reflect realistic team cohesion
+      const individualWeight = 1.0 - teamOverallWeight;
+
       // Realistic match day form & situational variance:
-      // In esports, players have good and bad games (bell curve distribution)
-      let matchFormLuck = (rng() + rng() + rng() - 1.5) * 5.0; // range -7.5 to +7.5
+      // Pro players have subtle good/bad days (tight bell curve distribution within ±3-4 points)
+      let matchFormLuck = (rng() + rng() + rng() - 1.5) * 2.2; // range ~ -3.3 to +3.3
       
-      // "Игра жизни" (Game of their life) & Off-game dynamics:
-      // Any player (especially underdogs or close rating teammates) can have a pop-off match!
       let playerFocusMod = 1.0;
       const popOffRoll = rng();
-      if (popOffRoll < 0.12) {
-        // 12% chance of a monster pop-off game (+9 to +13 rating boost)
-        matchFormLuck += 9 + rng() * 4;
-        playerFocusMod = 1.05;
-      } else if (popOffRoll > 0.92) {
-        // 8% chance of an off-day / cold match (-7 to -10)
-        matchFormLuck -= 7 + rng() * 3;
-        playerFocusMod = 0.95;
+      if (popOffRoll < 0.10) {
+        // 10% chance of a solid form boost (+3.5 to +5.0)
+        matchFormLuck += 3.5 + rng() * 1.5;
+        playerFocusMod = 1.02;
+      } else if (popOffRoll > 0.90) {
+        // 10% chance of a tough game (-2.5 to -4.0)
+        matchFormLuck -= 2.5 + rng() * 1.5;
+        playerFocusMod = 0.98;
       }
-
-      // Team-wide influence (Captain's calls / Team cohesion):
-      const teamOverallWeight = isCS2 ? 0.12 : 0.10; // Reduced from 0.18/0.15 to make individual skill more decisive
-      const individualWeight = 1.0 - teamOverallWeight;
 
       const baseRating = (rawRating * individualWeight) + (teamOverall * teamOverallWeight) + teamForm + matchFormLuck;
       const effectiveRating = baseRating * synergyMod * mapExpMod;
@@ -265,72 +263,71 @@ export class MatchEngine {
       const isCaptain = roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader';
 
       if (isSniper) {
-          aim = skillVal * 1.01;
+          aim = skillVal * 1.02;
           iq = skillVal * 1.01;
           movement = skillVal * 1.00;
-          utility = skillVal * 0.95;
-          focus *= 1.04;
-          aggression = 0.88;
-          impact = 1.02;
-          reaction = skillVal * 1.10; // Increased from 1.07
-          speedBonus = 0.00;
-      } else if (isEntry) {
-          // Entry goes in first, purely relying on strong aim now.
-          aim = skillVal * 1.18; // Increased from 1.15
-          iq = skillVal * 1.10;
-          movement = skillVal * 1.06;
           utility = skillVal * 0.96;
-          focus *= 1.02;
-          aggression = 1.12;
-          impact = 1.25;
-          reaction = skillVal * 1.08;
-          speedBonus = 0.00;
-      } else if (isLurker) {
-          aim = skillVal * 1.01;
-          iq = skillVal * 1.03;
-          movement = skillVal * 1.01;
-          utility = skillVal * 0.92;
           focus *= 1.02;
           aggression = 0.90;
           impact = 1.02;
+          reaction = skillVal * 1.05;
+          speedBonus = 0.00;
+      } else if (isEntry) {
+          // Entry goes in first; takes aggressive opening duels without unrealistic god-mode aim
+          aim = skillVal * 1.03;
+          iq = skillVal * 1.02;
+          movement = skillVal * 1.03;
+          utility = skillVal * 0.98;
+          focus *= 1.01;
+          aggression = 1.08;
+          impact = 1.06;
+          reaction = skillVal * 1.04;
+          speedBonus = 0.00;
+      } else if (isLurker) {
+          aim = skillVal * 1.01;
+          iq = skillVal * 1.02;
+          movement = skillVal * 1.01;
+          utility = skillVal * 0.95;
+          focus *= 1.01;
+          aggression = 0.94;
+          impact = 1.01;
           reaction = skillVal * 1.01;
           speedBonus = 0.01;
       } else if (isSupport) {
-          // Support is a standard rifler who also contributes heavy utility setups
           aim = skillVal * 1.00;
-          iq = skillVal * 1.02;
+          iq = skillVal * 1.01;
           movement = skillVal * 1.01;
-          utility = skillVal * 1.35;
-          focus *= 1.01;
-          aggression = 0.82;
+          utility = skillVal * 1.00;
+          focus *= 1.00;
+          aggression = 0.94;
           impact = 1.00;
           reaction = skillVal * 1.00;
           speedBonus = 0.00;
       } else if (isCaptain) {
-          // Captain / IGL focuses on calling strats; frags less unless their rating is superstar tier ("имба" 115+)
+          // Captain / IGL focuses on calling strats; mechanical skill is preserved close to team level
           const isStarCaptain = rawRating >= 115;
           const isStrongCaptain = rawRating >= 105;
           if (isStarCaptain) {
               aim = skillVal * 1.00;
               reaction = skillVal * 1.00;
-              aggression = 0.85;
+              aggression = 0.90;
               impact = 1.00;
           } else if (isStrongCaptain) {
-              aim = skillVal * 0.93;
-              reaction = skillVal * 0.94;
-              aggression = 0.76;
-              impact = 0.93;
+              aim = skillVal * 0.98;
+              reaction = skillVal * 0.98;
+              aggression = 0.86;
+              impact = 0.97;
           } else {
-              aim = skillVal * 0.88;
-              reaction = skillVal * 0.89;
-              aggression = 0.70;
-              impact = 0.88;
+              aim = skillVal * 0.96;
+              reaction = skillVal * 0.96;
+              aggression = 0.84;
+              impact = 0.95;
           }
-          iq = skillVal * 1.10;
-          movement = skillVal * 0.96;
-          utility = skillVal * 1.12;
+          iq = skillVal * 1.08;
+          movement = skillVal * 0.98;
+          utility = skillVal * 1.00;
           focus = 1.00;
-          speedBonus = -0.01;
+          speedBonus = 0.00;
       } else {
           // Rifler (including adapted snipers and adapted captains)
           if (isAdaptedRole) {

@@ -1,17 +1,17 @@
 {
-  "date": "2026-10-06",
-  "readsToday": 6234,
-  "writesToday": 21509,
+  "date": "2026-10-07",
+  "readsToday": 891,
+  "writesToday": 789,
   "maxReads": 50000,
   "maxWrites": 20000,
-  "remainingReads": 43766,
-  "remainingWrites": 0,
-  "percentReads": 12.47,
-  "percentWrites": 107.55,
-  "percentReadsFormatted": "12.47%",
-  "percentWritesFormatted": "107.55%",
-  "lastUpdated": "2026-10-06T13:09:04.973Z",
-  "lastSyncWithFirestore": "2026-10-06T13:01:00.479Z",
+  "remainingReads": 49109,
+  "remainingWrites": 19211,
+  "percentReads": 1.78,
+  "percentWrites": 3.94,
+  "percentReadsFormatted": "1.78%",
+  "percentWritesFormatted": "3.94%",
+  "lastUpdated": "2026-10-07T08:03:29.850Z",
+  "lastSyncWithFirestore": "2026-10-07T08:03:29.931Z",
   "firestoreConnected": true,
   "firestoreDatabaseId": "ai-studio-matchsimulator-cf882484-249e-4726-9c8b-046071d33a59",
   "projectId": "conductive-state-tf6jr",
@@ -25,34 +25,34 @@
   },
   "roomActivity": {
     "channel_bamep_cs2": {
-      "writes": 677,
-      "reads": 3258,
-      "lastActive": "2026-10-06T13:09:04.973Z"
+      "reads": 618,
+      "writes": 418,
+      "lastActive": "2026-10-07T08:03:27.848Z"
     },
     "channel_airy": {
+      "writes": 0,
       "reads": 0,
-      "lastActive": "2026-10-06T03:40:49.131Z",
-      "writes": 0
+      "lastActive": "2026-10-07T05:31:25.912Z"
     },
     "channel_simu": {
+      "reads": 0,
       "writes": 0,
-      "lastActive": "2026-10-06T03:40:49.131Z",
-      "reads": 0
+      "lastActive": "2026-10-07T05:31:25.912Z"
     },
-    "channel_bamep_so2": {
-      "reads": 12,
-      "lastActive": "2026-10-06T08:08:54.231Z",
-      "writes": 8
+    "guest": {
+      "reads": 0,
+      "writes": 24,
+      "lastActive": "2026-10-06T10:12:42.897Z"
     },
     "channel_bam": {
       "lastActive": "2026-10-03T10:14:13.399Z",
       "reads": 0,
       "writes": 0
     },
-    "guest": {
-      "reads": 0,
-      "writes": 24,
-      "lastActive": "2026-10-06T10:12:42.897Z"
+    "channel_bamep_so2": {
+      "reads": 12,
+      "writes": 27,
+      "lastActive": "2026-10-07T07:52:27.574Z"
     }
   }
 }

@@ -391,48 +391,58 @@ export class RatingSystem {
     // Enforce limits: maximum +8.0%, minimum -8.0% as specified
     avgRoundSwing = Math.max(-8.0, Math.min(8.0, avgRoundSwing));
 
-    // HLTV Impact Rating enhanced with context swing, clutches, and multi-kills
-    // Calibrated so that an average professional player (KPR ~0.67, APR ~0.14) has an Impact Rating of ~1.00
-    // and below-average performances realistically drop below 1.10 and below 1.00.
+    // Authentic HLTV 2.0 Impact Rating:
+    // Baselines: KPR 0.679, APR 0.14
+    // Formula: 2.13 * KPR + 0.12 * APR - 0.41 + Clutches + Multi-kills + Openings
     const rawImpact =
       2.13 * kpr +
-      0.42 * apr -
-      0.58 +
-      (avgRoundSwing / 100) * 0.40 +
-      multiKillFactor * 0.20 +
-      clutchFactor * 0.30 +
-      openingFactor * 0.35;
-    const impact = Math.max(0.10, Number(rawImpact.toFixed(2))); // Enforce 0.10 floor as requested
-    const finalImpact = Math.min(2.0, impact);
+      0.12 * apr - 0.41 +
+      multiKillFactor * 0.18 +
+      clutchFactor * 0.22 +
+      openingFactor * 0.20;
+    const finalImpact = Math.max(0.20, Math.min(2.30, Number(rawImpact.toFixed(2))));
 
-    // Final Unified Rating formula
-    const w = RATING_CONFIG.RATING_WEIGHTS;
-
-    const effectiveKast = RATING_CONFIG.USE_KAST ? kast : 70.0;
-    const effectiveSwing = RATING_CONFIG.USE_SWING ? (avgRoundSwing / 100) : 0.0;
+    // Authentic HLTV 2.0 Rating formula:
+    // 5 normalized components centered around 1.00:
+    // 1. KPR: (kpr / 0.679) -> weight 0.40 (frags drive rating)
+    // 2. Survival: ((1 - dpr) / 0.321) -> weight 0.15 (staying alive is valuable, but doesn't replace frags)
+    // 3. Impact: (finalImpact / 1.00) -> weight 0.22 (clutches, multi-kills, openings)
+    // 4. ADR: (adr / 75.0) -> weight 0.15 (damage output)
+    // 5. KAST: ((kast / 100) / 0.70) -> weight 0.08 (support factor)
+    const ratingKpr = kpr / 0.679;
+    const rawSurvival = Math.max(0, (1 - dpr)) / 0.321;
+    // Survival dampening: staying alive passively cannot carry a rating without kills
+    const ratingSurvival = Math.min(1.40, rawSurvival);
+    const ratingImpact = finalImpact / 1.00;
+    const ratingAdr = adr / 75.0;
+    const ratingKast = (kast / 100) / 0.70;
 
     let computedRating =
-      w.BASE_OFFSET +
-      w.KAST_COEFFICIENT * effectiveKast +
-      w.KPR_COEFFICIENT * kpr -
-      w.DPR_PENALTY * dpr +
-      w.ADR_COEFFICIENT * adr +
-      0.15 * finalImpact +
-      w.SWING_COEFFICIENT * effectiveSwing +
-      w.MULTI_KILL_COEFFICIENT * multiKillFactor +
-      w.CLUTCH_COEFFICIENT * clutchFactor +
-      w.OPENING_COEFFICIENT * openingFactor;
+      0.40 * ratingKpr +
+      0.15 * ratingSurvival +
+      0.22 * ratingImpact +
+      0.15 * ratingAdr +
+      0.08 * ratingKast;
 
-    // Static Stats Dampening: reduce the variance of the final rating
-    // This keeps most ratings in the 0.70 - 1.40 range even with high KPR
-    if (computedRating > 1.20) {
-      computedRating = 1.20 + (computedRating - 1.20) * 0.40;
-    } else if (computedRating < 0.80) {
-      computedRating = 0.80 - (0.80 - computedRating) * 0.40;
+    // Apply subtle round swing modifier (capped at +/- 0.04)
+    if (RATING_CONFIG.USE_SWING && avgRoundSwing) {
+      const swingContribution = Math.max(-0.04, Math.min(0.04, (avgRoundSwing / 100) * 0.05));
+      computedRating += swingContribution;
     }
 
-    // Safeguards: ensure realistic limits (0.10 to 2.50)
-    computedRating = Math.max(0.10, Math.min(2.50, computedRating));
+    // Competitive Balance Guard (Anti-0.8 KD Top Tab):
+    // In professional Counter-Strike (HLTV 2.0), a player with negative K/D (< 0.85) and low KPR (< 0.55)
+    // cannot hold a 1.00+ rating or take 1st tab over the team's primary fraggers
+    if (clutchFactor < 0.15) {
+      if (kd < 0.85 && kpr < 0.55) {
+        computedRating = Math.min(0.92, computedRating);
+      } else if (kd < 0.92 && kpr < 0.60) {
+        computedRating = Math.min(0.98, computedRating);
+      }
+    }
+
+    // Realistic bounds: professional matches stay between 0.30 and 2.30
+    computedRating = Math.max(0.30, Math.min(2.30, computedRating));
 
     return {
       rating: Number(computedRating.toFixed(2)),

@@ -16,6 +16,7 @@ export interface Match {
   winnerId: string | null;
   isDraw?: boolean;
   isFinished?: boolean;
+  importance?: 'none' | 'semi' | 'final'; // Important matches (Gold/Silver dots)
 }
 
 export interface Group {

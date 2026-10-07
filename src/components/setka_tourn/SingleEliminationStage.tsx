@@ -12,9 +12,10 @@ interface Props {
   isExporting?: boolean;
   isSwapMode?: boolean;
   onVetoMatch?: (team1: Team, team2: Team, matchInfo?: any) => void;
+  onToggleImportance?: (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number) => void;
 }
 
-export default function SingleEliminationStage({ tournament, onUpdate, isExporting, isSwapMode, onVetoMatch }: Props) {
+export default function SingleEliminationStage({ tournament, onUpdate, isExporting, isSwapMode, onVetoMatch, onToggleImportance }: Props) {
   const wRounds = Array.isArray(tournament.bracketRounds) ? tournament.bracketRounds : [];
   const lRounds = Array.isArray(tournament.losersBracketRounds) ? tournament.losersBracketRounds : [];
   const gf = Array.isArray(tournament.grandFinal) ? tournament.grandFinal : [];
@@ -494,6 +495,7 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                                             allTeams={tournament.teams}
                                             isExporting={isExporting}
                                             isSwapMode={isSwapMode}
+                                            onToggleImportance={onToggleImportance}
                                         />
                                     ))}
                                 </div>

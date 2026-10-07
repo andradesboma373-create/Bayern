@@ -25,6 +25,7 @@ interface Props {
     cardThemeColor?: string;
     btnStyle?: string;
     bracketMode?: 'standard' | 'realtime';
+    onToggleImportance?: (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number) => void;
 }
 
 export default function MatchCard({
@@ -47,7 +48,8 @@ export default function MatchCard({
     boxStyle = 'dark',
     cardThemeColor = '#ff8f00',
     btnStyle = 'gradient',
-    bracketMode = 'standard'
+    bracketMode = 'standard',
+    onToggleImportance
 }: Props) {
     if (!match) {
         return <div className="flex-1 min-h-[140px]" />;
@@ -125,6 +127,32 @@ export default function MatchCard({
     return (
         <div className="relative flex flex-col justify-center flex-1 px-6 min-h-[140px] group">
             <div className={`relative z-10 w-full transition-all ${boxCls.outerCard}`}>
+                {/* Importance Indicator (Dots) */}
+                {!isExporting && onToggleImportance && (
+                    <button 
+                        onClick={() => onToggleImportance(bracketType, rIdx, mIdx)}
+                        className="absolute -top-1.5 -right-1.5 z-20 w-6 h-6 rounded-full bg-black/80 border border-white/10 flex items-center justify-center hover:scale-110 transition-all shadow-lg"
+                        title="Изменить важность матча (Обычный -> Полуфинал -> Финал)"
+                    >
+                        {match.importance === 'final' ? (
+                            <div className="w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+                        ) : match.importance === 'semi' ? (
+                            <div className="w-3 h-3 rounded-full bg-slate-300 shadow-[0_0_8px_rgba(203,213,225,0.6)]" />
+                        ) : (
+                            <div className="w-2 h-2 rounded-full bg-white/10" />
+                        )}
+                    </button>
+                )}
+                {isExporting && match.importance && match.importance !== 'none' && (
+                    <div className="absolute top-2 right-2 z-20">
+                        {match.importance === 'final' ? (
+                            <div className="w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+                        ) : (
+                            <div className="w-3 h-3 rounded-full bg-slate-300 shadow-[0_0_8px_rgba(203,213,225,0.6)]" />
+                        )}
+                    </div>
+                )}
+
                 <div className="flex flex-col gap-3">
                     {/* Team 1 */}
                     <div 

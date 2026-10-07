@@ -473,6 +473,32 @@ export default function App() {
                   } catch (e) {}
                 }
                 window.dispatchEvent(new Event('tournaments-updated'));
+              } else if (col.prop === 'teams') {
+                const deletedIdsRaw = localStorage.getItem(`deleted_teams_${roomId}`) || localStorage.getItem(`deleted_teams_${user.uid}`);
+                const deletedSet = new Set<string>(deletedIdsRaw ? JSON.parse(deletedIdsRaw) : []);
+                const validArray = finalArray.filter((t: any) => t && t.id && !deletedSet.has(t.id));
+
+                let jsonStr = JSON.stringify(validArray);
+                if (jsonStr !== localRaw) {
+                  try {
+                    localStorage.setItem(col.cacheKey, jsonStr);
+                    if (roomId !== user.uid) localStorage.setItem(`teams_${user.uid}`, jsonStr);
+                    hasUpdatedAny = true;
+                  } catch (e) {}
+                }
+              } else if (col.prop === 'players') {
+                const deletedIdsRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
+                const deletedSet = new Set<string>(deletedIdsRaw ? JSON.parse(deletedIdsRaw) : []);
+                const validArray = finalArray.filter((p: any) => p && p.id && !deletedSet.has(p.id));
+
+                let jsonStr = JSON.stringify(validArray);
+                if (jsonStr !== localRaw) {
+                  try {
+                    localStorage.setItem(col.cacheKey, jsonStr);
+                    if (roomId !== user.uid) localStorage.setItem(`players_${user.uid}`, jsonStr);
+                    hasUpdatedAny = true;
+                  } catch (e) {}
+                }
               } else {
                 let jsonStr = JSON.stringify(finalArray);
                 if (jsonStr.length > 1500000) {

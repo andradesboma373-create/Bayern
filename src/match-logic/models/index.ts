@@ -63,7 +63,7 @@ export interface Player {
   teamId: string;
   side: TeamSide;
   role: PlayerRole;
-  originalRole?: string;
+  originalRole?: PlayerRole;
   isAdaptedRole?: boolean;
 
   // Base Characteristics
@@ -127,7 +127,7 @@ export interface Team {
   side: TeamSide;
   players: string[]; // Player IDs
   tactic: string;
-  strategy: 'DEFAULT' | 'FAST_A' | 'FAST_B' | 'EXECUTE_A' | 'EXECUTE_B' | 'MID_SPLIT_A' | 'MID_SPLIT_B' | 'MID_CONTROL' | 'SPLIT' | 'CONTACT' | 'FAKE' | 'SLOW' | 'AGGRESSIVE' | 'PASSIVE' | 'STACK_A' | 'STACK_B' | 'RETAKE' | 'SAVE' | 'DEFEND_BOMB' | 'RECOVER_BOMB';
+  strategy: 'DEFAULT' | 'FAST_A' | 'FAST_B' | 'EXECUTE_A' | 'EXECUTE_B' | 'MID_SPLIT_A' | 'MID_SPLIT_B' | 'MID_CONTROL' | 'SPLIT' | 'CONTACT' | 'FAKE' | 'SLOW' | 'AGGRESSIVE' | 'PASSIVE' | 'STACK_A' | 'STACK_B' | 'RETAKE' | 'SAVE' | 'DEFEND_BOMB' | 'RECOVER_BOMB' | 'MID_ROUND_HOLD';
   lossStreak?: number;
 }
 
@@ -151,7 +151,7 @@ export interface MatchState {
   format: string; // MR12, MR15
   formatProfile?: any;
   
-  phase: 'FREEZE' | 'BUY' | 'LIVE' | 'ROUND_END' | 'MATCH_END';
+  phase: 'FREEZE' | 'BUY' | 'LIVE' | 'POST_ROUND_COMBAT' | 'ROUND_END' | 'MATCH_END';
   round: number;
   half: number;
   tick: number; // For simulation timing
