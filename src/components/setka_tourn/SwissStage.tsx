@@ -1094,16 +1094,16 @@ export default function SwissStage({
                                   {/* Team 1 (Left) */}
                                   <div
                                     onClick={() => match.team1 && setQuickWinner(rIdx, mIdx, match.team1)}
-                                    className={`flex items-center ${isLogosOnly ? 'justify-start' : 'gap-1.5 flex-1 min-w-0 pr-1'} cursor-pointer transition-all ${
+                                    className={`flex items-center ${isLogosOnly ? 'justify-start w-fit px-1' : 'gap-1.5 flex-1 min-w-0 pr-1'} cursor-pointer transition-all ${
                                       hasWinner && !t1Won ? 'opacity-35 hover:opacity-75 grayscale-[40%]' : ''
                                     }`}
                                     title={match.team1?.name ? `${match.team1.name} (Нажмите для победы)` : 'Нажмите для победы'}
                                   >
-                                    <div className={`transition-all rounded-md ${t1Won ? 'p-0.5 bg-emerald-500/20 ring-2 ring-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : ''}`}>
+                                    <div className={`transition-all rounded-md shrink-0 ${t1Won ? 'p-0.5 bg-emerald-500/20 ring-2 ring-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : ''}`}>
                                       <TeamLogo
                                         teamName={match.team1?.name || ''}
                                         logoUrl={match.team1?.logoUrl}
-                                        sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"}
+                                        sizeClassName={isLogosOnly ? "w-7 h-7 shrink-0" : "w-5 h-5 shrink-0"}
                                       />
                                     </div>
                                     {!isLogosOnly && (
@@ -1183,7 +1183,7 @@ export default function SwissStage({
                                   {/* Team 2 (Right) */}
                                   <div
                                     onClick={() => match.team2 && setQuickWinner(rIdx, mIdx, match.team2)}
-                                    className={`flex items-center ${isLogosOnly ? 'justify-end' : 'justify-end gap-1.5 flex-1 min-w-0 pl-1'} cursor-pointer transition-all ${
+                                    className={`flex items-center ${isLogosOnly ? 'justify-end w-fit px-1' : 'justify-end gap-1.5 flex-1 min-w-0 pl-1'} cursor-pointer transition-all ${
                                       hasWinner && !t2Won ? 'opacity-35 hover:opacity-75 grayscale-[40%]' : ''
                                     }`}
                                     title={match.team2?.name ? `${match.team2.name} (Нажмите для победы)` : 'Нажмите для победы'}
@@ -1215,11 +1215,11 @@ export default function SwissStage({
                                         </span>
                                       )
                                     )}
-                                    <div className={`transition-all rounded-md ${t2Won ? 'p-0.5 bg-emerald-500/20 ring-2 ring-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : ''}`}>
+                                    <div className={`transition-all rounded-md shrink-0 ${t2Won ? 'p-0.5 bg-emerald-500/20 ring-2 ring-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : ''}`}>
                                       <TeamLogo
                                         teamName={match.team2?.name || ''}
                                         logoUrl={match.team2?.logoUrl}
-                                        sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"}
+                                        sizeClassName={isLogosOnly ? "w-7 h-7 shrink-0" : "w-5 h-5 shrink-0"}
                                       />
                                     </div>
                                   </div>

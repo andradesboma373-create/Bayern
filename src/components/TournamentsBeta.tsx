@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Sparkles, Plus, Search, Calendar, Users, ChevronRight, LayoutGrid, List, Filter, Trash2, Check, X, Layers, RotateCcw, Download, Database, Flame, Eye } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Trophy, Sparkles, Plus, Search, Calendar, Users, ChevronRight, LayoutGrid, List, Filter, Trash2, Check, X, Layers, RotateCcw, Download, Database, Flame, Eye, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 import { loadTournaments, deleteTournament, getCanonicalRoomId, saveTournament } from './setka_tourn/storage';
 import { Tournament } from './setka_tourn/types';
 import TournamentManager from './setka_tourn/TournamentManager';
@@ -7,10 +8,12 @@ import { getAutoMatchedVectorLogo } from '../lib/logoMatcher';
 import { generateStageData } from './setka_tourn/stageGenerator';
 
 export default function TournamentsBeta({ user }: { user: any }) {
+  const { tournamentId } = useParams<{ tournamentId?: string }>();
+  const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'list' | 'manager' | 'create'>('list');
-  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
+  const [view, setView] = useState<'list' | 'manager' | 'create'>(tournamentId ? 'manager' : 'list');
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(tournamentId || null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -48,6 +51,7 @@ export default function TournamentsBeta({ user }: { user: any }) {
   const handleSelectTournament = (id: string) => {
     setSelectedTournamentId(id);
     setView('manager');
+    navigate(`/tournaments-beta/${id}`);
   };
 
   const confirmDelete = (e: React.MouseEvent, id: string) => {
@@ -73,6 +77,8 @@ export default function TournamentsBeta({ user }: { user: any }) {
           tournamentId={selectedTournamentId} 
           onBack={() => {
             setView('list');
+            setSelectedTournamentId(null);
+            navigate('/tournaments-beta');
             refreshTournaments();
           }} 
         />

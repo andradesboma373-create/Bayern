@@ -1919,10 +1919,34 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                               link.click();
                               URL.revokeObjectURL(url);
                             }} 
-                            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border border-blue-500/20 flex items-center gap-2 cursor-pointer"
+                            className="bg-white/5 hover:bg-white/10 text-white/50 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border border-white/5 flex items-center gap-2 cursor-pointer"
                             title="Скачать JSON данные турнира (бэкап)"
                           >
                             <Download className="w-4 h-4" /> JSON
+                          </button>
+
+                          <button 
+                            onClick={() => {
+                              if (stageRef.current) {
+                                setIsExporting(true);
+                                setTimeout(() => {
+                                  downloadElementAsImage(stageRef.current!, `${activeTournament.name || 'tournament'}_bracket`, {
+                                    backgroundColor: '#050508',
+                                    quality: 1.0,
+                                    pixelRatio: 2.5
+                                  }).then(() => setIsExporting(false))
+                                    .catch(err => {
+                                      console.error("Export error:", err);
+                                      setIsExporting(false);
+                                      alert("Ошибка при сохранении изображения. Попробуйте еще раз.");
+                                    });
+                                }, 500);
+                              }
+                            }} 
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center gap-2 cursor-pointer"
+                            title="Скачать сетку турнира как изображение (PNG)"
+                          >
+                            <ImageIcon className="w-4 h-4" /> СКАЧАТЬ ФОТО
                           </button>
 
                           {!hasStarted && (
@@ -2014,6 +2038,29 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                           <div className="space-y-3 pt-4 border-t border-white/5">
                               <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Быстрые Действия</span>
                               <div className="flex flex-col gap-2">
+                                  <button 
+                                      onClick={() => {
+                                         if (stageRef.current) {
+                                           setShowDashboardHub(false);
+                                           setIsExporting(true);
+                                           setTimeout(() => {
+                                             downloadElementAsImage(stageRef.current!, `${activeTournament.name || 'tournament'}_bracket`, {
+                                               backgroundColor: '#050508',
+                                               quality: 1.0,
+                                               pixelRatio: 2.5
+                                             }).then(() => setIsExporting(false))
+                                               .catch(err => {
+                                                 console.error("Export error:", err);
+                                                 setIsExporting(false);
+                                               });
+                                           }, 500);
+                                         }
+                                      }}
+                                      className="w-full flex items-center gap-3 p-3 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-300 rounded-xl transition-all group shadow-lg shadow-emerald-500/5"
+                                  >
+                                      <ImageIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                      <span className="text-[10px] font-black uppercase tracking-widest">Скачать фото сетки</span>
+                                  </button>
                                   <button 
                                       onClick={() => setShowTop20(true)}
                                       className="w-full flex items-center gap-3 p-3 bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 text-purple-300 rounded-xl transition-all group"

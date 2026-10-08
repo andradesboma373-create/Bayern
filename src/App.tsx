@@ -665,6 +665,7 @@ export default function App() {
               <Route path="/matches" element={<Matches user={user} />} />
               <Route path="/tournaments" element={<TournamentBracket user={user} />} />
               <Route path="/tournaments-beta" element={<TournamentsBeta user={user} />} />
+              <Route path="/tournaments-beta/:tournamentId" element={<TournamentsBeta user={user} />} />
               <Route path="/teams" element={<Teams user={user} />} />
               <Route path="/players" element={<Players user={user} />} />
               <Route path="/news" element={<News user={user} />} />
