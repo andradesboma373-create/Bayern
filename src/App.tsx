@@ -19,7 +19,7 @@ import Teams from './components/Teams';
 import Players from './components/Players';
 import News from './components/News';
 import SettingsComponent from './components/Settings';
-import TgUsers from './components/TgUsers';
+import MapCenter from './components/MapCenter';
 import Transfers from './components/Transfers';
 import TournamentsBeta from './components/TournamentsBeta';
 import AdminAnalytics from './components/AdminAnalytics';
@@ -46,11 +46,16 @@ function Sidebar({ isOpen, onClose, user, onOpenSo2Media }: { isOpen: boolean, o
     { icon: Newspaper, label: 'Новости', path: '/news' },
     { icon: Zap, label: 'Трансферы', path: '/transfers' },
     ...(isBamepAdmin ? [
-      { icon: Database, label: 'База ТГ Бота', path: '/tg-users', admin: true },
+    { icon: Database, label: 'Карты и Тактики', path: '/map-center', admin: true },
       { icon: Activity, label: 'Аналитика', path: '/analytics', admin: true },
     ] : []),
     { icon: Settings, label: 'Настройки', path: '/settings' },
   ];
+
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
+
+  if (!isMounted) return null;
 
   return (
     <>
@@ -212,6 +217,11 @@ function TopBar({ user, onCustomLogin, onLogout, onToggleSidebar, onOpenSo2Media
 
   const rawStatus = dbUser && dbUser.status ? dbUser.status : 'Участник';
   const currentStatus = (rawStatus === 'Менеджер (Лидер)' || rawStatus === 'Менеджер' || rawStatus === 'Лидер') ? 'Участник' : rawStatus;
+
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
+
+  if (!isMounted) return <div className="h-20 border-b border-white/5"></div>;
 
   return (
     <div className="h-20 border-b border-white/5 px-4 lg:px-8 flex items-center justify-between">
@@ -475,8 +485,14 @@ export default function App() {
                 window.dispatchEvent(new Event('tournaments-updated'));
               } else if (col.prop === 'teams') {
                 const deletedIdsRaw = localStorage.getItem(`deleted_teams_${roomId}`) || localStorage.getItem(`deleted_teams_${user.uid}`);
-                const deletedSet = new Set<string>(deletedIdsRaw ? JSON.parse(deletedIdsRaw) : []);
-                const validArray = finalArray.filter((t: any) => t && t.id && !deletedSet.has(t.id));
+                const deletedList: string[] = deletedIdsRaw ? JSON.parse(deletedIdsRaw) : [];
+                const deletedSet = new Set<string>(deletedList.map(s => String(s).toLowerCase().trim()));
+                const validArray = finalArray.filter((t: any) => {
+                  if (!t) return false;
+                  const tId = String(t.id || t._id || '').toLowerCase().trim();
+                  const tName = String(t.name || '').toLowerCase().trim();
+                  return !deletedSet.has(tId) && !deletedSet.has(tName);
+                });
 
                 let jsonStr = JSON.stringify(validArray);
                 if (jsonStr !== localRaw) {
@@ -488,8 +504,14 @@ export default function App() {
                 }
               } else if (col.prop === 'players') {
                 const deletedIdsRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
-                const deletedSet = new Set<string>(deletedIdsRaw ? JSON.parse(deletedIdsRaw) : []);
-                const validArray = finalArray.filter((p: any) => p && p.id && !deletedSet.has(p.id));
+                const deletedList: string[] = deletedIdsRaw ? JSON.parse(deletedIdsRaw) : [];
+                const deletedSet = new Set<string>(deletedList.map(s => String(s).toLowerCase().trim()));
+                const validArray = finalArray.filter((p: any) => {
+                  if (!p) return false;
+                  const pId = String(p.id || p._id || '').toLowerCase().trim();
+                  const pNick = String(p.nickname || p.name || '').toLowerCase().trim();
+                  return !deletedSet.has(pId) && !deletedSet.has(pNick);
+                });
 
                 let jsonStr = JSON.stringify(validArray);
                 if (jsonStr !== localRaw) {
@@ -730,8 +752,8 @@ export default function App() {
               <Route path="/news" element={<News user={user} />} />
               <Route path="/transfers" element={<Transfers user={user} />} />
               <Route 
-                path="/tg-users" 
-                element={isBamepAdmin ? <TgUsers user={user} /> : <AccessDenied sectionName="База ТГ Бота" roomName={user?.name} />} 
+                path="/map-center" 
+                element={isBamepAdmin ? <MapCenter user={user} /> : <AccessDenied sectionName="Карты и Тактики" roomName={user?.name} />} 
               />
               <Route 
                 path="/analytics" 

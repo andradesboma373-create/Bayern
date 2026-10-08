@@ -255,9 +255,6 @@ export default function SwissStage({
         match.score2 = Math.max(match.score2, 1);
         if (match.score1 >= match.score2) match.score1 = 0;
       }
-      try {
-        recordTournamentMatchResult(tournament.userId || 'guest', tournament, match, `Swiss Round ${rIdx + 1}`);
-      } catch (e) {}
     }
     newRounds[rIdx][mIdx] = match;
     onUpdate({ ...tournament, swissRounds: newRounds });
@@ -270,12 +267,6 @@ export default function SwissStage({
 
     if (match.score1 > match.score2) match.winnerId = match.team1?.id || null;
     else if (match.score2 > match.score1) match.winnerId = match.team2?.id || null;
-
-    if (match.winnerId) {
-      try {
-        recordTournamentMatchResult(tournament.userId || 'guest', tournament, match, `Swiss Round ${rIdx + 1}`);
-      } catch (e) {}
-    }
 
     newRounds[rIdx][mIdx] = match;
     onUpdate({ ...tournament, swissRounds: newRounds });
@@ -1039,7 +1030,7 @@ export default function SwissStage({
                           {/* Match Cards List */}
                           <div className="flex flex-col gap-1.5">
                             {matchesToRender.map(({ match, originalIndex: mIdx }) => {
-                              const isRealMatch = originalIndexIsReal(mIdx);
+                                 const isRealMatch = originalIndexIsReal(mIdx);
                               const hasWinner = !!match.winnerId;
                               const isBye = match.team1?.id === 'BYE' || match.team2?.id === 'BYE';
 

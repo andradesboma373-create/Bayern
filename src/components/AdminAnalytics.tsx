@@ -28,6 +28,8 @@ interface RoomData {
   isLocked: boolean;
   lockReason?: string;
   totalRequestsToday: number;
+  readsToday?: number;
+  writesToday?: number;
   lastActive: string;
 }
 
@@ -59,10 +61,16 @@ interface AuditLog {
   timestamp: string;
   roomId: string;
   username: string;
+  channelName?: string;
   action: string;
   method: string;
   path: string;
   ip: string;
+  quotaCost?: {
+    reads?: number;
+    writes?: number;
+    isCache?: boolean;
+  };
   details?: string;
   isAbuse?: boolean;
 }
@@ -703,7 +711,8 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
                 <th className="py-3 px-4 font-bold">Логин</th>
                 <th className="py-3 px-4 font-bold">Роль</th>
                 <th className="py-3 px-4 font-bold">Статус</th>
-                <th className="py-3 px-4 font-bold">Запросов сегодня</th>
+                <th className="py-3 px-4 font-bold">Лимиты сегодня</th>
+                <th className="py-3 px-4 font-bold">Запросов</th>
                 <th className="py-3 px-4 font-bold">Последняя активность</th>
                 <th className="py-3 px-4 font-bold text-right">Действия</th>
               </tr>
@@ -758,6 +767,21 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
                           Активна
                         </span>
                       )}
+                    </td>
+
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
+                          (room.writesToday || 0) > 0 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-white/5 text-white/40'
+                        }`} title="Записей в Cloud Firestore сегодня">
+                          +{(room.writesToday || 0)} зап.
+                        </span>
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
+                          (room.readsToday || 0) > 0 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-white/40'
+                        }`} title="Чтений из Cloud Firestore сегодня">
+                          +{(room.readsToday || 0)} чт.
+                        </span>
+                      </div>
                     </td>
 
                     <td className="py-3 px-4 font-mono font-bold text-white/80">
@@ -1004,8 +1028,8 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
                           : 'bg-black/30 border-white/5 text-white/80'
                       }`}
                     >
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="flex items-center gap-2">
+                      <div className="flex items-center justify-between text-[11px] flex-wrap gap-1">
+                        <span className="flex items-center gap-2 flex-wrap">
                           <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
                             log.isAbuse 
                               ? 'bg-red-500 text-black' 
@@ -1017,8 +1041,26 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
                               ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                               : 'bg-white/10 text-white/70'
                           }`}>
-                            {log.action === 'CACHE_SYNC' ? 'КЭШ СИНХР (0 КВОТЫ)' : log.action}
+                            {log.action === 'CACHE_SYNC' ? 'КЭШ СИНХР' : log.action}
                           </span>
+
+                          {/* Quota Cost Badges */}
+                          {log.quotaCost?.writes ? (
+                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              +{log.quotaCost.writes} зап. Firestore
+                            </span>
+                          ) : null}
+                          {log.quotaCost?.reads ? (
+                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                              +{log.quotaCost.reads} чт. Firestore
+                            </span>
+                          ) : null}
+                          {log.quotaCost?.isCache && !log.quotaCost?.writes && !log.quotaCost?.reads ? (
+                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-500/10 text-emerald-300/90 border border-emerald-500/20">
+                              0 квоты (кэш сервера)
+                            </span>
+                          ) : null}
+
                           <span className="text-white/40">{log.method} {log.path}</span>
                         </span>
                         <span className="text-white/40">
@@ -1026,7 +1068,7 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
                         </span>
                       </div>
                       {log.details && (
-                        <div className="text-xs text-white/90 pl-1 font-sans">
+                        <div className="text-xs text-white/90 pl-1 font-sans bg-white/[0.02] p-2 rounded-lg border border-white/5">
                           {log.details}
                         </div>
                       )}

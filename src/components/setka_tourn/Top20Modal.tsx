@@ -8,7 +8,7 @@ import MvpModal from './MvpModal';
 import PlayerProfileModal from '../PlayerProfileModal';
 import { loadTournaments, getCanonicalRoomId } from './storage';
 import { db, doc, deleteDoc } from '../../firebase';
-import { saveMatchesToLocalStorage, getKdColorClass, getSwingColorClass } from '../../lib/utils';
+import { saveMatchesToLocalStorage, getKdColorClass, getSwingColorClass, formatSwing } from '../../lib/utils';
 import { RatingSystem } from '../../match-logic/systems/RatingSystem';
 import { RATING_CONFIG } from '../../match-logic/config/RatingConfig';
 import { syncAndBackfillTournamentMatches } from '../../lib/tournamentMatchRecorder';
@@ -46,7 +46,6 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
     const tourneys = loadTournaments(roomId);
     const currentTourney = tourneys.find((t: any) => t.id === tournamentId);
     if (currentTourney) {
-      syncAndBackfillTournamentMatches(uid, currentTourney);
       setRefreshTrigger(prev => prev + 1);
     }
 
@@ -173,11 +172,6 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
       return false;
     });
 
-    // If zero matches found in history but tournament has finished matches, auto backfill right now!
-    if (tourMatches.length === 0 && tourney) {
-      tourMatches = syncAndBackfillTournamentMatches(uid, tourney);
-    }
-    
     const playerStatsMap = new Map<string, any>();
     
     // Aggregate stats from matches
@@ -662,7 +656,7 @@ export default function Top20Modal({ user, tournamentId, onClose }: Props) {
                                         <div>{Math.round(p.adr)}</div>
                                         {RATING_CONFIG.USE_SWING && (
                                             <div className={getSwingColorClass(p.roundSwing)}>
-                                                {p.roundSwing > 0 ? `+${p.roundSwing.toFixed(1)}%` : `${p.roundSwing.toFixed(1)}%`}
+                                                {formatSwing(p.roundSwing)}
                                             </div>
                                         )}
                                         <div>{p.impact.toFixed(2)}</div>

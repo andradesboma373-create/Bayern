@@ -3,7 +3,7 @@ import { X, Download } from 'lucide-react';
 import TeamLogo from './TeamLogo';
 import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { RatingSystem } from '../match-logic/systems/RatingSystem';
-import { getKdColorClass, getSwingColorClass } from '../lib/utils';
+import { getKdColorClass, getSwingColorClass, formatSwing } from '../lib/utils';
 
 function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: string, colorClass: string, borderClass: string, stats?: any[] }) {
   if (!stats || !Array.isArray(stats) || stats.length === 0) {
@@ -83,7 +83,13 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
                   </td>
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{adrVal}</td>
                   {RATING_CONFIG.USE_KAST && <td className="py-2 text-center text-white/50 font-mono text-xs">{p?.kast || '-'}</td>}
-                  {RATING_CONFIG.USE_SWING && <td className={`py-2 text-center font-mono text-xs ${getSwingColorClass(p?.roundSwingNum ?? p?.roundSwing)}`}>{p?.roundSwing || '-'}</td>}
+                  {RATING_CONFIG.USE_SWING && (
+                    <td className="py-2 text-center font-mono text-xs">
+                      <span className={`px-1.5 py-0.5 rounded ${getSwingColorClass(p?.roundSwingNum ?? p?.roundSwing)}`}>
+                        {formatSwing(p?.roundSwingNum ?? p?.roundSwing)}
+                      </span>
+                    </td>
+                  )}
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{p?.impact || '-'}</td>
                   <td className={`py-2 text-center font-mono text-xs ${getKdColorClass(kd)}`}>{kd}</td>
                   <td className="py-2 text-right font-bold text-yellow-500/80 font-mono text-sm">{hltv}</td>

@@ -603,18 +603,18 @@ export default function SeriesStitcherModal({ user, onClose, onSavedToTop }: Pro
 
           <div className="flex items-center gap-3">
             {/* Format toggle: BO3 / BO5 */}
-            <div className="flex items-center bg-black/40 border border-white/10 p-1 rounded-xl">
+            <div className="flex items-center bg-black/40 border border-white/10 p-1 rounded-lg">
               <button
                 onClick={() => setFormat('BO3')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${format === 'BO3' ? 'bg-purple-600 text-white shadow' : 'text-white/50 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${format === 'BO3' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}
               >
-                BO3 (до 2 карт)
+                BO3
               </button>
               <button
                 onClick={() => setFormat('BO5')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${format === 'BO5' ? 'bg-purple-600 text-white shadow' : 'text-white/50 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${format === 'BO5' ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}
               >
-                BO5 (до 3 карт)
+                BO5
               </button>
             </div>
 
@@ -875,24 +875,20 @@ export default function SeriesStitcherModal({ user, onClose, onSavedToTop }: Pro
               {/* The Official Match Result Container for Screenshot Export */}
               <div 
                 ref={stitchedResultRef}
-                className="bg-[#0b0c13] border border-white/10 rounded-3xl p-6 shadow-2xl relative overflow-hidden"
+                className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8 relative overflow-hidden"
               >
-                {/* Background ambient glow */}
-                <div className="absolute top-0 left-0 w-80 h-80 bg-purple-500/10 blur-[90px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
-                <div className="absolute bottom-0 right-0 w-80 h-80 bg-blue-500/10 blur-[90px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2"></div>
-
                 {/* Team Logos & Series Score Header */}
-                <div className="bg-gradient-to-b from-[#141524] to-[#11121d] border border-white/10 rounded-2xl p-6 sm:p-8 text-center relative z-10 shadow-xl mb-6">
+                <div className="bg-black/20 border border-white/5 rounded-xl p-8 text-center relative z-10 mb-6">
                   
                   <div className="flex items-center justify-center gap-6 sm:gap-10 mb-4">
                     <TeamLogo game="cs2" teamName={aggregatedSeriesData.team1Name} sizeClassName="w-16 h-16 sm:w-20 sm:h-20 text-3xl" />
                     
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-white/40 mb-1">
-                        ГРАНД-СЕРИЯ • {format}
+                      <span className="text-[10px] sm:text-xs font-medium uppercase tracking-widest text-white/50 mb-1">
+                        Гранд-серия · {format}
                       </span>
-                      <h2 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-wider">
-                        {aggregatedSeriesData.team1Name} <span className="text-white/30 text-xl font-normal">vs</span> {aggregatedSeriesData.team2Name}
+                      <h2 className="text-2xl sm:text-4xl font-semibold text-white uppercase tracking-tight">
+                        {aggregatedSeriesData.team1Name} <span className="text-white/20 text-xl font-normal">vs</span> {aggregatedSeriesData.team2Name}
                       </h2>
                     </div>
 
@@ -900,41 +896,32 @@ export default function SeriesStitcherModal({ user, onClose, onSavedToTop }: Pro
                   </div>
 
                   {/* Big Series Score */}
-                  <div className="text-6xl sm:text-7xl font-black tracking-widest mb-3 drop-shadow-2xl">
-                    <span className={seriesScore1 > seriesScore2 ? 'text-purple-400 drop-shadow-[0_0_20px_rgba(168,85,247,0.5)]' : 'text-white/60'}>
+                  <div className="text-6xl sm:text-7xl font-bold tracking-tight mb-3">
+                    <span className={seriesScore1 > seriesScore2 ? 'text-white' : 'text-white/40'}>
                       {seriesScore1}
                     </span>
-                    <span className="mx-6 sm:mx-8 text-white/20 text-4xl sm:text-5xl">:</span>
-                    <span className={seriesScore2 > seriesScore1 ? 'text-blue-400 drop-shadow-[0_0_20px_rgba(96,165,250,0.5)]' : 'text-white/60'}>
+                    <span className="mx-6 sm:mx-8 text-white/10 text-4xl sm:text-5xl font-light">:</span>
+                    <span className={seriesScore2 > seriesScore1 ? 'text-white' : 'text-white/40'}>
                       {seriesScore2}
                     </span>
                   </div>
 
-                  {/* MVP Badge */}
+                  {/* MVP Text */}
                   {aggregatedSeriesData.mvp && (
-                    <div className="inline-flex items-center gap-2.5 bg-yellow-500/15 border border-yellow-500/40 rounded-full px-6 py-2 shadow-lg shadow-yellow-500/10">
-                      <span className="text-yellow-400 text-sm">⭐</span>
-                      <span className="text-white font-bold text-xs uppercase tracking-wider">
-                        MVP СЕРИИ: <strong>{aggregatedSeriesData.mvp.nickname}</strong> ({aggregatedSeriesData.mvp.team})
-                      </span>
-                      <span className="text-yellow-400 font-black text-xs font-mono">
-                        {aggregatedSeriesData.mvp.hltvRating}
-                      </span>
+                    <div className="mt-4 flex items-center justify-center gap-2 text-xs text-white/60">
+                      <span>MVP серии:</span>
+                      <strong className="text-white font-semibold">{aggregatedSeriesData.mvp.nickname}</strong>
+                      <span aria-hidden="true">·</span>
+                      <span className="font-mono text-yellow-400 font-semibold">{aggregatedSeriesData.mvp.hltvRating}</span>
                     </div>
                   )}
 
-                  {/* Maps breakdown pills */}
-                  <div className="mt-5 flex flex-wrap justify-center items-center gap-2.5">
+                  {/* Maps breakdown */}
+                  <div className="mt-6 text-xs text-white/50 flex flex-wrap justify-center gap-x-4 gap-y-2">
                     {aggregatedSeriesData.validMaps.map((m, idx) => (
-                      <div 
-                        key={idx}
-                        className="bg-black/50 border border-white/10 rounded-xl px-3.5 py-1.5 flex items-center gap-2 text-xs"
-                      >
-                        <span className="text-white/40 font-mono text-[10px]">Карта {m.mapNumber}:</span>
-                        <span className="font-bold text-white uppercase">{m.mapName}</span>
-                        <span className="font-mono font-black text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
-                          {m.score1}:{m.score2}
-                        </span>
+                      <div key={idx} className="flex items-center gap-1.5">
+                        <span className="font-medium text-white/70">{m.mapName}</span>
+                        <span className="font-mono text-white/40">{m.score1}:{m.score2}</span>
                       </div>
                     ))}
                   </div>

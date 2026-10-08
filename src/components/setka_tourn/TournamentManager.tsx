@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2 } from 'lucide-react';
+import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2, Users, ArrowLeftRight } from 'lucide-react';
 import { Tournament, TournamentSettings, Team, Match, Group } from './types';
 import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage, setTournamentBgImage, setTournamentLogoUrl, syncTournamentsWithServer, normalizeTournament } from './storage';
 import SingleEliminationStage from './SingleEliminationStage';
@@ -8,6 +8,7 @@ import GroupStage from './GroupStage';
 import SwissStage from './SwissStage';
 import GslGroupStage from './GslGroupStage';
 import TieredPlayoffStage from './TieredPlayoffStage';
+import QualifierStage from './QualifierStage';
 import TournamentSettingsForm from './TournamentSettingsForm';
 import MatchCard from './MatchCard';
 import { generateDoubleElimination, cascadeAdvancements, advanceDoubleElimMatch, BYE_TEAM, getBalancedSeeding } from './doubleEliminationLogic';
@@ -26,6 +27,7 @@ import { useGameUniverse } from '../../lib/gameUniverse';
 import So2MediaLibraryModal from '../So2MediaLibraryModal';
 import { syncAndBackfillTournamentMatches } from '../../lib/tournamentMatchRecorder';
 import { refreshMapPools } from '../../lib/simulation';
+import { generateStageData, advanceTeamsToStage, getStageAdvancingTeams } from './stageGenerator';
 
 export const BG_THEMES = {
   cyber_grid: {
@@ -169,7 +171,7 @@ export function getCleanTournamentTheme(themeKey?: string) {
   return BG_THEMES.cyber_grid;
 }
 
-export default function TournamentManager({ user }: { user: any }) {
+export default function TournamentManager({ user, tournamentId, onBack }: { user: any, tournamentId?: string, onBack?: () => void }) {
   const userId = user?.uid || 'guest';
   const navigate = useNavigate();
   const [activeGame, setActiveGame, gameInfo] = useGameUniverse();
@@ -177,6 +179,25 @@ export default function TournamentManager({ user }: { user: any }) {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [activeTournament, setActiveTournament] = useState<Tournament | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Initialize activeTournament if tournamentId prop is provided
+  useEffect(() => {
+    if (tournamentId && tournaments.length > 0) {
+      const found = tournaments.find(t => t.id === tournamentId);
+      if (found) {
+        setActiveTournament(found);
+      } else {
+        // Fallback: If not found in primary list, try to load isolated item
+        const roomId = getCanonicalRoomId(userId);
+        const raw = localStorage.getItem(`tournament_item_${roomId}_${tournamentId}`);
+        if (raw) {
+          try {
+             setActiveTournament(normalizeTournament(JSON.parse(raw)));
+          } catch(e) {}
+        }
+      }
+    }
+  }, [tournamentId, tournaments, userId]);
   const [templateForCreation, setTemplateForCreation] = useState<Tournament | null>(null);
   const [creationError, setCreationError] = useState('');
   const [isEditingSettings, setIsEditingSettings] = useState(false);
@@ -201,11 +222,77 @@ export default function TournamentManager({ user }: { user: any }) {
   const [mapsUpdateTrigger, setMapsUpdateTrigger] = useState(0);
   const [showTop20, setShowTop20] = useState(false);
   const [showFinalists, setShowFinalists] = useState(false);
-    const [showMvpModal, setShowMvpModal] = useState(false);
+  const [showMvpModal, setShowMvpModal] = useState(false);
+  const [showRosters, setShowRosters] = useState(false);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [isSeedingOpen, setIsSeedingOpen] = useState(false);
   const [seedingTeams, setSeedingTeams] = useState<Team[]>([]);
   const [historyStack, setHistoryStack] = useState<Tournament[]>([]);
+
+  const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0] && activeTournament) {
+          const file = e.target.files[0];
+          const formData = new FormData();
+          formData.append('file', file);
+          
+          fetch('/api/upload?type=background', { method: 'POST', body: formData })
+            .then(r => {
+               if (!r.ok) throw new Error("Upload response not OK");
+               return r.json();
+            })
+            .then(d => {
+               if (d && d.url) {
+                  setTournamentBgImage(activeTournament.id, d.url);
+                  const newT = { ...activeTournament, settings: { ...activeTournament.settings, bgImage: d.url, bgTheme: 'custom' } };
+                  handleUpdateActive(newT);
+               } else {
+                  throw new Error("No URL returned from upload");
+               }
+            })
+            .catch(() => {
+               const reader = new FileReader();
+               reader.onload = (evt) => {
+                  if (evt.target?.result) {
+                     const url = evt.target.result as string;
+                     setTournamentBgImage(activeTournament.id, url);
+                     const newT = { ...activeTournament, settings: { ...activeTournament.settings, bgImage: url, bgTheme: 'custom' } };
+                     handleUpdateActive(newT);
+                  }
+               };
+               reader.readAsDataURL(file);
+            });
+      }
+  };
+
+  const handleThemeSelect = (themeId: string) => {
+      if (activeTournament) {
+          setTournamentBgImage(activeTournament.id, null);
+          const newSettings = { ...activeTournament.settings, bgTheme: themeId, bgImage: undefined };
+          handleUpdateActive({ ...activeTournament, settings: newSettings });
+      }
+  };
+
+  const activeTheme = BG_THEMES[bgTheme as keyof typeof BG_THEMES] || BG_THEMES.cyber_grid;
+
+  const hasStarted = (() => {
+    if (!activeTournament) return false;
+    // Check groups
+    if (Array.isArray(activeTournament.groups) && activeTournament.groups.length > 0) {
+      if (activeTournament.groups.some(g => Array.isArray(g?.matches) && g.matches.some(m => m.winnerId))) return true;
+    }
+    // Check swiss
+    if (Array.isArray(activeTournament.swissRounds) && activeTournament.swissRounds.length > 0) {
+      if (activeTournament.swissRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
+    }
+    // Check playoffs
+    if (Array.isArray(activeTournament.bracketRounds) && activeTournament.bracketRounds.length > 0) {
+      if (activeTournament.bracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
+    }
+    if (Array.isArray(activeTournament.losersBracketRounds) && activeTournament.losersBracketRounds.length > 0) {
+      if (activeTournament.losersBracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
+    }
+    return false;
+  })();
 
   useEffect(() => {
     setTournaments(loadTournaments(userId, true));
@@ -255,13 +342,10 @@ export default function TournamentManager({ user }: { user: any }) {
     setHistoryStack([]);
   }, [activeTournament?.id]);
 
-  // Full concentration on tournament assets & automatic match history backfill
+  // Full concentration on tournament assets
   useEffect(() => {
     if (activeTournament) {
       concentrateOnTournament(activeTournament, userId);
-      try {
-        syncAndBackfillTournamentMatches(userId, activeTournament);
-      } catch (e) {}
     }
   }, [activeTournament?.id, userId]);
 
@@ -1019,9 +1103,15 @@ export default function TournamentManager({ user }: { user: any }) {
     setSeedingTeams(rearranged);
   };
 
-  const handleEditSave = (name: string, newSettings: TournamentSettings, newTeams: Team[], logoUrl?: string, prizePool?: string) => {
+  const handleEditSave = (name: string, newSettings: TournamentSettings, newTeams: Team[], logoUrl?: string, prizePool?: string, isTeamsOrFormatModified?: boolean) => {
       if (!activeTournament) return;
       
+      // If user only changed general info (name, logo, prize pool, background) and didn't touch teams or format, NEVER warn!
+      if (isTeamsOrFormatModified === false) {
+          proceedWithSave(name, newSettings, newTeams, false, logoUrl, prizePool);
+          return;
+      }
+
       const formatChanged = activeTournament.settings.mode !== newSettings.mode || 
                             activeTournament.settings.numberOfGroups !== newSettings.numberOfGroups || 
                             activeTournament.settings.matchesPerPairing !== newSettings.matchesPerPairing ||
@@ -1050,6 +1140,11 @@ export default function TournamentManager({ user }: { user: any }) {
                   break;
               }
           }
+      }
+
+      if (!formatChanged && !teamsChanged && !orderChanged) {
+          proceedWithSave(name, newSettings, newTeams, false, logoUrl, prizePool);
+          return;
       }
 
       const hasPlayedMatches = (() => {
@@ -1192,15 +1287,97 @@ export default function TournamentManager({ user }: { user: any }) {
       }
 
       if (resetProgress) {
-          const { initialGroups, initialBracket, initialLosersBracket, initialGrandFinal, initialSwissRounds, initialGslGroups } = generateInitialData(newSettings, newTeams);
+          if (Array.isArray(newSettings.stages) && newSettings.stages.length > 0) {
+              const regeneratedStages = newSettings.stages.map((stg, sIdx) => {
+                  const stageTeams = Array.isArray(stg.teams) ? stg.teams : [];
+                  const built = generateStageData(stg.type, stageTeams, {
+                      eliminationType: newSettings.eliminationType,
+                      numberOfGroups: newSettings.numberOfGroups,
+                      matchesPerPairing: newSettings.matchesPerPairing,
+                      gslAdvanceCount: newSettings.gslAdvanceCount,
+                      swissWinsToAdvance: newSettings.swissWinsToAdvance,
+                      swissLossesToEliminate: newSettings.swissLossesToEliminate,
+                      numQuals: stg.numQuals,
+                      advancePerQual: stg.advancePerQual
+                  });
+                  return {
+                      ...stg,
+                      id: stg.id || `stage_${sIdx + 1}`,
+                      name: stg.name || `Стадия ${sIdx + 1}`,
+                      teams: stageTeams,
+                      bracketRounds: built.bracketRounds,
+                      losersBracketRounds: built.losersBracketRounds,
+                      grandFinal: built.grandFinal,
+                      groups: built.groups,
+                      gslGroups: built.gslGroups,
+                      swissRounds: built.swissRounds,
+                      qualifiersBrackets: built.qualifiersBrackets
+                  };
+              });
+              updatedTournament.settings.stages = regeneratedStages;
+              const stage1 = regeneratedStages[0];
+              if (stage1) {
+                  updatedTournament.teams = stage1.teams || newTeams;
+                  updatedTournament.bracketRounds = stage1.bracketRounds;
+                  updatedTournament.losersBracketRounds = stage1.losersBracketRounds;
+                  updatedTournament.grandFinal = stage1.grandFinal;
+                  updatedTournament.groups = stage1.groups;
+                  updatedTournament.gslGroups = stage1.gslGroups;
+                  updatedTournament.swissRounds = stage1.swissRounds;
+                  updatedTournament.qualifiersBrackets = stage1.qualifiersBrackets;
+              }
+          } else {
+              const { initialGroups, initialBracket, initialLosersBracket, initialGrandFinal, initialSwissRounds, initialGslGroups } = generateInitialData(newSettings, newTeams);
+              updatedTournament.groups = initialGroups.length > 0 ? initialGroups : undefined;
+              updatedTournament.gslGroups = initialGslGroups.length > 0 ? initialGslGroups : undefined;
+              updatedTournament.swissRounds = initialSwissRounds.length > 0 ? initialSwissRounds : undefined;
+              updatedTournament.bracketRounds = initialBracket.length > 0 ? initialBracket : undefined;
+              updatedTournament.losersBracketRounds = initialLosersBracket.length > 0 ? initialLosersBracket : undefined;
+              updatedTournament.grandFinal = initialGrandFinal.length > 0 ? initialGrandFinal : undefined;
+          }
           updatedTournament.activeStage = 1;
-          updatedTournament.groups = initialGroups.length > 0 ? initialGroups : undefined;
-          updatedTournament.gslGroups = initialGslGroups.length > 0 ? initialGslGroups : undefined;
-          updatedTournament.swissRounds = initialSwissRounds.length > 0 ? initialSwissRounds : undefined;
-          updatedTournament.bracketRounds = initialBracket.length > 0 ? initialBracket : undefined;
-          updatedTournament.losersBracketRounds = initialLosersBracket.length > 0 ? initialLosersBracket : undefined;
-          updatedTournament.grandFinal = initialGrandFinal.length > 0 ? initialGrandFinal : undefined;
           updatedTournament.tieredBracketRounds = undefined;
+      } else if (Array.isArray(newSettings.stages) && newSettings.stages.length > 0) {
+          // If not resetting progress, preserve or initialize empty stages
+          const updatedStages = newSettings.stages.map((stg, sIdx) => {
+              const stageTeams = Array.isArray(stg.teams) ? stg.teams : [];
+              const hasMatches = (stg.bracketRounds && stg.bracketRounds.length > 0) ||
+                                 (stg.groups && stg.groups.length > 0) ||
+                                 (stg.gslGroups && stg.gslGroups.length > 0) ||
+                                 (stg.swissRounds && stg.swissRounds.length > 0);
+              if (!hasMatches && stageTeams.length >= 2) {
+                  const built = generateStageData(stg.type, stageTeams, {
+                      eliminationType: newSettings.eliminationType,
+                      numberOfGroups: newSettings.numberOfGroups,
+                      matchesPerPairing: newSettings.matchesPerPairing,
+                      gslAdvanceCount: newSettings.gslAdvanceCount,
+                      swissWinsToAdvance: newSettings.swissWinsToAdvance,
+                      swissLossesToEliminate: newSettings.swissLossesToEliminate,
+                      numQuals: stg.numQuals,
+                      advancePerQual: stg.advancePerQual
+                  });
+                  return {
+                      ...stg,
+                      id: stg.id || `stage_${sIdx + 1}`,
+                      name: stg.name || `Стадия ${sIdx + 1}`,
+                      teams: stageTeams,
+                      bracketRounds: built.bracketRounds,
+                      losersBracketRounds: built.losersBracketRounds,
+                      grandFinal: built.grandFinal,
+                      groups: built.groups,
+                      gslGroups: built.gslGroups,
+                      swissRounds: built.swissRounds,
+                      qualifiersBrackets: built.qualifiersBrackets
+                  };
+              }
+              return {
+                  ...stg,
+                  id: stg.id || `stage_${sIdx + 1}`,
+                  name: stg.name || `Стадия ${sIdx + 1}`,
+                  teams: stageTeams
+              };
+          });
+          updatedTournament.settings.stages = updatedStages;
       }
 
       handleUpdateActive(updatedTournament);
@@ -1210,8 +1387,29 @@ export default function TournamentManager({ user }: { user: any }) {
 
   const handlePlayTournamentMatch = (team1: Team, team2: Team, matchInfo?: any) => {
       if (!activeTournament) return;
-      const fullTeam1 = activeTournament.teams?.find(t => t.id === team1.id || t.name === team1.name) || team1;
-      const fullTeam2 = activeTournament.teams?.find(t => t.id === team2.id || t.name === team2.name) || team2;
+
+      const allKnownTeams: Team[] = [
+        ...(activeTournament.teams || []),
+        ...((activeTournament.settings?.stages || []).flatMap((s: any) => s.teams || []))
+      ];
+
+      const resolveFullTeam = (tm: Team): Team => {
+        if (!tm) return tm;
+        if (tm.players && Array.isArray(tm.players) && tm.players.length > 0) return tm;
+
+        const found = allKnownTeams.find(t => 
+          (t.id && tm.id && t.id === tm.id) || 
+          (t.name && tm.name && t.name.toLowerCase().trim() === tm.name.toLowerCase().trim())
+        );
+
+        if (found && found.players && Array.isArray(found.players) && found.players.length > 0) {
+          return { ...tm, ...found, players: found.players };
+        }
+        return tm;
+      };
+
+      const fullTeam1 = resolveFullTeam(team1);
+      const fullTeam2 = resolveFullTeam(team2);
 
       navigate('/', {
           state: {
@@ -1585,10 +1783,19 @@ export default function TournamentManager({ user }: { user: any }) {
       handleUpdateActive(updated);
   };
 
+  if (tournamentId && !activeTournament) {
+      return (
+          <div className="flex flex-col items-center justify-center py-48 bg-[#050508] min-h-screen text-white">
+              <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+              <p className="text-zinc-500 mt-6 font-black uppercase tracking-widest animate-pulse">Загрузка турнира...</p>
+          </div>
+      );
+  }
+
   if (activeTournament) {
       if (isEditingSettings) {
           return (
-              <div className="w-full max-w-4xl mx-auto relative">
+              <div className="w-full max-w-[1600px] mx-auto p-4 sm:p-8 animate-in fade-in duration-500 bg-[#050508] min-h-screen">
                   {isConfirmingSave && (
                       <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
                           <div className="bg-[#12121a] p-8 rounded-2xl border border-red-500/30 max-w-md w-full shadow-[0_0_50px_rgba(239,68,68,0.1)]">
@@ -1617,10 +1824,6 @@ export default function TournamentManager({ user }: { user: any }) {
                       <ArrowLeft className="w-4 h-4" /> Назад к турниру
                   </button>
                   <h2 className="text-3xl font-black mb-8 text-[#ff8f00]">Настройки турнира</h2>
-                  <div className="mb-4 text-white/70 bg-red-500/10 border border-red-500/30 p-4 rounded-xl">
-                      <p className="font-bold text-red-400">Внимание:</p>
-                      <p className="text-sm">Изменение названия команд или очков применится сразу. Добавление/Удаление команд или изменение формата турнира сбросит текущий прогресс.</p>
-                  </div>
                   <TournamentSettingsForm user={user} 
                       initialName={activeTournament.name}
                       initialLogoUrl={activeTournament.logoUrl}
@@ -1634,470 +1837,81 @@ export default function TournamentManager({ user }: { user: any }) {
           );
       }
 
-      const handleExport = async () => {
-          if (!stageRef.current || !activeTournament) return;
-          setIsExporting(true);
-          try {
-              // Wait for UI to update, normalize zoom and reveal text representation
-              await new Promise(resolve => setTimeout(resolve, 350));
-              const themeConfig = BG_THEMES[bgTheme as keyof typeof BG_THEMES] || BG_THEMES.cyber_grid;
-              const defaultBgColor = themeConfig ? (themeConfig.className.replace('bg-[', '').replace(']', '') || '#050508') : '#050508';
-
-              const safeName = (activeTournament.name || 'tournament')
-                .replace(/[^a-zA-Z0-9а-яА-ЯёЁ_-]/g, '_')
-                .replace(/_+/g, '_');
-              const stageLabel = activeTournament.activeStage === 2 ? 'playoff' : 'stage';
-              const fileName = `${safeName}-${stageLabel}-bracket.png`;
-
-              await downloadElementAsImage(stageRef.current, fileName, {
-                  backgroundColor: defaultBgColor,
-                  pixelRatio: 2.5,
-                  quality: 1.0
-              });
-          } catch (err: any) {
-              console.error('Failed to export image', err?.message || err);
-              alert('Ошибка при сохранении изображения: ' + (err?.message || 'Не удалось обработать некоторые изображения или шрифты'));
-          } finally {
-              setIsExporting(false);
-          }
-      };
-
-      const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-          if (e.target.files && e.target.files[0] && activeTournament) {
-              const file = e.target.files[0];
-              const formData = new FormData();
-              formData.append('file', file);
-              
-              fetch('/api/upload?type=background', { method: 'POST', body: formData })
-                .then(r => {
-                   if (!r.ok) throw new Error("Upload response not OK");
-                   return r.json();
-                })
-                .then(d => {
-                   if (d && d.url) {
-                      setTournamentBgImage(activeTournament.id, d.url);
-                      const newT = { ...activeTournament, settings: { ...activeTournament.settings, bgImage: d.url, bgTheme: 'custom' } };
-                      handleUpdateActive(newT);
-                   } else {
-                      throw new Error("No URL returned from upload");
-                   }
-                })
-                .catch(() => {
-                   const reader = new FileReader();
-                   reader.onload = (evt) => {
-                      if (evt.target?.result) {
-                         const url = evt.target.result as string;
-                         setTournamentBgImage(activeTournament.id, url);
-                         const newT = { ...activeTournament, settings: { ...activeTournament.settings, bgImage: url, bgTheme: 'custom' } };
-                         handleUpdateActive(newT);
-                      }
-                   };
-                   reader.readAsDataURL(file);
-                });
-          }
-      };
-
-      const handleThemeSelect = (themeId: string) => {
-          if (activeTournament) {
-              setTournamentBgImage(activeTournament.id, null);
-              const newSettings = { ...activeTournament.settings, bgTheme: themeId, bgImage: undefined };
-              handleUpdateActive({ ...activeTournament, settings: newSettings });
-          }
-      };
-
-      const activeTheme = BG_THEMES[bgTheme as keyof typeof BG_THEMES] || BG_THEMES.cyber_grid;
-
-      const hasStarted = (() => {
-        if (!activeTournament) return false;
-        // Check groups
-        if (Array.isArray(activeTournament.groups) && activeTournament.groups.length > 0) {
-          if (activeTournament.groups.some(g => Array.isArray(g?.matches) && g.matches.some(m => m.winnerId))) return true;
-        }
-        // Check swiss
-        if (Array.isArray(activeTournament.swissRounds) && activeTournament.swissRounds.length > 0) {
-          if (activeTournament.swissRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
-        }
-        // Check playoffs
-        if (Array.isArray(activeTournament.bracketRounds) && activeTournament.bracketRounds.length > 0) {
-          if (activeTournament.bracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
-        }
-        if (Array.isArray(activeTournament.losersBracketRounds) && activeTournament.losersBracketRounds.length > 0) {
-          if (activeTournament.losersBracketRounds.some(r => Array.isArray(r) && r.some(m => m.winnerId))) return true;
-        }
-        return false;
-      })();
-
       return (
-          <div className="w-full">
-              <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-                  <button onClick={() => setActiveTournament(null)} className="flex items-center gap-2 text-white/50 hover:text-white transition-colors">
-                      <ArrowLeft className="w-4 h-4" /> Назад к турнирам
-                  </button>
-                  <div className="flex items-center gap-3 flex-wrap">
-                      <button 
-                        onClick={() => setShowTop20(true)} 
-                        className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(168,85,247,0.4)] flex items-center gap-2 cursor-pointer"
-                      >
-                        📊 ТОП-20 Игроков
-                      </button>
-
-                      {!hasStarted && (
-                          <button 
-                              onClick={() => {
-                                  setSeedingTeams([...activeTournament.teams]);
-                                  setIsSeedingOpen(true);
-                              }} 
-                              className="flex items-center gap-2 bg-[#ff8f00] hover:bg-[#ff8f00]/95 text-black px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-colors shadow-[0_0_15px_rgba(255,143,0,0.3)] cursor-pointer"
-                          >
-                              🎲 Ручной Посев
+          <div className="w-full min-h-screen bg-[#050508] text-white relative">
+              {/* Sticky Top Header Area */}
+              <div className="sticky top-0 z-40 bg-[#050508]/90 backdrop-blur-xl border-b border-white/5 px-4 py-4 sm:px-8 shadow-2xl">
+                  <div className="max-w-none px-4 sm:px-12 mx-auto flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex items-center gap-3">
+                          <button onClick={() => onBack ? onBack() : setActiveTournament(null)} className="flex items-center gap-2 text-white/70 hover:text-white transition-all font-bold uppercase text-[10px] tracking-widest bg-white/5 px-3 py-2 rounded-xl border border-white/5">
+                              <ArrowLeft className="w-4 h-4" /> Назад
                           </button>
-                      )}
+                          <div className="hidden md:block h-8 w-[1px] bg-white/10 mx-2" />
+                          <h2 className="hidden md:block text-sm font-black text-white uppercase truncate max-w-[200px]">{activeTournament.name}</h2>
+                      </div>
                       
-                      {activeTournament.status === 'ongoing' && (
-                          <button 
-                            onClick={() => {
-                                const t = {...activeTournament, status: 'completed'};
-                                saveTournament(userId, t);
-                                setActiveTournament(t);
-                                setTournaments(loadTournaments(userId));
-                                setShowTop20(true);
-                            }} 
-                            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)] cursor-pointer"
-                          >
-                            Завершить турнир
-                          </button>
-                      )}
+                      <div className="flex items-center gap-3 flex-wrap">
+                           {/* Quick Zoom Controls */}
+                           <div className="flex items-center bg-black/40 rounded-xl border border-white/5 p-1 mr-2">
+                              <button 
+                                onClick={() => handleUpdateActive({ ...activeTournament, settings: { ...activeTournament.settings, bracketScale: Math.max(25, (activeTournament.settings.bracketScale || 100) - 25) }})}
+                                className="p-1.5 hover:bg-white/5 text-white/50 rounded-lg transition-colors"
+                              >
+                                <ZoomOut className="w-4 h-4" />
+                              </button>
+                              <span className="text-[10px] font-black text-white/40 px-2 min-w-[45px] text-center">
+                                {activeTournament.settings.bracketScale || 100}%
+                              </span>
+                              <button 
+                                onClick={() => handleUpdateActive({ ...activeTournament, settings: { ...activeTournament.settings, bracketScale: Math.min(200, (activeTournament.settings.bracketScale || 100) + 25) }})}
+                                className="p-1.5 hover:bg-white/5 text-white/50 rounded-lg transition-colors"
+                              >
+                                <ZoomIn className="w-4 h-4" />
+                              </button>
+                           </div>
 
-                      {activeTournament.status === 'setup' && (
-                          <button 
-                            onClick={() => {
-                                const t = {...activeTournament, status: 'ongoing'};
-                                saveTournament(userId, t);
-                                setActiveTournament(t);
-                                setTournaments(loadTournaments(userId));
-                            }} 
-                            className="bg-green-500 hover:bg-green-600 text-black px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-colors shadow-[0_0_15px_rgba(34,197,94,0.3)] cursor-pointer"
+                           <button 
+                            onClick={() => setShowTop20(true)} 
+                            className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] flex items-center gap-2 cursor-pointer"
                           >
-                            Начать турнир
+                            📊 ТОП-20
                           </button>
-                      )}
 
-                      <button onClick={handleExport} disabled={isExporting} className="flex items-center gap-2 bg-[#ff8f00]/20 hover:bg-[#ff8f00]/30 border border-[#ff8f00]/50 px-4 py-2 rounded-xl text-[#ff8f00] font-black tracking-wide text-xs uppercase transition-colors disabled:opacity-50">
-                          <Download className="w-4 h-4" /> {isExporting ? 'Экспорт...' : 'Скачать сетку (PNG)'}
-                      </button>
-                      <label className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl text-white font-bold transition-colors cursor-pointer border border-white/10">
-                          <input 
-                              type="checkbox" 
-                              checked={isSwapMode} 
-                              onChange={(e) => setIsSwapMode(e.target.checked)} 
-                              className="rounded border-white/20 bg-black/50 text-[#ff8f00] focus:ring-[#ff8f00]"
-                          />
-                          <span className="text-xs uppercase tracking-wider">Изменение команд</span>
-                      </label>
-                      <button onClick={() => setIsEditingSettings(true)} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl text-white font-bold transition-colors">
-                          <Settings className="w-4 h-4" /> Настройки
-                      </button>
+                          <button 
+                            onClick={() => setShowRosters(true)} 
+                            className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border border-zinc-700 flex items-center gap-2 cursor-pointer"
+                          >
+                            📋 СОСТАВЫ
+                          </button>
+
+                          {!hasStarted && (
+                              <button 
+                                  onClick={() => {
+                                      setSeedingTeams([...activeTournament.teams]);
+                                      setIsSeedingOpen(true);
+                                  }} 
+                                  className="flex items-center gap-2 bg-[#ff8f00] hover:bg-[#ff8f00]/95 text-black px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-colors shadow-[0_0_15px_rgba(255,143,0,0.3)] cursor-pointer"
+                              >
+                                  🎲 ПОСЕВ
+                              </button>
+                          )}
+                          
+                          <button onClick={() => setIsEditingSettings(true)} className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl text-white font-bold text-[10px] uppercase tracking-widest transition-colors border border-white/5">
+                              <Settings className="w-4 h-4 text-white/50" />
+                          </button>
+                      </div>
                   </div>
               </div>
-              <div className="flex justify-end mb-6">
-                  <button
-                      onClick={() => setShowCustomizationModal(true)}
-                      className="bg-[#161726] border border-[#ff8f00]/50 text-[#ff8f00] font-black uppercase tracking-wider text-sm py-3 px-6 rounded-xl hover:bg-[#ff8f00]/20 transition-all flex items-center gap-3 shadow-[0_0_15px_rgba(255,143,0,0.15)] hover:shadow-[0_0_25px_rgba(255,143,0,0.3)] cursor-pointer"
+
+              <div className="w-full max-w-none px-4 sm:px-8 mx-auto animate-in fade-in duration-500">
+                  <div 
+                      ref={stageRef}
+                      data-exporting={isExporting}
+                      className="w-full relative p-4 sm:p-8 rounded-3xl overflow-auto min-h-[600px] border border-white/5 transition-all shadow-2xl bg-black/40"
+                      style={{
+                          zoom: isExporting ? '100%' : `${Math.max(10, activeTournament.settings.bracketScale || 100)}%`
+                      }}
                   >
-                      <span className="text-xl">🎨</span> Настроить кастомизацию сетки
-                  </button>
-              </div>
-
-              {/* Customization Modal in Manager */}
-              {showCustomizationModal && (
-                  <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
-                    <div className="bg-[#12121a] border border-white/10 rounded-2xl w-full max-w-6xl my-auto flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.8)] max-h-[90vh]">
-                      <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
-                        <h2 className="text-xl font-black text-white uppercase tracking-wider flex items-center gap-3">
-                          <span className="text-2xl">🎨</span> Кастомизация Сетки и Карточек
-                        </h2>
-                        <button onClick={() => setShowCustomizationModal(false)} className="text-white/50 hover:text-white transition-colors cursor-pointer p-1 rounded-lg hover:bg-white/10">
-                          <X className="w-6 h-6" />
-                        </button>
-                      </div>
-                      
-                      <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
-                        {/* Left Side: Settings */}
-                        <div className="w-full md:w-1/2 p-6 overflow-y-auto border-r border-white/5 flex flex-col gap-8 custom-scrollbar">
-                            
-                            {/* Background Upload and Preset */}
-                            <div className="flex flex-col gap-4 bg-white/5 p-5 rounded-2xl border border-white/5">
-                                <h3 className="text-[#ff8f00] font-black uppercase tracking-widest text-xs flex items-center gap-2">
-                                    <ImageIcon className="w-4 h-4" /> Изображение Фона
-                                </h3>
-                                
-                                <label className="flex items-center justify-center gap-2 px-4 py-4 bg-[#ff8f00]/10 hover:bg-[#ff8f00]/20 border border-[#ff8f00]/30 rounded-xl text-sm font-black uppercase text-[#ff8f00] cursor-pointer transition-all shadow-[0_0_15px_rgba(255,143,0,0.1)] w-full text-center">
-                                    <ImageIcon className="w-5 h-5" />
-                                    <span>Загрузить свой фон</span>
-                                    <input 
-                                         type="file" 
-                                         accept="image/*" 
-                                         onChange={handleBgUpload} 
-                                         className="hidden" 
-                                    />
-                                </label>
-
-                                {bgImage && (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleThemeSelect('cyber_grid')}
-                                        className="w-full px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-sm font-bold transition-all text-center uppercase tracking-wider flex items-center justify-center gap-2"
-                                    >
-                                        <X className="w-4 h-4" /> Удалить свой фон
-                                    </button>
-                                )}
-
-                                <div className="mt-2">
-                                    <label className="block text-white/50 text-xs font-bold mb-2">Или выберите пресет:</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {Object.entries(BG_THEMES).map(([key, theme]) => (
-                                            <button
-                                                key={key}
-                                                type="button"
-                                                onClick={() => handleThemeSelect(key)}
-                                                className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border ${
-                                                    bgTheme === key && !bgImage
-                                                        ? 'bg-[#ff8f00] text-black border-[#ff8f00] shadow-[0_0_10px_rgba(255,143,0,0.3)]'
-                                                        : 'bg-black/40 text-white/70 border-white/10 hover:text-white hover:bg-white/10'
-                                                }`}
-                                            >
-                                                {theme.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {/* Background Dimming & Blur Settings */}
-                            <div className="flex flex-col gap-4 bg-white/5 p-5 rounded-2xl border border-white/5">
-                                <h3 className="text-[#ff8f00] font-black uppercase tracking-widest text-xs">Фон Турнира</h3>
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex justify-between items-center">
-                                        <label className="text-white text-xs font-bold">🌓 Затемнение фона (Тёмный фильтр):</label>
-                                        <span className="text-xs font-mono text-[#ff8f00] font-extrabold bg-[#ff8f00]/10 px-2 py-0.5 rounded border border-[#ff8f00]/20">
-                                            {activeTournament.settings.bgOpacity !== undefined ? activeTournament.settings.bgOpacity : 50}%
-                                        </span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        step="5"
-                                        value={activeTournament.settings.bgOpacity !== undefined ? activeTournament.settings.bgOpacity : 50}
-                                        onChange={async (e) => {
-                                            const val = parseInt(e.target.value);
-                                            handleUpdateActive({ ...activeTournament, settings: { ...activeTournament.settings, bgOpacity: val }});
-                                        }}
-                                        className="w-full accent-[#ff8f00] cursor-pointer"
-                                    />
-                                </div>
-                    
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex justify-between items-center">
-                                        <label className="text-white text-xs font-bold">🌫️ Блюр фона (Размытие):</label>
-                                        <span className="text-xs font-mono text-[#ff8f00] font-extrabold bg-[#ff8f00]/10 px-2 py-0.5 rounded border border-[#ff8f00]/20">
-                                            {activeTournament.settings.bgBlur !== undefined ? activeTournament.settings.bgBlur : 10}px
-                                        </span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="30"
-                                        step="2"
-                                        value={activeTournament.settings.bgBlur !== undefined ? activeTournament.settings.bgBlur : 0}
-                                        onChange={async (e) => {
-                                            const val = parseInt(e.target.value);
-                                            handleUpdateActive({ ...activeTournament, settings: { ...activeTournament.settings, bgBlur: val }});
-                                        }}
-                                        className="w-full accent-[#ff8f00] cursor-pointer"
-                                    />
-                                </div>
-                            </div>
-                    
-                            {/* Match Box Style */}
-                            <div className="flex flex-col gap-3">
-                                <label className="block text-white/70 text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                                    <Sparkles className="w-4 h-4 text-[#ff8f00]" /> Дизайн Карточек Матча
-                                </label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {[
-                                        { id: 'cyber', name: '🚀 Киберпанк' },
-                                        { id: 'neon', name: '🔮 Яркий Неон' },
-                                        { id: 'glass', name: '🧊 Матовое стекло' },
-                                        { id: 'gold', name: '👑 Золото' },
-                                        { id: 'dark', name: '🌑 Классик' },
-                                        { id: 'brutalist', name: '⚡ Брутализм' },
-                                        { id: 'retro', name: '📟 Ретро 8-бит' },
-                                        { id: 'minimalist', name: '⚪ Минимализм' },
-                                    ].map((styleItem) => (
-                                        <button
-                                            key={styleItem.id}
-                                            type="button"
-                                            onClick={() => handleUpdateActive({ ...activeTournament, settings: { ...activeTournament.settings, boxStyle: styleItem.id as any }})}
-                                            className={`p-3 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
-                                                (activeTournament.settings.boxStyle || 'dark') === styleItem.id
-                                                    ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-[0_0_15px_rgba(255,143,0,0.25)]'
-                                                    : 'bg-black/40 border-white/10 text-white/60 hover:text-white hover:bg-white/5'
-                                            }`}
-                                        >
-                                            <span>{styleItem.name}</span>
-                                            {(activeTournament.settings.boxStyle || 'dark') === styleItem.id && (
-                                                <span className="w-2.5 h-2.5 rounded-full bg-[#ff8f00] shadow-[0_0_8px_#ff8f00]" />
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                  
-                            {/* Card Accent Color Palette */}
-                            <div className="flex flex-col gap-3">
-                                <label className="block text-white/70 text-xs font-black uppercase tracking-widest">
-                                    🎨 Основной цвет элементов
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {[
-                                        { id: '#ff8f00', name: 'Оранжевый', class: 'bg-[#ff8f00]' },
-                                        { id: '#00f0ff', name: 'Неон Голубой', class: 'bg-[#00f0ff]' },
-                                        { id: '#10b981', name: 'Изумруд', class: 'bg-[#10b981]' },
-                                        { id: '#a855f7', name: 'Ультрафиолет', class: 'bg-[#a855f7]' },
-                                        { id: '#ef4444', name: 'Алый Красный', class: 'bg-[#ef4444]' },
-                                        { id: '#eab308', name: 'Золото', class: 'bg-[#eab308]' },
-                                        { id: '#ec4899', name: 'Розовый', class: 'bg-[#ec4899]' },
-                                    ].map((colorItem) => (
-                                        <button
-                                            key={colorItem.id}
-                                            type="button"
-                                            onClick={() => handleUpdateActive({ ...activeTournament, settings: { ...activeTournament.settings, cardThemeColor: colorItem.id }})}
-                                            className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                                                (activeTournament.settings.cardThemeColor || '#ff8f00') === colorItem.id
-                                                    ? 'bg-white/15 border-white text-white shadow-[0_0_10px_rgba(255,255,255,0.2)]'
-                                                    : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'
-                                            }`}
-                                        >
-                                            <span className={`w-3.5 h-3.5 rounded-full ${colorItem.class} shadow-sm border border-black/50`} />
-                                            <span>{colorItem.name}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                  
-                            {/* Bracket Scale Setting */}
-                            <div className="flex flex-col gap-3">
-                                <label className="block text-white/70 text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                                    <ZoomIn className="w-4 h-4 text-[#ff8f00]" /> Масштаб Сетки
-                                </label>
-                                <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
-                                    {[
-                                        { label: '50%', val: 50 },
-                                        { label: '75%', val: 75 },
-                                        { label: '90%', val: 90 },
-                                        { label: '100%', val: 100 },
-                                        { label: '110%', val: 110 },
-                                        { label: '125%', val: 125 },
-                                        { label: '150%', val: 150 },
-                                    ].map((preset) => (
-                                        <button
-                                            key={preset.val}
-                                            type="button"
-                                            onClick={() => handleUpdateActive({ ...activeTournament, settings: { ...activeTournament.settings, bracketScale: preset.val }})}
-                                            className={`py-2 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${
-                                                (activeTournament.settings.bracketScale || 100) === preset.val
-                                                    ? 'bg-[#ff8f00] text-black border-[#ff8f00]'
-                                                    : 'bg-black/40 text-white/50 border-white/5 hover:text-white hover:bg-white/5'
-                                            }`}
-                                        >
-                                            {preset.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {/* Right Side: Preview */}
-                        <div className="w-full md:w-1/2 p-6 overflow-y-auto flex flex-col items-center justify-center bg-[#0d0e15] border-t md:border-t-0 border-l-0 md:border-l border-white/5 relative">
-                           <div className="absolute inset-0 z-0 bg-black">
-                               {bgImage ? (
-                                  <div 
-                                       className="absolute inset-0 z-0 bg-cover bg-center transition-all" 
-                                       style={{ 
-                                           backgroundImage: `url(${bgImage})`,
-                                          filter: activeTournament.settings.bgBlur ? `blur(${activeTournament.settings.bgBlur}px)` : undefined
-                                      }} 
-                                   />
-                              ) : (
-                                  <div 
-                                       className={`absolute inset-0 z-0 transition-all ${activeTheme.className}`}
-                                      style={{
-                                          ...activeTheme.style,
-                                          filter: activeTournament.settings.bgBlur ? `blur(${activeTournament.settings.bgBlur}px)` : undefined
-                                      }}
-                                  />
-                              )}
-                              <div 
-                                   className="absolute inset-0 z-0 bg-black pointer-events-none transition-opacity duration-200" 
-                                   style={{ 
-                                       opacity: (activeTournament.settings.bgOpacity !== undefined ? activeTournament.settings.bgOpacity : 50) / 100
-                                  }} 
-                              />
-                           </div>
-
-                           <div className="absolute top-6 left-1/2 -translate-x-1/2 text-white/40 font-black uppercase text-[10px] tracking-widest bg-black/40 px-4 py-1.5 rounded-full border border-white/5 z-10 backdrop-blur-md">
-                               Превью Карточки Матча
-                           </div>
-                           
-                           <div className="w-full max-w-sm flex items-center justify-center transition-transform duration-300 z-10" style={{ transform: `scale(${(activeTournament.settings.bracketScale || 100) / 100})`, transformOrigin: 'center center' }}>
-                             <div className="w-full relative pointer-events-none">
-                               <MatchCard 
-                                  match={{
-                                    id: 'mock-match',
-                                    team1: { id: 'team1', name: 'Natus Vincere', logoUrl: 'https://img-cdn.hltv.org/teamlogo/9b5o0_R21E8qH8x8K4q_c_.svg?ixlib=java-2.1.0&s=9fcf2b0a6da9b552377b2f0a8d62da3e' },
-                                    team2: { id: 'team2', name: 'FaZe Clan', logoUrl: 'https://img-cdn.hltv.org/teamlogo/gO-Fp-X6H2p-0o79eH99tB.svg?ixlib=java-2.1.0&s=e6fc339178cbcd253c0ddf3be23c21d8' },
-                                    score1: 2,
-                                    score2: 1,
-                                    winnerId: 'team1',
-                                    isFinished: true
-                                  }} 
-                                  bracketType="winners"
-                                  rIdx={0}
-                                  mIdx={0}
-                                  onUpdateScore={() => {}}
-                                  onAdvanceWinner={() => {}}
-                                  boxStyle={activeTournament.settings.boxStyle}
-                                  cardThemeColor={activeTournament.settings.cardThemeColor}
-                                  btnStyle={activeTournament.settings.btnStyle}
-                                  bracketMode={activeTournament.settings.bracketMode}
-                               />
-                             </div>
-                           </div>
-                        </div>
-                      </div>
-                      
-                      <div className="p-5 border-t border-white/5 flex justify-end bg-black/40 shrink-0 z-10">
-                         <button
-                            type="button"
-                            onClick={() => setShowCustomizationModal(false)}
-                            className="bg-[#ff8f00] text-black font-black uppercase tracking-wider py-3 px-8 rounded-xl hover:bg-[#ffa733] transition-colors flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(255,143,0,0.4)]"
-                         >
-                            <Check className="w-5 h-5" /> Готово
-                         </button>
-                      </div>
-                    </div>
-                  </div>
-              )}
-
-              <div 
-                  ref={stageRef}
-                  data-exporting={isExporting}
-                  className="w-full relative p-8 rounded-2xl overflow-hidden min-h-[500px] border border-white/5 transition-all"
-                  style={{
-                      zoom: isExporting ? '100%' : `${activeTournament.settings.bracketScale || 100}%`
-                  }}
-              >
                   {/* Hidden preloader for background image to ensure correct isBgLoaded state */}
                   {bgImage && (
                     <img 
@@ -2272,6 +2086,300 @@ export default function TournamentManager({ user }: { user: any }) {
                       </div>
                       
                       {(() => {
+                          const configuredStages = (activeTournament.settings?.stages && activeTournament.settings.stages.length > 0)
+                              ? activeTournament.settings.stages
+                              : null;
+
+                          const effectiveStage = activeTournament.activeStage || 1;
+
+                          // 1. DEDICATED MULTI-STAGE RENDERING (Beta / Multi-Stage tournaments)
+                          if (configuredStages && configuredStages.length > 0) {
+                              const currentStageIdx = Math.min(Math.max(0, effectiveStage - 1), configuredStages.length - 1);
+                              const currentStageConfig = configuredStages[currentStageIdx];
+                              const currentStageType = currentStageConfig?.type || 'playoff';
+                              const currentTeams = (currentStageConfig?.teams && currentStageConfig.teams.length > 0)
+                                  ? currentStageConfig.teams
+                                  : (currentStageIdx === 0 ? (activeTournament.teams || []) : (currentStageConfig?.teams || []));
+
+                              // Build stage-scoped tournament view
+                              const stageScopedTournament: Tournament = {
+                                  ...activeTournament,
+                                  teams: currentTeams,
+                                  bracketRounds: currentStageConfig?.bracketRounds || (currentStageIdx === 0 ? activeTournament.bracketRounds : undefined),
+                                  losersBracketRounds: currentStageConfig?.losersBracketRounds || (currentStageIdx === 0 ? activeTournament.losersBracketRounds : undefined),
+                                  grandFinal: currentStageConfig?.grandFinal || (currentStageIdx === 0 ? activeTournament.grandFinal : undefined),
+                                  groups: currentStageConfig?.groups || (currentStageIdx === 0 ? activeTournament.groups : undefined),
+                                  gslGroups: currentStageConfig?.gslGroups || (currentStageIdx === 0 ? activeTournament.gslGroups : undefined),
+                                  swissRounds: currentStageConfig?.swissRounds || (currentStageIdx === 0 ? activeTournament.swissRounds : undefined),
+                                  qualifiersBrackets: currentStageConfig?.qualifiersBrackets || (currentStageIdx === 0 ? activeTournament.qualifiersBrackets : undefined)
+                              };
+
+                              const handleUpdateCurrentStage = (updatedStageTourn: Tournament) => {
+                                  const updatedStages = [...configuredStages];
+                                  if (updatedStages[currentStageIdx]) {
+                                      updatedStages[currentStageIdx] = {
+                                          ...updatedStages[currentStageIdx],
+                                          bracketRounds: updatedStageTourn.bracketRounds,
+                                          losersBracketRounds: updatedStageTourn.losersBracketRounds,
+                                          grandFinal: updatedStageTourn.grandFinal,
+                                          groups: updatedStageTourn.groups,
+                                          gslGroups: updatedStageTourn.gslGroups,
+                                          swissRounds: updatedStageTourn.swissRounds,
+                                          qualifiersBrackets: updatedStageTourn.qualifiersBrackets,
+                                          teams: updatedStageTourn.teams || updatedStages[currentStageIdx].teams
+                                      };
+                                  }
+
+                                  const nextTourn: Tournament = {
+                                      ...updatedStageTourn,
+                                      settings: {
+                                          ...activeTournament.settings,
+                                          stages: updatedStages
+                                      }
+                                  };
+
+                                  if (currentStageIdx === 0) {
+                                      nextTourn.bracketRounds = updatedStageTourn.bracketRounds;
+                                      nextTourn.losersBracketRounds = updatedStageTourn.losersBracketRounds;
+                                      nextTourn.grandFinal = updatedStageTourn.grandFinal;
+                                      nextTourn.groups = updatedStageTourn.groups;
+                                      nextTourn.gslGroups = updatedStageTourn.gslGroups;
+                                      nextTourn.swissRounds = updatedStageTourn.swissRounds;
+                                      nextTourn.qualifiersBrackets = updatedStageTourn.qualifiersBrackets;
+                                      nextTourn.teams = updatedStageTourn.teams || nextTourn.teams;
+                                  }
+
+                                  handleUpdateActive(nextTourn);
+                              };
+
+                              const hasMatchesInStage = !!(
+                                  (stageScopedTournament.bracketRounds && stageScopedTournament.bracketRounds.length > 0) ||
+                                  (stageScopedTournament.groups && stageScopedTournament.groups.length > 0) ||
+                                  (stageScopedTournament.gslGroups && stageScopedTournament.gslGroups.length > 0) ||
+                                  (stageScopedTournament.swissRounds && stageScopedTournament.swissRounds.length > 0) ||
+                                  (stageScopedTournament.qualifiersBrackets && stageScopedTournament.qualifiersBrackets.length > 0) ||
+                                  currentStageType === 'qualifier'
+                              );
+
+                              return (
+                                  <>
+                                      {/* Stage Selector Tabs */}
+                                      {!isExporting && configuredStages.length > 1 && (
+                                          <div className="flex flex-wrap items-center gap-2 mb-8 p-1.5 bg-black/40 border border-white/5 rounded-2xl w-fit mx-auto sm:mx-0 shadow-lg">
+                                              {configuredStages.map((stg, sIdx) => {
+                                                  const isCurrent = effectiveStage === (sIdx + 1);
+                                                  const tCount = stg.teams?.length || 0;
+                                                  return (
+                                                      <button
+                                                          key={sIdx}
+                                                          type="button"
+                                                          onClick={() => handleUpdateActive({ ...activeTournament, activeStage: (sIdx + 1) as any })}
+                                                          className={`px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2.5 cursor-pointer ${
+                                                              isCurrent
+                                                                  ? "bg-white text-black shadow-lg scale-100"
+                                                                  : "text-white/40 hover:text-white hover:bg-white/5"
+                                                          }`}
+                                                      >
+                                                          <span>{stg.name || `Стадия ${sIdx + 1}`}</span>
+                                                          <span className={`text-[10px] px-2 py-0.5 rounded-md font-mono ${
+                                                              isCurrent ? "bg-black/10 text-black font-bold" : "bg-white/5 text-white/40"
+                                                          }`}>
+                                                              {tCount} {sIdx > 0 ? 'ждут' : 'ком.'}
+                                                          </span>
+                                                      </button>
+                                                  );
+                                              })}
+                                          </div>
+                                      )}
+
+                                      {/* Mobile Scroll Hint */}
+                                      {!isExporting && (
+                                          <div className="flex sm:hidden items-center justify-center gap-2 mb-4 text-white/30 font-bold uppercase text-[9px] tracking-widest animate-pulse">
+                                              <ArrowLeftRight className="w-3 h-3" /> Листайте вправо, чтобы увидеть всю сетку
+                                          </div>
+                                      )}
+
+                                      {/* STAGE HEADER BANNER (especially for Stage 2 & Stage 3 waiting states) */}
+                                      {!isExporting && (
+                                          <div className="mb-8 p-5 sm:p-6 bg-gradient-to-r from-blue-950/40 via-zinc-900/60 to-purple-950/40 border border-white/10 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+                                              <div className="space-y-1">
+                                                  <div className="flex items-center gap-2">
+                                                      <span className="bg-blue-600/20 text-blue-400 border border-blue-500/30 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-lg">
+                                                          Стадия {currentStageIdx + 1} из {configuredStages.length}
+                                                      </span>
+                                                      <span className="text-white/60 text-xs font-bold uppercase tracking-wider">
+                                                          {currentStageType === 'playoff' ? 'Плей-офф (Сетка)' : currentStageType === 'gsl_groups' ? 'GSL Группы' : currentStageType === 'swiss' ? 'Швейцарка' : currentStageType === 'qualifier' ? 'Квалификации' : 'Групповой этап'}
+                                                      </span>
+                                                  </div>
+                                                  <h3 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
+                                                      {currentStageConfig?.name || `Стадия ${currentStageIdx + 1}`}
+                                                  </h3>
+                                                  <p className="text-xs text-white/60">
+                                                      {currentStageIdx === 0
+                                                          ? `Стартовая стадия турнира • ${currentTeams.length} команд`
+                                                          : `Приглашенные команды: ${currentTeams.length} ждут своего этапа${configuredStages[currentStageIdx - 1] ? ' и победителей из Стадии ' + currentStageIdx : ''}`}
+                                                  </p>
+                                              </div>
+
+                                              {/* Stage Action Buttons */}
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                  {currentStageIdx > 0 && configuredStages[currentStageIdx - 1] && (
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                              const adv = getStageAdvancingTeams(configuredStages[currentStageIdx - 1]);
+                                                              if (adv.length === 0) {
+                                                                  alert(`В Стадии ${currentStageIdx} пока не определены победители матчей.`);
+                                                                  return;
+                                                              }
+                                                              const updated = advanceTeamsToStage(activeTournament, currentStageIdx - 1, currentStageIdx, adv);
+                                                              handleUpdateActive(updated);
+                                                          }}
+                                                          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+                                                      >
+                                                          <Plus className="w-3.5 h-3.5" />
+                                                          Принять победителей из Стадии {currentStageIdx}
+                                                      </button>
+                                                  )}
+
+                                                  {currentStageIdx < configuredStages.length - 1 && (
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                              const adv = getStageAdvancingTeams(currentStageConfig!);
+                                                              if (adv.length === 0) {
+                                                                  alert(`В текущей Стадии ${currentStageIdx + 1} пока не определены прошедшие команды.`);
+                                                                  return;
+                                                              }
+                                                              const updated = advanceTeamsToStage(activeTournament, currentStageIdx, currentStageIdx + 1, adv);
+                                                              handleUpdateActive(updated);
+                                                          }}
+                                                          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+                                                      >
+                                                          <Trophy className="w-3.5 h-3.5" />
+                                                          Передать победителей в {configuredStages[currentStageIdx + 1]?.name || `Стадию ${currentStageIdx + 2}`}
+                                                      </button>
+                                                  )}
+
+                                                  {(!hasMatchesInStage && currentTeams.length >= 2) && (
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                              const built = generateStageData(currentStageType, currentTeams, {
+                                                                  eliminationType: activeTournament.settings?.eliminationType,
+                                                                  numberOfGroups: activeTournament.settings?.numberOfGroups,
+                                                                  matchesPerPairing: activeTournament.settings?.matchesPerPairing,
+                                                                  gslAdvanceCount: activeTournament.settings?.gslAdvanceCount,
+                                                                  swissWinsToAdvance: activeTournament.settings?.swissWinsToAdvance,
+                                                                  swissLossesToEliminate: activeTournament.settings?.swissLossesToEliminate,
+                                                                  numQuals: currentStageConfig?.numQuals,
+                                                                  advancePerQual: currentStageConfig?.advancePerQual
+                                                              });
+                                                              const updatedStages = [...configuredStages];
+                                                              updatedStages[currentStageIdx] = {
+                                                                  ...currentStageConfig!,
+                                                                  ...built
+                                                              };
+                                                              const nextTourn = {
+                                                                  ...activeTournament,
+                                                                  settings: {
+                                                                      ...activeTournament.settings,
+                                                                      stages: updatedStages
+                                                                  }
+                                                              };
+                                                              handleUpdateActive(nextTourn);
+                                                          }}
+                                                          className="px-4 py-2.5 bg-[#ff8f00] hover:bg-[#ff8f00]/90 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+                                                      >
+                                                          <Play className="w-3.5 h-3.5 fill-black" />
+                                                          Сгенерировать сетку для Стадии {currentStageIdx + 1}
+                                                      </button>
+                                                  )}
+                                              </div>
+                                          </div>
+                                      )}
+
+                                      {/* WAITING TEAMS PREVIEW (when in stage 2 or 3 and matches not generated yet) */}
+                                      {!hasMatchesInStage && (
+                                          <div className="bg-black/30 border border-white/5 rounded-3xl p-8 mb-8 text-center space-y-6">
+                                              <div>
+                                                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
+                                                      <Layers className="w-7 h-7" />
+                                                  </div>
+                                                  <h4 className="text-xl font-black text-white uppercase tracking-tight">
+                                                      {currentTeams.length > 0 ? `Команды в ожидании (${currentTeams.length})` : 'Команды еще не добавлены в эту стадию'}
+                                                  </h4>
+                                                  <p className="text-xs text-white/50 max-w-md mx-auto mt-1">
+                                                      {currentTeams.length > 0 
+                                                          ? `Команды приглашены напрямую в Стадию ${currentStageIdx + 1} и ждут своего старта или завершения предыдущего этапа.`
+                                                          : `Откройте Настройки турнира (вкладка "Команды"), чтобы добавить или перенести участников в эту стадию.`}
+                                                  </p>
+                                              </div>
+
+                                              {currentTeams.length > 0 && (
+                                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 max-w-4xl mx-auto">
+                                                      {currentTeams.map((tm, tIdx) => (
+                                                          <div key={tm.id || tIdx} className="bg-zinc-900/60 border border-white/10 rounded-2xl p-3 flex flex-col items-center gap-2 hover:border-blue-500/40 transition-all">
+                                                              <div className="w-10 h-10 rounded-xl bg-black/50 border border-white/5 flex items-center justify-center overflow-hidden p-1">
+                                                                  {tm.logoUrl ? (
+                                                                      <img src={tm.logoUrl} alt="" className="w-full h-full object-contain" />
+                                                                  ) : (
+                                                                      <Trophy className="w-5 h-5 text-white/20" />
+                                                                  )}
+                                                              </div>
+                                                              <span className="text-xs font-black text-white uppercase truncate w-full text-center">
+                                                                  {tm.name}
+                                                              </span>
+                                                              <span className="text-[9px] font-bold text-amber-400/80 bg-amber-400/10 px-2 py-0.5 rounded uppercase">
+                                                                  Инвайт
+                                                              </span>
+                                                          </div>
+                                                      ))}
+                                                  </div>
+                                              )}
+                                          </div>
+                                      )}
+
+                                      {/* STAGE BRACKET / MATCHES RENDERING */}
+                                      {hasMatchesInStage && (
+                                          <>
+                                              {currentStageType === 'gsl_groups' && (
+                                                  <GslGroupStage onVetoMatch={handlePlayTournamentMatch} tournament={stageScopedTournament} onUpdate={handleUpdateCurrentStage} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                              )}
+                                              {currentStageType === 'groups' && (
+                                                  <GroupStage onVetoMatch={handlePlayTournamentMatch} tournament={stageScopedTournament} onUpdate={handleUpdateCurrentStage} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                              )}
+                                              {currentStageType === 'swiss' && (
+                                                  <SwissStage onVetoMatch={handlePlayTournamentMatch} tournament={stageScopedTournament} onUpdate={handleUpdateCurrentStage} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                              )}
+                                              {currentStageType === 'qualifier' && (
+                                                  <QualifierStage 
+                                                      onVetoMatch={handlePlayTournamentMatch} 
+                                                      tournament={stageScopedTournament} 
+                                                      onUpdate={handleUpdateCurrentStage} 
+                                                      isExporting={isExporting} 
+                                                      isSwapMode={isSwapMode}
+                                                      onAdvanceToNextStage={currentStageIdx < configuredStages.length - 1 ? (advTeams) => {
+                                                          const updated = advanceTeamsToStage(activeTournament, currentStageIdx, currentStageIdx + 1, advTeams);
+                                                          handleUpdateActive(updated);
+                                                      } : undefined}
+                                                      nextStageName={configuredStages[currentStageIdx + 1]?.name || `Стадию ${currentStageIdx + 2}`}
+                                                  />
+                                              )}
+                                              {currentStageType === 'playoff' && (
+                                                  stageScopedTournament.tieredBracketRounds && stageScopedTournament.tieredBracketRounds.length > 0 ? (
+                                                      <TieredPlayoffStage onVetoMatch={handlePlayTournamentMatch} tournament={stageScopedTournament} onUpdate={handleUpdateCurrentStage} isExporting={isExporting} isSwapMode={isSwapMode} onToggleImportance={handleToggleMatchImportance} />
+                                                  ) : (
+                                                      <SingleEliminationStage onVetoMatch={handlePlayTournamentMatch} tournament={stageScopedTournament} onUpdate={handleUpdateCurrentStage} isExporting={isExporting} isSwapMode={isSwapMode} onToggleImportance={handleToggleMatchImportance} />
+                                                  )
+                                              )}
+                                          </>
+                                      )}
+                                  </>
+                              );
+                          }
+
+                          // 2. LEGACY NON-MULTI-STAGE FALLBACK RENDERING
                           const hasGroupStage = !!(
                               (Array.isArray(activeTournament.gslGroups) && activeTournament.gslGroups.length > 0) ||
                               (Array.isArray(activeTournament.groups) && activeTournament.groups.length > 0) ||
@@ -2279,6 +2387,7 @@ export default function TournamentManager({ user }: { user: any }) {
                               activeTournament.settings?.stage1Type === 'gsl_groups' ||
                               activeTournament.settings?.stage1Type === 'groups' ||
                               activeTournament.settings?.stage1Type === 'swiss' ||
+                              (activeTournament.settings?.stage1Type as string) === 'qualifier' ||
                               activeTournament.settings?.mode === 'two_stage' ||
                               activeTournament.settings?.mode === 'swiss'
                           );
@@ -2293,46 +2402,47 @@ export default function TournamentManager({ user }: { user: any }) {
                           );
 
                           const isMultiStage = hasGroupStage && (hasPlayoffStage || activeTournament.activeStage === 2 || (activeTournament.teams && activeTournament.teams.length >= 4));
-                          const effectiveStage = activeTournament.activeStage || (hasPlayoffStage && !hasGroupStage ? 2 : 1);
+                          const legacyEffectiveStage = activeTournament.activeStage || (hasPlayoffStage && !hasGroupStage ? 2 : 1);
 
                           const stage1Label = activeTournament.settings?.stage1Type === 'gsl_groups' 
                               ? 'GSL Группы' 
-                              : (activeTournament.settings?.stage1Type === 'swiss' || activeTournament.settings?.mode === 'swiss')
-                                  ? 'Швейцарка' 
-                                  : 'Групповой этап';
+                              : (activeTournament.settings?.stage1Type as string) === 'qualifier'
+                                  ? 'Квалификации'
+                                  : (activeTournament.settings?.stage1Type === 'swiss' || activeTournament.settings?.mode === 'swiss')
+                                      ? 'Швейцарка' 
+                                      : 'Групповой этап';
 
                           return (
                               <>
                                   {/* Prominent Stage Selector Tabs for Multi-Stage tournaments */}
                                   {!isExporting && isMultiStage && (
-                                      <div className="flex items-center gap-3 mb-6 p-1.5 bg-black/60 border border-white/10 rounded-2xl w-fit backdrop-blur-md shadow-xl">
-                                          <button
-                                              type="button"
-                                              onClick={() => handleUpdateActive({ ...activeTournament, activeStage: 1 })}
-                                              className={`px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                                                  effectiveStage === 1
-                                                      ? 'bg-[#ff8f00] text-black shadow-[0_0_20px_rgba(255,143,0,0.4)]'
-                                                      : 'text-white/60 hover:text-white hover:bg-white/5'
-                                              }`}
-                                          >
-                                              <span>1️⃣ {stage1Label}</span>
-                                          </button>
-                                          <button
-                                              type="button"
-                                              onClick={() => handleUpdateActive({ ...activeTournament, activeStage: 2 })}
-                                              className={`px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                                                  effectiveStage === 2
-                                                      ? 'bg-[#ff8f00] text-black shadow-[0_0_20px_rgba(255,143,0,0.4)]'
-                                                      : 'text-white/60 hover:text-white hover:bg-white/5'
-                                              }`}
-                                          >
-                                              <span>2️⃣ Сетка Плей-офф</span>
-                                          </button>
+                                      <div className="flex items-center gap-2 mb-8 p-1.5 bg-black/40 border border-white/5 rounded-xl w-fit mx-auto sm:mx-0">
+                                          {[1, 2].map((stageNum) => (
+                                              <button
+                                                  key={stageNum}
+                                                  type="button"
+                                                  onClick={() => handleUpdateActive({ ...activeTournament, activeStage: stageNum as any })}
+                                                  className={`px-5 py-2 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all cursor-pointer ${
+                                                      legacyEffectiveStage === stageNum
+                                                          ? "bg-white text-black shadow"
+                                                          : "text-white/40 hover:text-white hover:bg-white/5"
+                                                  }`}
+                                              >
+                                                  {stageNum === 1 ? stage1Label : 'Плей-офф'}
+                                              </button>
+                                          ))}
                                       </div>
                                   )}
 
+                                  {/* Mobile Scroll Hint */}
+                                  {!isExporting && (
+                                    <div className="flex sm:hidden items-center justify-center gap-2 mb-4 text-white/30 font-bold uppercase text-[9px] tracking-widest animate-pulse">
+                                       <ArrowLeftRight className="w-3 h-3" /> Листайте вправо, чтобы увидеть всю сетку
+                                    </div>
+                                  )}
+
                                   {/* STAGE 1: GROUPS / GSL / SWISS */}
-                                  {effectiveStage === 1 && hasGroupStage && (
+                                  {legacyEffectiveStage === 1 && hasGroupStage && (
                                       <>
                                           {(activeTournament.settings?.stage1Type === 'gsl_groups' || (!activeTournament.settings?.stage1Type && activeTournament.gslGroups && activeTournament.gslGroups.length > 0)) && (
                                               <GslGroupStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
@@ -2343,11 +2453,14 @@ export default function TournamentManager({ user }: { user: any }) {
                                           {(activeTournament.settings?.stage1Type === 'swiss' || (!activeTournament.settings?.stage1Type && ((activeTournament.swissRounds && activeTournament.swissRounds.length > 0) || activeTournament.settings?.mode === 'swiss'))) && (
                                               <SwissStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} onAdvanceToBracket={handleAdvanceToBracket} isExporting={isExporting} isSwapMode={isSwapMode} />
                                           )}
+                                          {(activeTournament.settings?.stage1Type as string) === 'qualifier' && (
+                                              <QualifierStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} />
+                                          )}
                                       </>
                                   )}
 
                                   {/* STAGE 2 OR SINGLE STAGE PLAYOFF (FAIL-SAFE BRACKET RENDERING) */}
-                                  {(effectiveStage === 2 || !hasGroupStage) && (
+                                  {(legacyEffectiveStage === 2 || !hasGroupStage) && (
                                       activeTournament.tieredBracketRounds && activeTournament.tieredBracketRounds.length > 0 ? (
                                           <TieredPlayoffStage onVetoMatch={handlePlayTournamentMatch} tournament={activeTournament} onUpdate={handleUpdateActive} isExporting={isExporting} isSwapMode={isSwapMode} onToggleImportance={handleToggleMatchImportance} />
                                       ) : (
@@ -2623,8 +2736,9 @@ export default function TournamentManager({ user }: { user: any }) {
                   />
               )}
           </div>
-      );
-  }
+      </div>
+  );
+}
 
   if (isCreating) {
       return (

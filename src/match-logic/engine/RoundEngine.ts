@@ -29,6 +29,7 @@ export class RoundEngine {
             (p as any).contributedObjectiveInRound = false;
             (p as any).roundClutchWon = false;
             (p as any).clutchOpponentsAtStart = null;
+            (p as any).killsInClutch = 0;
         }
     });
     state.phase = 'FREEZE';
@@ -375,21 +376,44 @@ export class RoundEngine {
       if (winnerAlivePlayers.length === 1) {
         const clutchCloser = winnerAlivePlayers[0];
         const opponentsFaced = (clutchCloser as any).clutchOpponentsAtStart;
-        if (opponentsFaced && opponentsFaced >= 1 && clutchCloser.statistics) {
-          let clutchBonus = 0;
+        const killsInClutch = (clutchCloser as any).killsInClutch || 0;
+        const opponentsAliveAtEnd = Object.values(state.players).filter(p => p && p.alive && p.teamId !== winnerId).length;
+
+        // Validating genuine clutch:
+        // 1. Elimination: player defeated enemies (opponentsAliveAtEnd === 0)
+        // 2. Defuse: lone player defused bomb
+        // 3. Explosion / Time: valid only if lone player actively fought/killed enemies or remaining enemies were <= 1
+        let isLegitimateClutch = false;
+        let effectiveOpponentsFaced = opponentsFaced;
+
+        if (reason === 'ELIMINATION') {
+          isLegitimateClutch = true;
+        } else if (reason === 'DEFUSE') {
+          isLegitimateClutch = true;
+        } else if (reason === 'EXPLOSION' || reason === 'TIME') {
           if (opponentsFaced === 1) {
+            isLegitimateClutch = true;
+          } else if (killsInClutch >= 1 || opponentsAliveAtEnd <= 1) {
+            isLegitimateClutch = true;
+            effectiveOpponentsFaced = Math.min(opponentsFaced, killsInClutch + (opponentsAliveAtEnd === 0 ? 0 : 1));
+          }
+        }
+
+        if (isLegitimateClutch && effectiveOpponentsFaced >= 1 && clutchCloser.statistics) {
+          let clutchBonus = 0;
+          if (effectiveOpponentsFaced === 1) {
             clutchCloser.statistics.clutchesWon1v1 = (clutchCloser.statistics.clutchesWon1v1 || 0) + 1;
             clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v1'] || 0.03;
-          } else if (opponentsFaced === 2) {
+          } else if (effectiveOpponentsFaced === 2) {
             clutchCloser.statistics.clutchesWon1v2 = (clutchCloser.statistics.clutchesWon1v2 || 0) + 1;
             clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v2'] || 0.05;
-          } else if (opponentsFaced === 3) {
+          } else if (effectiveOpponentsFaced === 3) {
             clutchCloser.statistics.clutchesWon1v3 = (clutchCloser.statistics.clutchesWon1v3 || 0) + 1;
             clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v3'] || 0.06;
-          } else if (opponentsFaced === 4) {
+          } else if (effectiveOpponentsFaced === 4) {
             clutchCloser.statistics.clutchesWon1v4 = (clutchCloser.statistics.clutchesWon1v4 || 0) + 1;
             clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v4'] || 0.07;
-          } else if (opponentsFaced >= 5) {
+          } else if (effectiveOpponentsFaced >= 5) {
             clutchCloser.statistics.clutchesWon1v5 = (clutchCloser.statistics.clutchesWon1v5 || 0) + 1;
             clutchBonus = RATING_CONFIG.EVENT_SWING?.CLUTCH['1v5'] || 0.08;
           }

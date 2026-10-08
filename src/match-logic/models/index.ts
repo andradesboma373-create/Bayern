@@ -65,6 +65,7 @@ export interface Player {
   role: PlayerRole;
   originalRole?: PlayerRole;
   isAdaptedRole?: boolean;
+  isNewPlayer?: boolean;
 
   // Base Characteristics
   rating: number;

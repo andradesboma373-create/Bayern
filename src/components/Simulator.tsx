@@ -12,25 +12,32 @@ import { simulationPerf } from '../lib/simulationPerformance';
 import VetoModal from "./VetoModal";
 import MatchStitcherModal from './MatchStitcherModal';
 import SeriesStitcherModal from './SeriesStitcherModal';
-import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass, shuffleArray } from '../lib/utils';
+import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass, formatSwing, shuffleArray } from '../lib/utils';
 import { updateBetaTournamentMatchResult, loadTournaments, saveTournament, getCanonicalRoomId } from './setka_tourn/storage';
 import { useGameUniverse } from '../lib/gameUniverse';
-import { Trophy, Sparkles, Layers, ChevronRight } from 'lucide-react';
+import { Trophy, Sparkles, Layers, ChevronRight, Check } from 'lucide-react';
 
-const DEFAULT_TEAM_T = [
-  { nickname: 'Player 1', role: 'rifler', rating: 148 },
-  { nickname: 'Player 2', role: 'sniper', rating: 144 },
-  { nickname: 'Player 3', role: 'opener', rating: 135 },
-  { nickname: 'Player 4', role: 'support', rating: 124 },
-  { nickname: 'Player 5', role: 'captain', rating: 118 },
+interface SimulatorPlayer {
+  nickname: string;
+  role: string;
+  rating: number;
+  isNewPlayer?: boolean;
+}
+
+const DEFAULT_TEAM_T: SimulatorPlayer[] = [
+  { nickname: 'Player 1', role: 'rifler', rating: 148, isNewPlayer: false },
+  { nickname: 'Player 2', role: 'sniper', rating: 144, isNewPlayer: false },
+  { nickname: 'Player 3', role: 'opener', rating: 135, isNewPlayer: false },
+  { nickname: 'Player 4', role: 'support', rating: 124, isNewPlayer: false },
+  { nickname: 'Player 5', role: 'captain', rating: 118, isNewPlayer: false },
 ];
 
-const DEFAULT_TEAM_CT = [
-  { nickname: 'Player 1', role: 'rifler', rating: 146 },
-  { nickname: 'Player 2', role: 'sniper', rating: 142 },
-  { nickname: 'Player 3', role: 'opener', rating: 134 },
-  { nickname: 'Player 4', role: 'support', rating: 122 },
-  { nickname: 'Player 5', role: 'captain', rating: 116 },
+const DEFAULT_TEAM_CT: SimulatorPlayer[] = [
+  { nickname: 'Player 1', role: 'rifler', rating: 146, isNewPlayer: false },
+  { nickname: 'Player 2', role: 'sniper', rating: 142, isNewPlayer: false },
+  { nickname: 'Player 3', role: 'opener', rating: 134, isNewPlayer: false },
+  { nickname: 'Player 4', role: 'support', rating: 122, isNewPlayer: false },
+  { nickname: 'Player 5', role: 'captain', rating: 116, isNewPlayer: false },
 ];
 
 const FORMS = [
@@ -154,8 +161,8 @@ export default function Simulator({ user }: { user: any }) {
   const [isSimulating, setIsSimulating] = useState(false);
     const [result, setResult] = useState<any>(null);
 
-  const [team1, setTeam1] = useState(DEFAULT_TEAM_T);
-  const [team2, setTeam2] = useState(DEFAULT_TEAM_CT);
+  const [team1, setTeam1] = useState<SimulatorPlayer[]>(DEFAULT_TEAM_T);
+  const [team2, setTeam2] = useState<SimulatorPlayer[]>(DEFAULT_TEAM_CT);
 
   const [team1Synergy, setTeam1Synergy] = useState(100);
   const [team2Synergy, setTeam2Synergy] = useState(100);
@@ -218,16 +225,35 @@ export default function Simulator({ user }: { user: any }) {
         const preparePlayers = (t: any) => {
           if (!t) return [1, 2, 3, 4, 5].map(i => ({ nickname: `Игрок #${i}`, role: i === 1 ? 'awper' : i === 2 ? 'entry' : i === 3 ? 'captain' : 'rifler', rating: 130 }));
 
-          if (t.players && Array.isArray(t.players) && t.players.length > 0) {
-            const mainRoster = t.players.slice(0, 5);
-            const validEmbedded = mainRoster.filter((p: any) => p && p.nickname && p.nickname !== 'Пусто' && p.nickname.trim() !== '');
-            if (validEmbedded.length > 0) {
-              return validEmbedded.map((p: any, i: number) => ({
+          const rawPlayers = (t.players && Array.isArray(t.players) && t.players.length > 0)
+            ? t.players
+            : ((t.roster && Array.isArray(t.roster) && t.roster.length > 0)
+              ? t.roster
+              : ((t.lineup && Array.isArray(t.lineup) && t.lineup.length > 0) ? t.lineup : []));
+
+          if (rawPlayers.length > 0) {
+            const mapped = rawPlayers.map((p: any, i: number) => {
+              const nick = p?.nickname || p?.name || p?.nick || p?.playerName || '';
+              if (!nick || nick === 'Пусто' || nick.trim() === '') return null;
+              return {
                 ...p,
-                nickname: p.nickname || p.name || `Игрок ${i+1}`,
-                role: p.role || (i === 0 ? 'awper' : i === 1 ? 'entry' : i === 2 ? 'captain' : 'rifler'),
-                rating: p.rating || 130
-              }));
+                nickname: nick,
+                role: p?.role || p?.position || p?.pos || (i === 0 ? 'awper' : i === 1 ? 'entry' : i === 2 ? 'captain' : 'rifler'),
+                rating: Number(p?.rating ?? p?.rate ?? p?.skill ?? p?.rank ?? 130) || 130
+              };
+            }).filter(Boolean);
+
+            if (mapped.length > 0) {
+              const res = [...mapped];
+              while (res.length < 5) {
+                const i = res.length;
+                res.push({
+                  nickname: `${t.name || 'Игрок'} #${i + 1}`,
+                  role: i === 0 ? 'awper' : i === 1 ? 'entry' : i === 2 ? 'captain' : 'rifler',
+                  rating: 130
+                });
+              }
+              return res.slice(0, 5);
             }
           }
 
@@ -244,15 +270,28 @@ export default function Simulator({ user }: { user: any }) {
           const teamName = foundTeam?.name || t.name;
 
           if (foundTeam?.players && Array.isArray(foundTeam.players)) {
-            const mainRoster = foundTeam.players.slice(0, 5);
-            const validEmbed = mainRoster.filter((p: any) => p && p.nickname && p.nickname !== 'Пусто' && p.nickname.trim() !== '');
-            if (validEmbed.length > 0) {
-              return validEmbed.map((p: any, i: number) => ({
+            const mapped = foundTeam.players.map((p: any, i: number) => {
+              const nick = p?.nickname || p?.name || p?.nick || p?.playerName || '';
+              if (!nick || nick === 'Пусто' || nick.trim() === '') return null;
+              return {
                 ...p,
-                nickname: p.nickname || p.name || `Игрок ${i+1}`,
-                role: p.role || (i === 0 ? 'awper' : i === 1 ? 'entry' : i === 2 ? 'captain' : 'rifler'),
-                rating: p.rating || 130
-              }));
+                nickname: nick,
+                role: p?.role || p?.position || p?.pos || (i === 0 ? 'awper' : i === 1 ? 'entry' : i === 2 ? 'captain' : 'rifler'),
+                rating: Number(p?.rating ?? p?.rate ?? p?.skill ?? p?.rank ?? 130) || 130
+              };
+            }).filter(Boolean);
+
+            if (mapped.length > 0) {
+              const res = [...mapped];
+              while (res.length < 5) {
+                const i = res.length;
+                res.push({
+                  nickname: `${teamName || 'Игрок'} #${i + 1}`,
+                  role: i === 0 ? 'awper' : i === 1 ? 'entry' : i === 2 ? 'captain' : 'rifler',
+                  rating: 130
+                });
+              }
+              return res.slice(0, 5);
             }
           }
 
@@ -264,9 +303,9 @@ export default function Simulator({ user }: { user: any }) {
           if (matchingPlayers.length > 0) {
             return matchingPlayers.slice(0, 5).map((p: any, i: number) => ({
               ...p,
-              nickname: p.nickname || p.name || `Игрок ${i+1}`,
-              role: p.role || (i === 0 ? 'awper' : i === 1 ? 'entry' : i === 2 ? 'captain' : 'rifler'),
-              rating: p.rating || 130
+              nickname: p.nickname || p.name || p.nick || p.playerName || `Игрок ${i+1}`,
+              role: p.role || p.position || (i === 0 ? 'awper' : i === 1 ? 'entry' : i === 2 ? 'captain' : 'rifler'),
+              rating: Number(p.rating ?? p.rate ?? 130) || 130
             }));
           }
 
@@ -800,17 +839,41 @@ export default function Simulator({ user }: { user: any }) {
       const reader = new FileReader();
       reader.onload = async (ev) => {
         try {
-          const data = JSON.parse(ev.target?.result as string);
-          if (data.teamName && data.players && Array.isArray(data.players)) {
+          const raw = JSON.parse(ev.target?.result as string);
+          const data = Array.isArray(raw) && raw.length > 0 && (raw[0].teamName || raw[0].name) ? raw[0] : raw;
+          
+          const teamName = data.teamName || data.name || data.title || (teamIdx === 1 ? 'Команда 1' : 'Команда 2');
+          const rawPlayers = (data.players && Array.isArray(data.players)) 
+            ? data.players 
+            : ((data.roster && Array.isArray(data.roster)) 
+              ? data.roster 
+              : ((data.lineup && Array.isArray(data.lineup)) 
+                ? data.lineup 
+                : (Array.isArray(data) ? data : [])));
+
+          if (rawPlayers.length > 0) {
+            const formatted = rawPlayers.map((p: any, idx: number) => ({
+              ...p,
+              id: p?.id || `p_${Date.now()}_${idx}`,
+              nickname: p?.nickname || p?.name || p?.nick || p?.playerName || `Игрок #${idx + 1}`,
+              role: p?.role || p?.position || p?.pos || (idx === 0 ? 'awper' : idx === 1 ? 'entry' : idx === 2 ? 'captain' : 'rifler'),
+              rating: Number(p?.rating ?? p?.rate ?? p?.skill ?? p?.rank ?? 130) || 130
+            }));
+
+            while (formatted.length < 5) {
+              const idx = formatted.length;
+              formatted.push({ nickname: '', role: 'rifler', rating: 100 });
+            }
+
             if (teamIdx === 1) {
-              setTeam1Name(data.teamName);
-              setTeam1(data.players);
+              setTeam1Name(teamName);
+              setTeam1(formatted.slice(0, 5));
             } else {
-              setTeam2Name(data.teamName);
-              setTeam2(data.players);
+              setTeam2Name(teamName);
+              setTeam2(formatted.slice(0, 5));
             }
           } else {
-            alert("Неверный формат файла пресета");
+            alert("В файле не найден состав игроков. Проверьте JSON структуру.");
           }
         } catch (e) {
           console.error(e);
@@ -831,6 +894,56 @@ export default function Simulator({ user }: { user: any }) {
       const newTeam = [...team2];
       newTeam[playerIndex] = { ...newTeam[playerIndex], [field]: value };
       setTeam2(newTeam);
+    }
+  };
+
+  const handleToggleNewPlayer = (teamIndex: 1 | 2, playerIndex: number) => {
+    if (teamIndex === 1) {
+      const newTeam = [...team1];
+      const willBeNew = !newTeam[playerIndex]?.isNewPlayer;
+      newTeam[playerIndex] = { ...newTeam[playerIndex], isNewPlayer: willBeNew };
+      setTeam1(newTeam);
+      const newCount = newTeam.filter(p => p && p.isNewPlayer).length;
+      setTeam1Synergy(newCount === 0 ? 100 : Math.max(30, 100 - newCount * 15));
+    } else {
+      const newTeam = [...team2];
+      const willBeNew = !newTeam[playerIndex]?.isNewPlayer;
+      newTeam[playerIndex] = { ...newTeam[playerIndex], isNewPlayer: willBeNew };
+      setTeam2(newTeam);
+      const newCount = newTeam.filter(p => p && p.isNewPlayer).length;
+      setTeam2Synergy(newCount === 0 ? 100 : Math.max(30, 100 - newCount * 15));
+    }
+  };
+
+  const handleSetRegularRoster = (teamIndex: 1 | 2) => {
+    if (teamIndex === 1) {
+      const newTeam = team1.map(p => ({ ...p, isNewPlayer: false }));
+      setTeam1(newTeam);
+      setTeam1Synergy(100);
+    } else {
+      const newTeam = team2.map(p => ({ ...p, isNewPlayer: false }));
+      setTeam2(newTeam);
+      setTeam2Synergy(100);
+    }
+  };
+
+  const handleSetNewPlayerMode = (teamIndex: 1 | 2) => {
+    if (teamIndex === 1) {
+      const newTeam = [...team1];
+      if (!newTeam.some(p => p && p.isNewPlayer)) {
+        newTeam[4] = { ...newTeam[4], isNewPlayer: true };
+      }
+      setTeam1(newTeam);
+      const newCount = newTeam.filter(p => p && p.isNewPlayer).length;
+      setTeam1Synergy(newCount === 0 ? 100 : Math.max(30, 100 - newCount * 15));
+    } else {
+      const newTeam = [...team2];
+      if (!newTeam.some(p => p && p.isNewPlayer)) {
+        newTeam[4] = { ...newTeam[4], isNewPlayer: true };
+      }
+      setTeam2(newTeam);
+      const newCount = newTeam.filter(p => p && p.isNewPlayer).length;
+      setTeam2Synergy(newCount === 0 ? 100 : Math.max(30, 100 - newCount * 15));
     }
   };
 
@@ -1082,6 +1195,34 @@ export default function Simulator({ user }: { user: any }) {
               <button onClick={() => setSelectedMaps([])} className="text-xs bg-white/5 text-white/50 hover:bg-white/10 hover:text-white px-3 py-1.5 rounded-lg font-bold uppercase transition-colors">Сбросить</button>
             </div>
           </div>
+
+          {selectedMaps.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 p-3 bg-black/40 rounded-xl border border-white/5 animate-fade-in">
+              <span className="text-[10px] font-black text-white/20 uppercase tracking-widest mr-2 ml-1">Порядок:</span>
+              {selectedMaps.map((mapName, idx) => {
+                const mInfo = (game === 'cs2' ? cs2MapPool : s2MapPool).find(m => m.name === mapName);
+                return (
+                  <div key={idx} className="group flex items-center gap-2.5 bg-gradient-to-r from-blue-600/20 to-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/20 text-[10px] font-black uppercase transition-all hover:border-blue-400/40">
+                    <span className="text-blue-500/50">#{idx + 1}</span>
+                    <span>{mapName}</span>
+                    <button 
+                      onClick={() => setSelectedMaps(selectedMaps.filter((_, i) => i !== idx))} 
+                      className="text-white/20 hover:text-red-400 transition-colors cursor-pointer"
+                      title="Удалить"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+              {selectedMaps.length < parseInt(format.replace('BO', '')) && (
+                <div className="px-3 py-1.5 rounded-lg border border-white/5 text-white/10 text-[10px] font-black uppercase border-dashed">
+                  Ожидание выбора...
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-3">
             {(game === 'cs2' ? cs2MapPool : s2MapPool).map(m => {
               const isSelected = selectedMaps.includes(m.name);
@@ -1117,7 +1258,7 @@ export default function Simulator({ user }: { user: any }) {
             <select 
               value={selectedTournament}
               onChange={(e) => setSelectedTournament(e.target.value)}
-              className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#ff8f00]/50 transition-colors"
+              className="bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#ff8f00]/50 transition-colors cursor-pointer"
               disabled={tournaments.length === 0}
             >
               {tournaments.length === 0 ? (
@@ -1335,8 +1476,52 @@ export default function Simulator({ user }: { user: any }) {
 
       {/* Teams */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <TeamCard game={game as "cs2"|"s2"} nameLabel="Команда 1" nameValue={team1Name} onNameChange={setTeam1Name} color="#ff8f00" players={team1} rating={Math.round(team1.reduce((acc, p) => acc + (Number(p.rating) || 0), 0) / Math.max(1, team1.length))} synergy={team1Synergy} form={team1Form} selectedMaps={selectedMaps} mapExp={team1MapExp} onSynergyChange={setTeam1Synergy} onFormChange={setTeam1Form} onMapExpChange={(map, val) => setTeam1MapExp({...team1MapExp, [map]: val})} onChange={(idx, field, val) => updatePlayer(1, idx, field, val)} onSave={() => handleSaveTeam(team1Name, team1)} onLoad={() => handleLoadTeam(1)} onChannelLoad={user?.isCustom ? () => handleOpenChannelLoad(1) : undefined} />
-        <TeamCard game={game as "cs2"|"s2"} nameLabel="Команда 2" nameValue={team2Name} onNameChange={setTeam2Name} color="#3b82f6" players={team2} rating={Math.round(team2.reduce((acc, p) => acc + (Number(p.rating) || 0), 0) / Math.max(1, team2.length))} synergy={team2Synergy} form={team2Form} selectedMaps={selectedMaps} mapExp={team2MapExp} onSynergyChange={setTeam2Synergy} onFormChange={setTeam2Form} onMapExpChange={(map, val) => setTeam2MapExp({...team2MapExp, [map]: val})} onChange={(idx, field, val) => updatePlayer(2, idx, field, val)} onSave={() => handleSaveTeam(team2Name, team2)} onLoad={() => handleLoadTeam(2)} onChannelLoad={user?.isCustom ? () => handleOpenChannelLoad(2) : undefined} />
+        <TeamCard 
+          game={game as "cs2"|"s2"} 
+          nameLabel="Команда 1" 
+          nameValue={team1Name} 
+          onNameChange={setTeam1Name} 
+          color="#ff8f00" 
+          players={team1} 
+          rating={Math.round(team1.reduce((acc, p) => acc + (Number(p.rating) || 0), 0) / Math.max(1, team1.length))} 
+          synergy={team1Synergy} 
+          form={team1Form} 
+          selectedMaps={selectedMaps} 
+          mapExp={team1MapExp} 
+          onSynergyChange={setTeam1Synergy} 
+          onFormChange={setTeam1Form} 
+          onMapExpChange={(map, val) => setTeam1MapExp({...team1MapExp, [map]: val})} 
+          onChange={(idx, field, val) => updatePlayer(1, idx, field, val)} 
+          onToggleNewPlayer={(idx) => handleToggleNewPlayer(1, idx)}
+          onSetRegularRoster={() => handleSetRegularRoster(1)}
+          onSetNewPlayerMode={() => handleSetNewPlayerMode(1)}
+          onSave={() => handleSaveTeam(team1Name, team1)} 
+          onLoad={() => handleLoadTeam(1)} 
+          onChannelLoad={user?.isCustom ? () => handleOpenChannelLoad(1) : undefined} 
+        />
+        <TeamCard 
+          game={game as "cs2"|"s2"} 
+          nameLabel="Команда 2" 
+          nameValue={team2Name} 
+          onNameChange={setTeam2Name} 
+          color="#3b82f6" 
+          players={team2} 
+          rating={Math.round(team2.reduce((acc, p) => acc + (Number(p.rating) || 0), 0) / Math.max(1, team2.length))} 
+          synergy={team2Synergy} 
+          form={team2Form} 
+          selectedMaps={selectedMaps} 
+          mapExp={team2MapExp} 
+          onSynergyChange={setTeam2Synergy} 
+          onFormChange={setTeam2Form} 
+          onMapExpChange={(map, val) => setTeam2MapExp({...team2MapExp, [map]: val})} 
+          onChange={(idx, field, val) => updatePlayer(2, idx, field, val)} 
+          onToggleNewPlayer={(idx) => handleToggleNewPlayer(2, idx)}
+          onSetRegularRoster={() => handleSetRegularRoster(2)}
+          onSetNewPlayerMode={() => handleSetNewPlayerMode(2)}
+          onSave={() => handleSaveTeam(team2Name, team2)} 
+          onLoad={() => handleLoadTeam(2)} 
+          onChannelLoad={user?.isCustom ? () => handleOpenChannelLoad(2) : undefined} 
+        />
       </div>
       {showSkleyka && (
         <MatchStitcherModal 
@@ -1371,7 +1556,31 @@ export default function Simulator({ user }: { user: any }) {
   );
 }
 
-function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, rating, synergy, form, selectedMaps, mapExp, onSynergyChange, onFormChange, onMapExpChange, onChange, onSave, onLoad, onChannelLoad }: { nameLabel: string, nameValue: string, onNameChange: (val: string) => void, color: string, players: any[], rating: number, synergy: number, form: number, selectedMaps: string[], mapExp: Record<string, number>, onSynergyChange: (val: number) => void, onFormChange: (val: number) => void, onMapExpChange: (map: string, val: number) => void, onChange: (idx: number, field: string, val: string | number) => void, onSave: () => void, onLoad: () => void, onChannelLoad?: () => void, game?: "cs2" | "s2" }) {
+function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, rating, synergy, form, selectedMaps, mapExp, onSynergyChange, onFormChange, onMapExpChange, onChange, onToggleNewPlayer, onSetRegularRoster, onSetNewPlayerMode, onSave, onLoad, onChannelLoad }: { 
+  nameLabel: string, 
+  nameValue: string, 
+  onNameChange: (val: string) => void, 
+  color: string, 
+  players: any[], 
+  rating: number, 
+  synergy: number, 
+  form: number, 
+  selectedMaps: string[], 
+  mapExp: Record<string, number>, 
+  onSynergyChange: (val: number) => void, 
+  onFormChange: (val: number) => void, 
+  onMapExpChange: (map: string, val: number) => void, 
+  onChange: (idx: number, field: string, val: string | number) => void, 
+  onToggleNewPlayer: (idx: number) => void,
+  onSetRegularRoster: () => void,
+  onSetNewPlayerMode: () => void,
+  onSave: () => void, 
+  onLoad: () => void, 
+  onChannelLoad?: () => void, 
+  game?: "cs2" | "s2" 
+}) {
+  const hasNewPlayers = (players || []).some(p => p && p.isNewPlayer);
+
   return (
     <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-6">
       {/* Header */}
@@ -1390,6 +1599,24 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
         </div>
       </div>
 
+      {/* Roster Mode Buttons */}
+      <div className="grid grid-cols-2 gap-3">
+        <button 
+          onClick={onSetRegularRoster}
+          className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${!hasNewPlayers ? 'bg-green-500/20 text-green-400 border-green-500/40' : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10'}`}
+        >
+          <Check className={`w-3.5 h-3.5 ${!hasNewPlayers ? 'opacity-100' : 'opacity-0'}`} />
+          Состав обычный
+        </button>
+        <button 
+          onClick={onSetNewPlayerMode}
+          className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${hasNewPlayers ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10'}`}
+        >
+          <Sparkles className={`w-3.5 h-3.5 ${hasNewPlayers ? 'opacity-100 text-amber-400' : 'opacity-0'}`} />
+          Новый игрок
+        </button>
+      </div>
+
       {/* Players */}
       <div>
         <div className="flex justify-between px-4 mb-3 text-xs font-bold text-white/40 uppercase tracking-wider">
@@ -1401,24 +1628,38 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
         </div>
         <div className="flex flex-col gap-2">
           {players.map((p, i) => (
-            <div key={i} className="flex items-center justify-between bg-white/5 rounded-xl px-3 py-2 border border-white/5 focus-within:border-white/20 transition-colors">
+            <div key={i} className={`flex items-center justify-between bg-white/5 rounded-xl px-3 py-2 border transition-colors ${p?.isNewPlayer ? 'border-amber-500/30 bg-amber-500/[0.03]' : 'border-white/5 focus-within:border-white/20'}`}>
               <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-                <div className="text-white/20 shrink-0">⋮</div>
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs overflow-hidden shrink-0">
+                <button 
+                  onClick={() => onToggleNewPlayer(i)}
+                  className={`shrink-0 w-6 h-6 rounded flex items-center justify-center transition-all ${p?.isNewPlayer ? 'bg-amber-500 text-black' : 'bg-white/5 text-white/20 hover:bg-white/10 hover:text-white'}`}
+                  title={p?.isNewPlayer ? "Новичок (Играет на себя)" : "Обычный игрок"}
+                >
+                  <Sparkles className="w-3 h-3" />
+                </button>
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs overflow-hidden shrink-0 relative">
                   <PlayerAvatar game={game} playerName={p.nickname} sizeClassName="w-8 h-8" />
+                  {p?.isNewPlayer && (
+                    <div className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
+                      <div className="w-full h-full animate-pulse bg-amber-500/10"></div>
+                    </div>
+                  )}
                 </div>
-                <input 
-                  type="text" 
-                  value={p.nickname} 
-                  onChange={(e) => onChange(i, 'nickname', e.target.value)}
-                  className="font-bold text-sm text-white/90 bg-transparent outline-none w-full truncate"
-                />
+                <div className="flex flex-col min-w-0 flex-1">
+                  <input 
+                    type="text" 
+                    value={p.nickname} 
+                    onChange={(e) => onChange(i, 'nickname', e.target.value)}
+                    className={`font-bold text-sm bg-transparent outline-none w-full truncate ${p?.isNewPlayer ? 'text-amber-400' : 'text-white/90'}`}
+                  />
+                  {p?.isNewPlayer && <span className="text-[8px] font-black text-amber-500/60 uppercase tracking-tighter">Играет на себя / Координация -30%</span>}
+                </div>
               </div>
               <div className="flex gap-3 items-center text-sm shrink-0">
                 <select 
                   value={p.role} 
                   onChange={(e) => onChange(i, 'role', e.target.value)}
-                  className="w-24 bg-black/50 border border-white/10 rounded-lg px-2 py-1 outline-none text-white/80 appearance-none text-xs font-medium cursor-pointer text-center"
+                  className="w-24 bg-zinc-950 border border-white/10 rounded-lg px-2 py-1 outline-none text-white/80 appearance-none text-xs font-medium cursor-pointer text-center"
                 >
                   <option value="rifler">Рифлер</option>
                   <option value="sniper">{game === 's2' ? 'Снайпер' : 'AWPer'}</option>
@@ -1445,7 +1686,7 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
                     onChange(i, 'rating', val);
                   }}
                   className="w-16 bg-black/50 border border-white/10 rounded-lg px-2 py-1 outline-none text-right font-black text-xs font-mono shrink-0"
-                  style={{ color }}
+                  style={{ color: p?.isNewPlayer ? '#fbbf24' : color }}
                 />
               </div>
             </div>
@@ -1460,7 +1701,7 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
           <select 
             value={form}
             onChange={(e) => onFormChange(parseInt(e.target.value))}
-            className={`bg-black/50 border border-white/10 rounded-lg px-2 py-1 outline-none font-bold ${FORMS.find(f => f.value === form)?.color || 'text-white'}`}
+            className={`bg-zinc-950 border border-white/10 rounded-lg px-2 py-1 outline-none font-bold cursor-pointer ${FORMS.find(f => f.value === form)?.color || 'text-white'}`}
           >
             {FORMS.map(f => (
               <option key={f.value} value={f.value}>{f.label} ({f.value > 0 ? '+' : ''}{f.value})</option>
@@ -1548,7 +1789,13 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
                   </td>
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{p.adr || '-'}</td>
                   {RATING_CONFIG.USE_KAST && <td className="py-2 text-center text-white/50 font-mono text-xs">{p.kast || '-'}</td>}
-                  {RATING_CONFIG.USE_SWING && <td className={`py-2 text-center font-mono text-xs ${getSwingColorClass(p?.roundSwingNum ?? p?.roundSwing)}`}>{p?.roundSwing || '-'}</td>}
+                  {RATING_CONFIG.USE_SWING && (
+                    <td className="py-2 text-center font-mono text-xs">
+                      <span className={`px-1.5 py-0.5 rounded ${getSwingColorClass(p?.roundSwingNum ?? p?.roundSwing)}`}>
+                        {formatSwing(p?.roundSwingNum ?? p?.roundSwing)}
+                      </span>
+                    </td>
+                  )}
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{p.impact || '-'}</td>
                   <td className={`py-2 text-center font-mono text-xs ${getKdColorClass(p.kd)}`}>{p.kd || '-'}</td>
                   <td className="py-2 text-right font-bold text-yellow-500/80 font-mono text-sm">{p.hltvRating || '-'}</td>

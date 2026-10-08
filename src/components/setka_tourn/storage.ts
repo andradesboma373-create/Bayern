@@ -50,6 +50,10 @@ export const normalizeTournament = (t: any): Tournament => {
     const fixed = ensureArrayOfMatches(copy.grandFinal);
     if (fixed) copy.grandFinal = fixed;
   }
+  if (copy.qualifiersBrackets && typeof copy.qualifiersBrackets === 'object' && !Array.isArray(copy.qualifiersBrackets)) {
+    const fixed = ensureArrayOfQualifiers(copy.qualifiersBrackets);
+    if (fixed) copy.qualifiersBrackets = fixed;
+  }
 
   const hasGroupStage = (Array.isArray(copy.groups) && copy.groups.length > 0) || 
                         (Array.isArray(copy.gslGroups) && copy.gslGroups.length > 0) || 
@@ -91,14 +95,15 @@ export const normalizeTournament = (t: any): Tournament => {
   }
 
   // 3. Normalize activeStage and eliminate invalid states
-  if (copy.activeStage !== 1 && copy.activeStage !== 2) {
+  const totalStages = Array.isArray(copy.settings?.stages) ? copy.settings.stages.length : (copy.settings?.numStages || 2);
+  if (typeof copy.activeStage !== 'number' || copy.activeStage < 1 || copy.activeStage > Math.max(2, totalStages)) {
     if (hasPlayoffStage && !hasGroupStage) {
       copy.activeStage = 2;
     } else {
       copy.activeStage = 1;
     }
-  } else if (!hasGroupStage && hasPlayoffStage) {
-    // Pure playoff tournament - ensure it renders playoff bracket regardless of activeStage
+  } else if (!hasGroupStage && hasPlayoffStage && !copy.settings?.stages) {
+    // Pure playoff tournament without multi-stage config
     copy.settings.stage1Type = 'playoff';
     copy.settings.mode = 'single_stage';
   }
@@ -169,6 +174,41 @@ export const normalizeTournament = (t: any): Tournament => {
       ...g,
       matches: Array.isArray(g.matches) ? g.matches.map(normalizeMatch).filter(Boolean) : []
     }));
+  }
+  if (Array.isArray(copy.qualifiersBrackets)) {
+    copy.qualifiersBrackets = copy.qualifiersBrackets.map((bracket: any) => 
+      Array.isArray(bracket) ? bracket.map((round: any) => Array.isArray(round) ? round.map(normalizeMatch).filter(Boolean) : []) : []
+    );
+  }
+
+  // Normalize stages if present in settings
+  if (copy.settings && Array.isArray(copy.settings.stages)) {
+    copy.settings.stages = copy.settings.stages.map((stg: any, sIdx: number) => {
+      const s = { ...stg };
+      if (!s.id) s.id = `stage_${sIdx + 1}`;
+      if (!s.name) s.name = `Стадия ${sIdx + 1}`;
+      if (Array.isArray(s.teams)) {
+        s.teams = s.teams.map((tm: any) => normalizeTeam(tm)).filter(Boolean);
+      } else {
+        s.teams = [];
+      }
+      if (Array.isArray(s.bracketRounds)) {
+        s.bracketRounds = s.bracketRounds.map((r: any) => Array.isArray(r) ? r.map(normalizeMatch).filter(Boolean) : []);
+      }
+      if (Array.isArray(s.losersBracketRounds)) {
+        s.losersBracketRounds = s.losersBracketRounds.map((r: any) => Array.isArray(r) ? r.map(normalizeMatch).filter(Boolean) : []);
+      }
+      if (Array.isArray(s.swissRounds)) {
+        s.swissRounds = s.swissRounds.map((r: any) => Array.isArray(r) ? r.map(normalizeMatch).filter(Boolean) : []);
+      }
+      if (Array.isArray(s.groups)) {
+        s.groups = s.groups.map((g: any) => ({
+          ...g,
+          matches: Array.isArray(g.matches) ? g.matches.map(normalizeMatch).filter(Boolean) : []
+        }));
+      }
+      return s;
+    });
   }
 
   // 5. Auto-repair missing playoff bracket if it was lost in transmission or stripped in lightweight storage
@@ -252,6 +292,36 @@ export function ensureArrayOfMatches(val: any, jsonVal?: string): Match[] | unde
   return Array.isArray(val) ? val : undefined;
 }
 
+export function ensureArrayOfQualifiers(val: any, jsonVal?: string): Match[][][] | undefined {
+  if (jsonVal && typeof jsonVal === 'string' && jsonVal.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(jsonVal);
+      if (Array.isArray(parsed)) {
+        return parsed.map((b: any) => ensureArrayOfRounds(b) || []).filter(Array.isArray);
+      }
+    } catch (e) {}
+  }
+  if (Array.isArray(val)) {
+    return val.map((b: any) => ensureArrayOfRounds(b) || []).filter(Array.isArray);
+  }
+  if (val && typeof val === 'object' && val !== null) {
+    const keys = Object.keys(val);
+    if (keys.length > 0) {
+      const sortedKeys = keys
+        .filter(k => k !== '_isNestedArray')
+        .sort((a, b) => {
+          const na = parseInt(a.replace(/\D/g, ''));
+          const nb = parseInt(b.replace(/\D/g, ''));
+          if (!isNaN(na) && !isNaN(nb)) return na - nb;
+          return a.localeCompare(b);
+        });
+      const arr = sortedKeys.map(k => ensureArrayOfRounds(val[k]) || []);
+      if (arr.length > 0) return arr;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Safely serializes tournament for Google Cloud Firestore (avoids nested arrays error)
  */
@@ -278,6 +348,42 @@ export const serializeTournamentForFirestore = (tournament: Tournament): any => 
     docData.gslGroups_json = JSON.stringify(docData.gslGroups);
     delete docData.gslGroups;
   }
+  if (Array.isArray(docData.qualifiersBrackets)) {
+    docData.qualifiersBrackets_json = JSON.stringify(docData.qualifiersBrackets);
+    delete docData.qualifiersBrackets;
+  }
+
+  // Safely serialize stages inside settings
+  if (docData.settings && Array.isArray(docData.settings.stages)) {
+    docData.settings = {
+      ...docData.settings,
+      stages: docData.settings.stages.map((stg: any) => {
+        const s = { ...stg };
+        if (Array.isArray(s.bracketRounds)) {
+          s.bracketRounds_json = JSON.stringify(s.bracketRounds);
+          delete s.bracketRounds;
+        }
+        if (Array.isArray(s.losersBracketRounds)) {
+          s.losersBracketRounds_json = JSON.stringify(s.losersBracketRounds);
+          delete s.losersBracketRounds;
+        }
+        if (Array.isArray(s.swissRounds)) {
+          s.swissRounds_json = JSON.stringify(s.swissRounds);
+          delete s.swissRounds;
+        }
+        if (Array.isArray(s.gslGroups)) {
+          s.gslGroups_json = JSON.stringify(s.gslGroups);
+          delete s.gslGroups;
+        }
+        if (Array.isArray(s.qualifiersBrackets)) {
+          s.qualifiersBrackets_json = JSON.stringify(s.qualifiersBrackets);
+          delete s.qualifiersBrackets;
+        }
+        return s;
+      })
+    };
+  }
+
   return docData;
 };
 
@@ -300,12 +406,37 @@ export const deserializeTournamentFromFirestore = (data: any): Tournament => {
   const tiered = ensureArrayOfRounds(t.tieredBracketRounds, t.tieredBracketRounds_json);
   if (tiered) t.tieredBracketRounds = tiered;
 
+  const quals = ensureArrayOfQualifiers(t.qualifiersBrackets, t.qualifiersBrackets_json);
+  if (quals) t.qualifiersBrackets = quals;
+
   const gf = ensureArrayOfMatches(t.grandFinal, t.grandFinal_json);
   if (gf) t.grandFinal = gf;
 
   if (t.gslGroups_json && (!t.gslGroups || !Array.isArray(t.gslGroups))) {
     try { t.gslGroups = JSON.parse(t.gslGroups_json); } catch (e) {}
   }
+
+  if (t.settings && Array.isArray(t.settings.stages)) {
+    t.settings.stages = t.settings.stages.map((stg: any) => {
+      const s = { ...stg };
+      const sBracket = ensureArrayOfRounds(s.bracketRounds, s.bracketRounds_json);
+      if (sBracket) s.bracketRounds = sBracket;
+
+      const sLosers = ensureArrayOfRounds(s.losersBracketRounds, s.losersBracketRounds_json);
+      if (sLosers) s.losersBracketRounds = sLosers;
+
+      const sSwiss = ensureArrayOfRounds(s.swissRounds, s.swissRounds_json);
+      if (sSwiss) s.swissRounds = sSwiss;
+
+      if (s.gslGroups_json && (!s.gslGroups || !Array.isArray(s.gslGroups))) {
+        try { s.gslGroups = JSON.parse(s.gslGroups_json); } catch (e) {}
+      }
+      const sQuals = ensureArrayOfQualifiers(s.qualifiersBrackets, s.qualifiersBrackets_json);
+      if (sQuals) s.qualifiersBrackets = sQuals;
+      return s;
+    });
+  }
+
   return normalizeTournament(t);
 };
 
@@ -891,10 +1022,13 @@ export const saveTournament = (userId: string, tournament: Tournament) => {
 
 export const deleteTournament = (userId: string, tournamentId: string) => {
   const roomId = getCanonicalRoomId(userId);
+  console.log(`[Tournament Storage] Deleting tournament ${tournamentId} from room ${roomId}`);
   addDeletedTournamentId(roomId, tournamentId);
 
   const all = loadTournaments(roomId);
+  console.log(`[Tournament Storage] Current tournament count: ${all.length}`);
   const filtered = all.filter((t) => t.id !== tournamentId);
+  console.log(`[Tournament Storage] Tournament count after filter: ${filtered.length}`);
   memoryCache[roomId] = [...filtered];
   if (userId && userId !== roomId) {
     memoryCache[userId] = [...filtered];
@@ -902,26 +1036,31 @@ export const deleteTournament = (userId: string, tournamentId: string) => {
 
   try {
     // Remove individual tournament files
+    console.log(`[Tournament Storage] Removing local storage items for ${tournamentId}`);
     localStorage.removeItem(`tournament_item_${roomId}_${tournamentId}`);
     localStorage.removeItem(`tournament_bg_${tournamentId}`);
     if (userId && userId !== roomId) {
       localStorage.removeItem(`tournament_item_${userId}_${tournamentId}`);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error(`[Tournament Storage] Error removing local storage items:`, e);
+  }
 
   saveTournamentsIndex(roomId, filtered);
   window.dispatchEvent(new Event("tournaments-updated"));
 
   if (roomId !== 'guest') {
     import('../../firebase').then(({ db, doc, deleteDoc }) => {
-      deleteDoc(doc(db, "tournaments", tournamentId)).catch(e => console.error("Firebase delete error", e));
+      deleteDoc(doc(db, "tournaments", tournamentId)).then(() => {
+        console.log(`[Tournament Storage] Successfully deleted from Firestore: ${tournamentId}`);
+      }).catch(e => console.error("Firebase delete error", e));
     }).catch(console.error);
 
     fetch('/api/sync-cache', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: roomId, tournaments: filtered })
-    }).catch(() => {});
+    }).then(() => console.log(`[Tournament Storage] Successfully synced delete to server`)).catch((e) => console.error(`[Tournament Storage] Sync error:`, e));
   }
 };
 

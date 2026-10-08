@@ -34,12 +34,33 @@ export interface GslGroup {
   lowerBracket: Match[][];
 }
 
+export interface TournamentStageConfig {
+  id?: string;
+  name?: string;
+  type: 'playoff' | 'qualifier' | 'gsl_groups' | 'swiss' | 'groups';
+  teams: Team[];
+  numQuals?: number;
+  advancePerQual?: number;
+  bracketRounds?: Match[][];
+  losersBracketRounds?: Match[][];
+  grandFinal?: Match[];
+  groups?: Group[];
+  gslGroups?: GslGroup[];
+  swissRounds?: Match[][];
+  tieredBracketRounds?: Match[][];
+  qualifiersBrackets?: Match[][][];
+  completed?: boolean;
+  advancingTeams?: Team[];
+}
+
 export interface TournamentSettings {
-  mode: 'single_stage' | 'two_stage' | 'swiss';
+  mode: 'single_stage' | 'two_stage' | 'swiss' | 'multi_stage';
+  numStages?: number;
+  stages?: TournamentStageConfig[];
   game?: string;
   matchFormat?: string;
   eliminationType?: 'single' | 'double';
-  stage1Type?: 'groups' | 'swiss' | 'playoff' | 'gsl_groups';
+  stage1Type?: 'groups' | 'swiss' | 'playoff' | 'gsl_groups' | 'qualifier';
   stage2Type?: 'tiered' | 'single' | 'double';
   hasStage2?: boolean;
   
@@ -63,6 +84,9 @@ export interface TournamentSettings {
   numberOfGroups?: number;
   groupAssignments?: Record<string, string[]>; // groupId -> array of team ids (or team objects)
   gslAdvanceCount?: 2 | 3 | 4; // 2 = Classic GSL / Major (Top-2), 3 = IEM / BLAST (Top-3), 4 = ESL Pro League (Top-4)
+
+  advancePerQual?: number;
+  numQuals?: number;
 
   // Bracket mode
   bracketMode?: 'standard' | 'realtime';
@@ -143,7 +167,7 @@ export interface Tournament {
   awards?: { mvpId?: string; evpIds?: string[] };
   
   // State
-  activeStage: 1 | 2; // 1 = Group (if two stage) or bracket (if single), 2 = bracket (if two stage)
+  activeStage: number; // 1-based index of the active stage
   
   // Stage 1 (Group stage)
   groups?: Group[];
@@ -157,4 +181,7 @@ export interface Tournament {
 
   // Swiss
   swissRounds?: Match[][];
+
+  // Qualifiers
+  qualifiersBrackets?: Match[][][];
 }

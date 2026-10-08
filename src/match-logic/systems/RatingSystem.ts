@@ -299,7 +299,7 @@ export class RatingSystem {
       c1v4 * w['1v4'] +
       c1v5 * w['1v5'];
 
-    return (totalClutchScore * 10) / rounds;
+    return (totalClutchScore * 1.5) / rounds;
   }
 
   /**
@@ -396,9 +396,9 @@ export class RatingSystem {
     // Formula: 2.13 * KPR + 0.12 * APR - 0.41 + Clutches + Multi-kills + Openings
     const rawImpact =
       2.13 * kpr +
-      0.12 * apr - 0.41 +
-      multiKillFactor * 0.18 +
-      clutchFactor * 0.22 +
+      0.15 * apr - 0.41 +
+      multiKillFactor * 0.16 +
+      clutchFactor * 0.15 +
       openingFactor * 0.20;
     const finalImpact = Math.max(0.20, Math.min(2.30, Number(rawImpact.toFixed(2))));
 

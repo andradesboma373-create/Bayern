@@ -171,7 +171,7 @@ export default function MatchCard({
                                 <select
                                     value={t1Id}
                                     onChange={(e) => onSwapTeam(bracketType, rIdx, mIdx, 1, e.target.value)}
-                                    className="bg-transparent text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate"
+                                    className="bg-zinc-950 text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate rounded border border-white/10 px-1"
                                 >
                                     <option value="" className="bg-[#12121a]">TBD</option>
                                     <option value="BYE" className="bg-[#12121a] text-emerald-400">BYE</option>
@@ -229,7 +229,7 @@ export default function MatchCard({
                                 <select
                                     value={t2Id}
                                     onChange={(e) => onSwapTeam(bracketType, rIdx, mIdx, 2, e.target.value)}
-                                    className="bg-transparent text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate"
+                                    className="bg-zinc-950 text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate rounded border border-white/10 px-1"
                                 >
                                     <option value="" className="bg-[#12121a]">TBD</option>
                                     <option value="BYE" className="bg-[#12121a] text-emerald-400">BYE</option>

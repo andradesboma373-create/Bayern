@@ -23,7 +23,7 @@ import {
   Medal,
 } from "lucide-react";
 import { toPng } from "html-to-image";
-import { safeLocalStorageSet } from "../lib/utils";
+import { safeLocalStorageSet, formatSwing, getSwingColorClass } from "../lib/utils";
 import { calculateConsistencyFromMatchHistory } from "../lib/simulation";
 import { RatingSystem } from "../match-logic/systems/RatingSystem";
 import PlayerAvatar from "./PlayerAvatar";
@@ -1098,25 +1098,17 @@ export default function PlayerProfileModal({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div className="bg-[#161726] border border-white/5 rounded-xl p-3.5 flex flex-col">
                     <div className="flex justify-between items-center mb-1">
-                      <span className={`text-sm font-black font-mono ${
-                        Number(playerStats.roundSwing) > 1.0
-                          ? 'text-emerald-400'
-                          : Number(playerStats.roundSwing) < -1.0
-                          ? 'text-red-400'
-                          : 'text-slate-300'
-                      }`}>
-                        {Number(playerStats.roundSwing) > 0
-                          ? `+${playerStats.roundSwing}%`
-                          : `${playerStats.roundSwing}%`}
+                      <span className={`text-sm font-black font-mono px-1.5 py-0.5 rounded ${getSwingColorClass(playerStats.roundSwing)}`}>
+                        {formatSwing(playerStats.roundSwing)}
                       </span>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                        Number(playerStats.roundSwing) > 1.0
+                        parseFloat(String(playerStats.roundSwing || 0).replace(/[%+]/g, '')) > 1.0
                           ? 'text-emerald-400 bg-emerald-500/10'
-                          : Number(playerStats.roundSwing) < -1.0
+                          : parseFloat(String(playerStats.roundSwing || 0).replace(/[%+]/g, '')) < -1.0
                           ? 'text-red-400 bg-red-500/10'
                           : 'text-slate-400 bg-white/5'
                       }`}>
-                        {Number(playerStats.roundSwing) > 1.0 ? 'EXCELLENT' : Number(playerStats.roundSwing) < -1.0 ? 'LOW' : 'NEUTRAL'}
+                        {parseFloat(String(playerStats.roundSwing || 0).replace(/[%+]/g, '')) > 1.0 ? 'EXCELLENT' : parseFloat(String(playerStats.roundSwing || 0).replace(/[%+]/g, '')) < -1.0 ? 'LOW' : 'NEUTRAL'}
                       </span>
                     </div>
                     <span className="text-[10px] font-bold text-white/40 uppercase">

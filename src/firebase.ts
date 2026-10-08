@@ -70,10 +70,21 @@ export async function getDocs(queryRef: any) {
       console.warn("getDocs failed with status:", res.status);
       return { docs: [], empty: true, size: 0, forEach: () => {} };
     }
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.warn("getDocs received non-json response:", contentType);
+      return { docs: [], empty: true, size: 0, forEach: () => {} };
+    }
     
     const data = await res.json();
+    if (!Array.isArray(data)) {
+      return { docs: [], empty: true, size: 0, forEach: () => {} };
+    }
+
     const docs = data.map((d: any) => ({
       id: d.id,
+      ref: doc(queryRef.path || 'items', d.id),
       data: () => d.data,
       exists: () => true
     }));
@@ -99,6 +110,11 @@ export async function getDoc(docRef: any) {
     
     if (!res.ok) {
       console.warn("getDoc failed with status:", res.status);
+      return { exists: () => false, data: () => null, id: docRef.path.split('/').pop() };
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
       return { exists: () => false, data: () => null, id: docRef.path.split('/').pop() };
     }
     

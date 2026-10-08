@@ -75,12 +75,6 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
       return { ...g, matches: newMatches };
     });
 
-    if (finishedMatchObj) {
-      try {
-        recordTournamentMatchResult(tournament.userId || 'guest', tournament, finishedMatchObj, `Групповой этап`);
-      } catch (e) {}
-    }
-
     onUpdate({ ...tournament, groups: newGroups });
   };
 

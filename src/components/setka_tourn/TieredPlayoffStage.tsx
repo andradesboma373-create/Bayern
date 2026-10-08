@@ -174,10 +174,6 @@ export default function TieredPlayoffStage({ tournament, onUpdate, onVetoMatch, 
     const match = rounds[rIdx]?.[mIdx];
     if (!match || !match.team1 || !match.team2) return;
 
-    try {
-      recordTournamentMatchResult(tournament.userId || 'guest', tournament, match, getRoundName(rIdx, rounds.length));
-    } catch (e) {}
-
     const newRounds = advanceTieredPlayoffMatch(rounds, rIdx, mIdx, match.score1, match.score2);
     onUpdate({ ...tournament, tieredBracketRounds: newRounds });
   };

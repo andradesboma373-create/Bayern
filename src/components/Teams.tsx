@@ -174,20 +174,37 @@ export default function Teams({ user }: { user: any }) {
     const loadData = () => {
       try {
         const delTeamsRaw = localStorage.getItem(`deleted_teams_${roomId}`) || localStorage.getItem(`deleted_teams_${user.uid}`);
-        const delTeamsSet = new Set<string>(delTeamsRaw ? JSON.parse(delTeamsRaw) : []);
+        const delTeamsList: string[] = delTeamsRaw ? JSON.parse(delTeamsRaw) : [];
+        const delTeamsSet = new Set<string>(delTeamsList.map(s => String(s).toLowerCase().trim()));
+
         const delPlayersRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
-        const delPlayersSet = new Set<string>(delPlayersRaw ? JSON.parse(delPlayersRaw) : []);
+        const delPlayersList: string[] = delPlayersRaw ? JSON.parse(delPlayersRaw) : [];
+        const delPlayersSet = new Set<string>(delPlayersList.map(s => String(s).toLowerCase().trim()));
+
+        const isTeamDeleted = (t: any) => {
+          if (!t) return true;
+          const tId = String(t.id || t._id || '').toLowerCase().trim();
+          const tName = String(t.name || '').toLowerCase().trim();
+          return (tId && delTeamsSet.has(tId)) || (tName && delTeamsSet.has(tName));
+        };
+
+        const isPlayerDeleted = (p: any) => {
+          if (!p) return true;
+          const pId = String(p.id || p._id || '').toLowerCase().trim();
+          const pNick = String(p.nickname || p.name || '').toLowerCase().trim();
+          return (pId && delPlayersSet.has(pId)) || (pNick && delPlayersSet.has(pNick));
+        };
 
         const p = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
         if (p) {
           const rawP = JSON.parse(p);
-          setPlayers((rawP || []).filter((item: any) => item && item.id && !delPlayersSet.has(item.id)));
+          setPlayers((rawP || []).filter((item: any) => !isPlayerDeleted(item)));
         }
         const t = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
         let currentTeams: any[] = [];
         if (t) {
           const rawT = JSON.parse(t);
-          currentTeams = (rawT || []).filter((item: any) => item && item.id && !delTeamsSet.has(item.id));
+          currentTeams = (rawT || []).filter((item: any) => !isTeamDeleted(item));
           setTeams(currentTeams);
         }
 
@@ -215,15 +232,32 @@ export default function Teams({ user }: { user: any }) {
     };
     loadData();
 
-    // Fetch from resilient server endpoint and safely MERGE without overwriting local user-added teams
+    // Fetch from resilient server endpoint and safely MERGE without resurrecting deleted items
     fetch(`/api/backup-data/${roomId}`)
       .then(res => res.json())
       .then(data => {
         if (data && data.success) {
           const delTeamsRaw = localStorage.getItem(`deleted_teams_${roomId}`) || localStorage.getItem(`deleted_teams_${user.uid}`);
-          const delTeamsSet = new Set<string>(delTeamsRaw ? JSON.parse(delTeamsRaw) : []);
+          const delTeamsList: string[] = delTeamsRaw ? JSON.parse(delTeamsRaw) : [];
+          const delTeamsSet = new Set<string>(delTeamsList.map(s => String(s).toLowerCase().trim()));
+
           const delPlayersRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
-          const delPlayersSet = new Set<string>(delPlayersRaw ? JSON.parse(delPlayersRaw) : []);
+          const delPlayersList: string[] = delPlayersRaw ? JSON.parse(delPlayersRaw) : [];
+          const delPlayersSet = new Set<string>(delPlayersList.map(s => String(s).toLowerCase().trim()));
+
+          const isTeamDeleted = (t: any) => {
+            if (!t) return true;
+            const tId = String(t.id || t._id || '').toLowerCase().trim();
+            const tName = String(t.name || '').toLowerCase().trim();
+            return (tId && delTeamsSet.has(tId)) || (tName && delTeamsSet.has(tName));
+          };
+
+          const isPlayerDeleted = (p: any) => {
+            if (!p) return true;
+            const pId = String(p.id || p._id || '').toLowerCase().trim();
+            const pNick = String(p.nickname || p.name || '').toLowerCase().trim();
+            return (pId && delPlayersSet.has(pId)) || (pNick && delPlayersSet.has(pNick));
+          };
 
           if (Array.isArray(data.teams) && data.teams.length > 0) {
             setTeams(prevTeams => {
@@ -234,20 +268,20 @@ export default function Teams({ user }: { user: any }) {
               const mergedMap = new Map<string, any>();
               // 1. Server teams first, excluding deleted teams
               data.teams.forEach((t: any) => {
-                if (t && (t.id || t.name) && !delTeamsSet.has(t.id)) {
+                if (t && !isTeamDeleted(t)) {
                   mergedMap.set(t.id || t.name.toLowerCase(), t);
                 }
               });
               // 2. Local / user-added teams second (authoritative: keeps custom created teams!)
               (Array.isArray(localTeams) ? localTeams : []).forEach((t: any) => {
-                if (t && (t.id || t.name) && !delTeamsSet.has(t.id)) {
+                if (t && !isTeamDeleted(t)) {
                   const key = t.id || t.name.toLowerCase();
                   const existing = mergedMap.get(key);
                   mergedMap.set(key, existing ? { ...existing, ...t } : t);
                 }
               });
               const merged = filterItemsForRoom(Array.from(mergedMap.values()), roomId)
-                .filter((t: any) => t && t.id && !delTeamsSet.has(t.id));
+                .filter((t: any) => !isTeamDeleted(t));
               safeLocalStorageSet(`teams_${roomId}`, merged);
               return merged;
             });
@@ -260,19 +294,19 @@ export default function Teams({ user }: { user: any }) {
 
               const mergedMap = new Map<string, any>();
               data.players.forEach((p: any) => {
-                if (p && (p.id || p.nickname) && !delPlayersSet.has(p.id)) {
+                if (p && !isPlayerDeleted(p)) {
                   mergedMap.set(p.id || p.nickname.toLowerCase(), p);
                 }
               });
               (Array.isArray(localPlayers) ? localPlayers : []).forEach((p: any) => {
-                if (p && (p.id || p.nickname) && !delPlayersSet.has(p.id)) {
+                if (p && !isPlayerDeleted(p)) {
                   const key = p.id || p.nickname.toLowerCase();
                   const existing = mergedMap.get(key);
                   mergedMap.set(key, existing ? { ...existing, ...p } : p);
                 }
               });
               const merged = filterItemsForRoom(Array.from(mergedMap.values()), roomId)
-                .filter((p: any) => p && p.id && !delPlayersSet.has(p.id));
+                .filter((p: any) => !isPlayerDeleted(p));
               safeLocalStorageSet(`players_${roomId}`, merged);
               return merged;
             });
@@ -436,19 +470,34 @@ export default function Teams({ user }: { user: any }) {
 
   const handleDeleteTeam = async (id: string) => {
     const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
+    const targetTeam = teams.find(t => t && (t.id === id || t._id === id || t.name === id));
+    const targetId = targetTeam?.id || id;
+    const targetName = (targetTeam?.name || '').toLowerCase().trim();
     
     // 1. Tombstone in localStorage so background sync never resurrects it
     try {
-      const prevRaw = localStorage.getItem(`deleted_teams_${roomId}`) || '[]';
+      const prevRaw = localStorage.getItem(`deleted_teams_${roomId}`) || localStorage.getItem(`deleted_teams_${user.uid}`) || '[]';
       const prevList = JSON.parse(prevRaw);
-      const updatedDeleted = Array.from(new Set([...prevList, id]));
+      const updatedDeleted = Array.from(new Set([
+        ...prevList, 
+        targetId, 
+        targetId.toLowerCase(), 
+        targetName, 
+        id, 
+        id.toLowerCase()
+      ].filter(Boolean)));
       localStorage.setItem(`deleted_teams_${roomId}`, JSON.stringify(updatedDeleted));
       if (roomId !== user.uid) {
         localStorage.setItem(`deleted_teams_${user.uid}`, JSON.stringify(updatedDeleted));
       }
     } catch (e) {}
 
-    const updated = teams.filter(t => t.id !== id);
+    const updated = teams.filter((t: any) => {
+      if (!t) return false;
+      const tId = String(t.id || t._id || '').toLowerCase().trim();
+      const tName = String(t.name || '').toLowerCase().trim();
+      return tId !== targetId.toLowerCase() && tId !== id.toLowerCase() && (targetName === '' || tName !== targetName);
+    });
     setTeams(updated);
     safeLocalStorageSet(`teams_${user.uid}`, updated);
     if (roomId !== user.uid) safeLocalStorageSet(`teams_${roomId}`, updated);
@@ -458,11 +507,11 @@ export default function Teams({ user }: { user: any }) {
     fetch('/api/teams/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: roomId, teamId: id })
+      body: JSON.stringify({ userId: roomId, teamId: targetId })
     }).catch(() => {});
 
     if (user && !user.isLocalDemo) {
-      deleteDoc(doc(db, 'teams', id)).catch(e => console.warn(e));
+      deleteDoc(doc(db, 'teams', targetId)).catch(e => console.warn(e));
       fetch('/api/sync-cache', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -476,12 +525,13 @@ export default function Teams({ user }: { user: any }) {
   const handleClearAllTeams = async () => {
     const roomId = getCanonicalRoomId(user.channelId || user.uid, activeGame);
     
-    // Tombstone all current team IDs
+    // Tombstone all current team IDs & names
     try {
-      const prevRaw = localStorage.getItem(`deleted_teams_${roomId}`) || '[]';
+      const prevRaw = localStorage.getItem(`deleted_teams_${roomId}`) || localStorage.getItem(`deleted_teams_${user.uid}`) || '[]';
       const prevList = JSON.parse(prevRaw);
       const allIds = teams.map(t => t.id).filter(Boolean);
-      const updatedDeleted = Array.from(new Set([...prevList, ...allIds]));
+      const allNames = teams.map(t => (t.name || '').toLowerCase().trim()).filter(Boolean);
+      const updatedDeleted = Array.from(new Set([...prevList, ...allIds, ...allNames]));
       localStorage.setItem(`deleted_teams_${roomId}`, JSON.stringify(updatedDeleted));
       if (roomId !== user.uid) {
         localStorage.setItem(`deleted_teams_${user.uid}`, JSON.stringify(updatedDeleted));

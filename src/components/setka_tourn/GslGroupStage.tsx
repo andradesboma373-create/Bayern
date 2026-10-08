@@ -96,10 +96,6 @@ export default function GslGroupStage({
     const match = targetBracket[rIdx]?.[mIdx];
     if (!match) return;
 
-    try {
-      recordTournamentMatchResult(tournament.userId || 'guest', tournament, match, `GSL Группа ${targetGroup.name}`);
-    } catch (e) {}
-
     const updatedGroup = updateGslMatch(targetGroup, bracketType, rIdx, mIdx, match.score1, match.score2, advanceCount);
     const newGroups = [...gslGroups];
     newGroups[groupIndex] = updatedGroup;

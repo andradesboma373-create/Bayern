@@ -250,23 +250,47 @@ export function getKdColorClass(kd: number | string | undefined | null): string 
 
 /**
  * Color styling for Round Swing:
- * - > 1.0% (больше единицы): green (text-emerald-400 font-bold)
- * - < -1.0% (меньше минус единицы): red (text-red-400 font-bold)
- * - в пределах единицы (-1.0% .. 1.0% / "единичка"): gray (text-white/50 font-medium)
+ * - >= 1.0%: bright green bold
+ * - > 0.05%: noticeable emerald green
+ * - <= -1.0%: bright red bold
+ * - < -0.05%: noticeable rose red
+ * - between -0.05% and +0.05%: neutral gray
  */
 export function getSwingColorClass(swing: number | string | undefined | null): string {
-  if (swing === undefined || swing === null || swing === '' || swing === '-') return 'text-white/50 font-mono text-xs';
+  if (swing === undefined || swing === null || swing === '' || swing === '-') return 'text-white/40 font-mono text-xs';
   let val: number;
   if (typeof swing === 'number') {
     val = swing;
   } else {
-    const cleaned = String(swing).replace(/%/g, '').replace(/\+/g, '').trim();
+    const cleaned = String(swing).replace(/%/g, '').replace(/\+/g, '').replace(/,/g, '.').trim();
     val = parseFloat(cleaned);
   }
-  if (isNaN(val)) return 'text-white/50 font-mono text-xs';
-  if (val > 1.0) return 'text-emerald-400 font-bold';
-  if (val < -1.0) return 'text-red-400 font-bold';
-  return 'text-white/50 font-medium';
+  if (isNaN(val)) return 'text-white/40 font-mono text-xs';
+  if (val >= 1.0) return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
+  if (val > 0.05) return 'bg-emerald-500/10 text-emerald-400 font-semibold';
+  if (val <= -1.0) return 'bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold';
+  if (val < -0.05) return 'bg-rose-500/10 text-rose-400 font-semibold';
+  return 'text-white/50 bg-white/[0.04] font-medium';
+}
+
+/**
+ * Formats Round Swing with exact precision (2 decimal places):
+ * e.g. +0.78%, -0.45%, 0.00%
+ */
+export function formatSwing(swing: number | string | undefined | null): string {
+  if (swing === undefined || swing === null || swing === '' || swing === '-') return '-';
+  let val: number;
+  if (typeof swing === 'number') {
+    val = swing;
+  } else {
+    const cleaned = String(swing).replace(/%/g, '').replace(/\+/g, '').replace(/,/g, '.').trim();
+    val = parseFloat(cleaned);
+  }
+  if (isNaN(val)) return '-';
+  const formatted = Math.abs(val).toFixed(2);
+  if (val > 0.001) return `+${formatted}%`;
+  if (val < -0.001) return `-${formatted}%`;
+  return `0.00%`;
 }
 
 /**

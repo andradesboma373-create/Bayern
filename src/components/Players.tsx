@@ -20,7 +20,7 @@ export default function Players({ user }: { user: any }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [newPlayer, setNewPlayer] = useState({ nickname: '', role: 'rifler', rating: 100, valRating: 0, isAcademy: false, avatarUrl: '' });
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeletePlayer, setConfirmDeletePlayer] = useState<any | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   const [selectedProfilePlayer, setSelectedProfilePlayer] = useState<any | null>(null);
@@ -134,16 +134,24 @@ export default function Players({ user }: { user: any }) {
     }
     const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
     const deletedRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
-    const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
+    const deletedList: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+    const deletedSet = new Set<string>(deletedList.map(s => String(s).toLowerCase().trim()));
+
+    const isPlayerDeleted = (p: any) => {
+      if (!p) return true;
+      const pId = String(p.id || p._id || '').toLowerCase().trim();
+      const pNick = String(p.nickname || p.name || '').toLowerCase().trim();
+      return (pId && deletedSet.has(pId)) || (pNick && deletedSet.has(pNick));
+    };
 
     let rawLocalPlayers = JSON.parse(localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`) || '[]');
-    let localPlayers = (rawLocalPlayers || []).filter((p: any) => p && p.id && !deletedSet.has(p.id));
+    let localPlayers = (rawLocalPlayers || []).filter((p: any) => !isPlayerDeleted(p));
     let localTeams = JSON.parse(localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`) || '[]');
 
     setPlayers(localPlayers);
     if (localTeams.length) setTeams(localTeams);
 
-    // If local players is incomplete or empty, fetch resilient server backup and merge
+    // If local players is incomplete, fetch resilient server backup and merge
     try {
       const res = await fetch(`/api/backup-data/${roomId}`);
       const data = await res.json();
@@ -157,17 +165,23 @@ export default function Players({ user }: { user: any }) {
           const pMap = new Map();
           // Server items first, strictly excluding deleted players
           data.players.forEach((p: any) => {
-            if (p && p.id && !deletedSet.has(p.id)) pMap.set(p.id, p);
+            if (p && !isPlayerDeleted(p)) {
+              const key = p.id || p.nickname;
+              if (key) pMap.set(key, p);
+            }
           });
           // Local items overlay
           localPlayers.forEach((p: any) => {
-            if (p && p.id && !deletedSet.has(p.id)) {
-              const existing = pMap.get(p.id);
-              pMap.set(p.id, existing ? { ...existing, ...p } : p);
+            if (p && !isPlayerDeleted(p)) {
+              const key = p.id || p.nickname;
+              if (key) {
+                const existing = pMap.get(key);
+                pMap.set(key, existing ? { ...existing, ...p } : p);
+              }
             }
           });
           const mergedPlayers = filterItemsForRoom(Array.from(pMap.values()), roomId)
-            .filter((p: any) => p && p.id && !deletedSet.has(p.id));
+            .filter((p: any) => !isPlayerDeleted(p));
           setPlayers(mergedPlayers);
           safeLocalStorageSet(`players_${roomId}`, mergedPlayers);
           localPlayers = mergedPlayers;
@@ -185,9 +199,8 @@ export default function Players({ user }: { user: any }) {
       const qPlayers = query(collection(db, 'players'), where('channelId', '==', roomId));
       const qsPlayers = await getDocs(qPlayers);
       const dbPlayers = filterItemsForRoom(qsPlayers.docs.map(d => ({ id: d.id, ...d.data() })), roomId)
-        .filter((p: any) => p && p.id && !deletedSet.has(p.id));
+        .filter((p: any) => !isPlayerDeleted(p));
       
-      // CRITICAL: Only overwrite local data if Firestore returned ACTUAL non-empty records!
       if (dbPlayers.length > 0) {
         setPlayers(dbPlayers);
         safeLocalStorageSet(`players_${roomId}`, dbPlayers);
@@ -219,13 +232,21 @@ export default function Players({ user }: { user: any }) {
       try {
         const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
         const delRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`);
-        const delSet = new Set<string>(delRaw ? JSON.parse(delRaw) : []);
+        const delList: string[] = delRaw ? JSON.parse(delRaw) : [];
+        const delSet = new Set<string>(delList.map(s => String(s).toLowerCase().trim()));
+
+        const isPlayerDeleted = (p: any) => {
+          if (!p) return true;
+          const pId = String(p.id || p._id || '').toLowerCase().trim();
+          const pNick = String(p.nickname || p.name || '').toLowerCase().trim();
+          return (pId && delSet.has(pId)) || (pNick && delSet.has(pNick));
+        };
 
         let cachedPlayers = localStorage.getItem(`players_${user.uid}`) || localStorage.getItem(`players_${roomId}`);
         let cachedTeams = localStorage.getItem(`teams_${user.uid}`) || localStorage.getItem(`teams_${roomId}`);
 
         let rawPList = cachedPlayers ? JSON.parse(cachedPlayers) : [];
-        let pList = (rawPList || []).filter((p: any) => p && p.id && !delSet.has(p.id));
+        let pList = (rawPList || []).filter((p: any) => !isPlayerDeleted(p));
         let tList = cachedTeams ? JSON.parse(cachedTeams) : [];
 
         setPlayers(pList);
@@ -321,12 +342,22 @@ export default function Players({ user }: { user: any }) {
 
   const handleDeletePlayer = async (id: string) => {
     const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
-    
+    const targetPlayer = players.find((p: any) => p && (p.id === id || p._id === id || p.nickname === id));
+    const targetId = targetPlayer?.id || id;
+    const targetNick = (targetPlayer?.nickname || '').toLowerCase().trim();
+
     // 1. Tombstone in localStorage so background backup never resurrects it
     try {
-      const prevRaw = localStorage.getItem(`deleted_players_${roomId}`) || '[]';
+      const prevRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`) || '[]';
       const prevList = JSON.parse(prevRaw);
-      const updatedDeleted = Array.from(new Set([...prevList, id]));
+      const updatedDeleted = Array.from(new Set([
+        ...prevList, 
+        targetId, 
+        targetId.toLowerCase(), 
+        targetNick, 
+        id, 
+        id.toLowerCase()
+      ].filter(Boolean)));
       localStorage.setItem(`deleted_players_${roomId}`, JSON.stringify(updatedDeleted));
       if (roomId !== user.uid) {
         localStorage.setItem(`deleted_players_${user.uid}`, JSON.stringify(updatedDeleted));
@@ -334,7 +365,12 @@ export default function Players({ user }: { user: any }) {
     } catch (e) {}
 
     // 2. Filter out player from global players list
-    const filteredPlayers = players.filter((p: any) => p.id !== id);
+    const filteredPlayers = players.filter((p: any) => {
+      if (!p) return false;
+      const pId = String(p.id || p._id || '').toLowerCase().trim();
+      const pNick = String(p.nickname || '').toLowerCase().trim();
+      return pId !== targetId.toLowerCase() && pId !== id.toLowerCase() && (targetNick === '' || pNick !== targetNick);
+    });
     setPlayers(filteredPlayers);
     safeLocalStorageSet(`players_${user.uid}`, filteredPlayers);
     if (roomId !== user.uid) safeLocalStorageSet(`players_${roomId}`, filteredPlayers);
@@ -342,8 +378,8 @@ export default function Players({ user }: { user: any }) {
     // 3. Remove player from any team rosters locally
     const teamsToUpdateDocs: string[] = [];
     const updatedTeams = teams.map((t: any) => {
-      if (t.players && t.players.some((p: any) => p.id === id)) {
-        const newRoster = t.players.map((p: any) => p.id === id ? { id: '' } : p);
+      if (t.players && t.players.some((p: any) => p && (p.id === targetId || p.id === id || (p.nickname && p.nickname.toLowerCase().trim() === targetNick)))) {
+        const newRoster = t.players.map((p: any) => (p && (p.id === targetId || p.id === id || (p.nickname && p.nickname.toLowerCase().trim() === targetNick))) ? { id: '' } : p);
         const totalVal = newRoster.slice(0, 5).reduce((acc: number, p: any) => acc + (p?.valRating || 0), 0);
         if (t.id) teamsToUpdateDocs.push(t.id);
         return { ...t, players: newRoster, totalValRating: totalVal };
@@ -361,7 +397,7 @@ export default function Players({ user }: { user: any }) {
     fetch('/api/players/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: roomId, playerId: id })
+      body: JSON.stringify({ userId: roomId, playerId: targetId })
     }).catch(() => {});
 
     // 5. Sync to server cache
@@ -378,7 +414,7 @@ export default function Players({ user }: { user: any }) {
     // 6. Update Firestore
     try {
       if (!user.isLocalDemo) {
-        await deleteDoc(doc(db, 'players', id));
+        await deleteDoc(doc(db, 'players', targetId));
         // Update teams that lost a player
         const batch = writeBatch(db);
         for (const tId of teamsToUpdateDocs) {
@@ -395,7 +431,7 @@ export default function Players({ user }: { user: any }) {
     } catch (e) {
       console.warn("Firestore delete/update failed", e);
     } finally {
-      setConfirmDeleteId(null);
+      setConfirmDeletePlayer(null);
       window.dispatchEvent(new Event("db-user-updated"));
     }
   };
@@ -403,12 +439,13 @@ export default function Players({ user }: { user: any }) {
   const handleClearAllPlayers = async () => {
     const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
 
-    // Tombstone all current player IDs
+    // Tombstone all current player IDs & nicknames
     try {
-      const prevRaw = localStorage.getItem(`deleted_players_${roomId}`) || '[]';
+      const prevRaw = localStorage.getItem(`deleted_players_${roomId}`) || localStorage.getItem(`deleted_players_${user.uid}`) || '[]';
       const prevList = JSON.parse(prevRaw);
       const allIds = players.map(p => p.id).filter(Boolean);
-      const updatedDeleted = Array.from(new Set([...prevList, ...allIds]));
+      const allNicks = players.map(p => (p.nickname || '').toLowerCase().trim()).filter(Boolean);
+      const updatedDeleted = Array.from(new Set([...prevList, ...allIds, ...allNicks]));
       localStorage.setItem(`deleted_players_${roomId}`, JSON.stringify(updatedDeleted));
       if (roomId !== user.uid) {
         localStorage.setItem(`deleted_players_${user.uid}`, JSON.stringify(updatedDeleted));
@@ -443,8 +480,23 @@ export default function Players({ user }: { user: any }) {
       })
     }).catch(() => {});
 
-    setConfirmClearAll(false);
-    window.dispatchEvent(new Event("db-user-updated"));
+    // Delete from Firestore
+    try {
+      if (!user.isLocalDemo) {
+        const q = query(collection(db, 'players'), where('channelId', '==', roomId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const batch = writeBatch(db);
+          snap.docs.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+    } catch (e) {
+      console.warn("Firestore clear failed", e);
+    } finally {
+      setConfirmClearAll(false);
+      window.dispatchEvent(new Event("db-user-updated"));
+    }
   };
 
   if (!user || !user.isCustom) {
@@ -676,23 +728,7 @@ export default function Players({ user }: { user: any }) {
                 const pTeam = teams.find(t => t.players?.some((tp: any) => tp.id === p.id));
                 
                 return (
-                  <div key={p.id} className="group flex items-center p-3 md:px-4 md:py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.05] transition-colors relative overflow-hidden">
-                    {confirmDeleteId === p.id && (
-                      <div className="absolute inset-0 bg-black/95 flex items-center justify-between px-6 text-center z-10 animate-fade-in">
-                        <div className="text-sm font-bold text-white uppercase tracking-wider">Удалить {p.nickname}?</div>
-                        <div className="flex gap-2 w-full max-w-[160px]">
-                          <button 
-                            onClick={() => handleDeletePlayer(p.id)} 
-                            className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-1.5 px-3 rounded-lg text-xs transition-colors"
-                          >Да</button>
-                          <button 
-                            onClick={() => setConfirmDeleteId(null)} 
-                            className="flex-1 bg-white/10 hover:bg-white/20 text-white/80 font-bold py-1.5 px-3 rounded-lg text-xs transition-colors"
-                          >Нет</button>
-                        </div>
-                      </div>
-                    )}
-                    
+                  <div key={p.id || p.nickname} className="group flex items-center p-3 md:px-4 md:py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.05] transition-colors relative">
                     {/* Rank */}
                     <div className="text-sm md:text-base font-black font-mono w-10 text-center text-white/40 group-hover:text-white transition-colors">
                       {globalIdx + 1}
@@ -738,12 +774,20 @@ export default function Players({ user }: { user: any }) {
                     </div>
 
                     {/* Actions */}
-                    <div className="w-24 md:w-32 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setSelectedProfilePlayer(p)} className="text-white/20 hover:text-blue-400 transition-colors cursor-pointer" title="Профиль">
-                        <ExternalLink className="w-4 h-4 md:w-5 md:h-5" />
+                    <div className="w-24 md:w-32 flex justify-end items-center gap-2">
+                      <button 
+                        onClick={() => setSelectedProfilePlayer(p)} 
+                        className="p-1.5 text-white/40 hover:text-blue-400 hover:bg-white/5 rounded-lg transition-all cursor-pointer" 
+                        title="Профиль"
+                      >
+                        <ExternalLink className="w-4 h-4" />
                       </button>
-                      <button onClick={() => setConfirmDeleteId(p.id)} className="text-white/20 hover:text-red-500 transition-colors cursor-pointer" title="Удалить">
-                        <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
+                      <button 
+                        onClick={() => setConfirmDeletePlayer(p)} 
+                        className="p-1.5 text-red-500/70 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer" 
+                        title="Удалить игрока"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -778,6 +822,32 @@ export default function Players({ user }: { user: any }) {
           </div>
         );
       })()}
+      {confirmDeletePlayer && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-red-950/40 p-8 rounded-2xl max-w-sm w-full border border-red-500/20 relative shadow-[0_0_50px_rgba(239,68,68,0.15)] text-center">
+            <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-2xl font-black uppercase tracking-wider text-white mb-2">Удалить игрока?</h3>
+            <p className="text-red-200/60 text-sm font-bold mb-6">
+              Игрок <span className="text-white font-black">{confirmDeletePlayer.nickname}</span> будет удален из базы данных и отвязан от составов.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmDeletePlayer(null)} 
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all uppercase tracking-wider text-sm cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button 
+                onClick={() => handleDeletePlayer(confirmDeletePlayer.id || confirmDeletePlayer.nickname)} 
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all uppercase tracking-wider text-sm shadow-[0_0_20px_rgba(220,38,38,0.3)] cursor-pointer"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmClearAll && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
           <div className="bg-red-950/40 p-8 rounded-2xl max-w-sm w-full border border-red-500/20 relative shadow-[0_0_50px_rgba(239,68,68,0.15)] text-center">

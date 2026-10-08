@@ -31,9 +31,9 @@ export const ROLE_SUBCLASSES: Record<string, RoleSubclass[]> = {
         { id: 'tactician_igl', name: 'Капитан-тактик', desc: 'Организует четкие размены и грамотные закупки', icon: '📋', assistMultBonus: 0.25, synergyBonus: 4 }
     ],
     support: [
-        { id: 'anchor', name: 'Опорник', desc: 'Железное удержание позиций в обороне за CT', icon: '🔒', defenseBonus: 0.20, deathMultBonus: -0.08, killMultBonus: 0.02 },
-        { id: 'utility_support', name: 'Саппорт', desc: 'Максимальный эффект от раскидок и дымов', icon: '💣', impactBonus: 0.12, killMultBonus: 0.02 },
-        { id: 'second_entry', name: 'Разменщик (2-я волна)', desc: 'Мгновенно разменивает открывающего игрока', icon: '⚡', killMultBonus: 0.08, impactBonus: 0.08 }
+        { id: 'anchor', name: 'Опорник', desc: 'Железное удержание позиций в обороне за CT', icon: '🔒', defenseBonus: 0.20, deathMultBonus: -0.06, killMultBonus: 0.01 },
+        { id: 'utility_support', name: 'Саппорт', desc: 'Максимальный эффект от раскидок и дымов', icon: '💣', impactBonus: 0.03, assistMultBonus: 0.20, killMultBonus: 0.01 },
+        { id: 'second_entry', name: 'Разменщик (2-я волна)', desc: 'Мгновенно разменивает открывающего игрока', icon: '⚡', killMultBonus: 0.06, impactBonus: 0.05 }
     ],
     rifler: [
         { id: 'classic_rifler', name: 'Классический рифлер', desc: 'Стабильная стрельба на любых дистанциях', icon: '🔫', killMultBonus: 0.06, deathMultBonus: -0.03 },
@@ -66,21 +66,21 @@ export function getSubclassObj(roleId: string, subclassId?: string): RoleSubclas
 }
 
 export const DEFAULT_ROLES_S2 = [
-    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.02, skillMultiplier: 1.01, impact: 1.02, deathMultiplier: 0.99, assistMultiplier: 1.00 },
+    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.05, skillMultiplier: 1.02, impact: 1.04, deathMultiplier: 0.97, assistMultiplier: 1.00 },
     { id: 'sniper', name: 'Снайпер', killMultiplier: 1.15, skillMultiplier: 1.08, impact: 1.15, deathMultiplier: 0.85, assistMultiplier: 1.00 },
-    { id: 'lurker', name: 'Люркер', killMultiplier: 1.08, skillMultiplier: 1.04, impact: 1.10, deathMultiplier: 0.88, assistMultiplier: 1.00 },
-    { id: 'opener', name: 'Entry', killMultiplier: 1.12, skillMultiplier: 1.06, impact: 1.25, deathMultiplier: 1.12, assistMultiplier: 1.05 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 1.01, skillMultiplier: 1.02, impact: 1.02, deathMultiplier: 0.96, assistMultiplier: 1.00 },
-    { id: 'captain', name: 'Капитан', killMultiplier: 0.88, skillMultiplier: 0.98, impact: 0.98, deathMultiplier: 1.02, assistMultiplier: 1.00 }
+    { id: 'lurker', name: 'Люркер', killMultiplier: 1.06, skillMultiplier: 1.04, impact: 1.10, deathMultiplier: 0.88, assistMultiplier: 1.00 },
+    { id: 'opener', name: 'Entry', killMultiplier: 1.10, skillMultiplier: 1.06, impact: 1.25, deathMultiplier: 1.10, assistMultiplier: 1.05 },
+    { id: 'support', name: 'Саппорт', killMultiplier: 0.88, skillMultiplier: 0.95, impact: 0.85, deathMultiplier: 1.00, assistMultiplier: 1.25 },
+    { id: 'captain', name: 'Капитан', killMultiplier: 0.86, skillMultiplier: 0.98, impact: 0.90, deathMultiplier: 1.02, assistMultiplier: 1.00 }
 ];
 
 export const DEFAULT_ROLES_CS2 = [
-    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.02, skillMultiplier: 1.00, impact: 1.02, deathMultiplier: 0.98, assistMultiplier: 1.00 },
+    { id: 'rifler', name: 'Рифлер', killMultiplier: 1.05, skillMultiplier: 1.02, impact: 1.04, deathMultiplier: 0.97, assistMultiplier: 1.00 },
     { id: 'sniper', name: 'AWPer', killMultiplier: 1.10, skillMultiplier: 1.05, impact: 1.12, deathMultiplier: 0.84, assistMultiplier: 0.80 },
     { id: 'lurker', name: 'Люркер', killMultiplier: 1.05, skillMultiplier: 1.03, impact: 1.08, deathMultiplier: 0.86, assistMultiplier: 0.90 },
     { id: 'opener', name: 'Entry', killMultiplier: 1.08, skillMultiplier: 1.05, impact: 1.20, deathMultiplier: 1.08, assistMultiplier: 1.00 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 1.00, skillMultiplier: 1.02, impact: 1.02, deathMultiplier: 0.95, assistMultiplier: 1.00 },
-    { id: 'captain', name: 'IGL', killMultiplier: 0.86, skillMultiplier: 0.98, impact: 0.98, deathMultiplier: 1.02, assistMultiplier: 1.00 }
+    { id: 'support', name: 'Саппорт', killMultiplier: 0.88, skillMultiplier: 0.95, impact: 0.85, deathMultiplier: 1.00, assistMultiplier: 1.25 },
+    { id: 'captain', name: 'IGL', killMultiplier: 0.86, skillMultiplier: 0.98, impact: 0.90, deathMultiplier: 1.02, assistMultiplier: 1.00 }
 ];
 
 export const MAP_POOL_CS2 = [
@@ -887,7 +887,7 @@ function finalizeStats(stats: any[]) {
         s.impact = breakdown.impact.toFixed(2);
         s.rawRoundSwing = breakdown.totalSwing;
         s.roundSwingNum = breakdown.roundSwing;
-        s.roundSwing = `${breakdown.roundSwing > 0 ? '+' : ''}${breakdown.roundSwing.toFixed(1)}%`;
+        s.roundSwing = `${breakdown.roundSwing > 0 ? '+' : ''}${breakdown.roundSwing.toFixed(2)}%`;
         s.hltvRating = breakdown.rating.toFixed(2);
     });
 }

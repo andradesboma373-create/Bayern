@@ -137,13 +137,6 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
     const winningTeam = match.score1 > match.score2 ? match.team1 : match.team2;
     const losingTeam = match.score1 > match.score2 ? match.team2 : match.team1;
 
-    // Immediately record match to global match history and tournament stats
-    try {
-        recordTournamentMatchResult(tournament.userId || 'guest', tournament, match, type);
-    } catch (e) {
-        console.warn("Could not record match result:", e);
-    }
-
     if (isDouble) {
         advanceDoubleElimMatch(wBracket, lBracket, gFinal, typeChar, rIdx, mIdx, winningTeam, losingTeam);
         const cascaded = cascadeAdvancements(wBracket, lBracket, gFinal);

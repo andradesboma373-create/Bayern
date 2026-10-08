@@ -111,9 +111,20 @@ export class MatchEngine {
     (state as any).t2Overall = t2Overall;
     (state as any).teamRatingDiff = teamRatingDiff;
 
-    // Team synergy: subtle impact (max ±1.5% as requested by user)
-    const team1Synergy = options?.team1Synergy ?? 50;
-    const team2Synergy = options?.team2Synergy ?? 50;
+    // Team synergy: subtle impact (max ±1.5% as requested by user), adjusted if new player in roster
+    const t1NewPlayersCount = (team1Input || []).filter((p: any) => p && p.isNewPlayer).length;
+    const t2NewPlayersCount = (team2Input || []).filter((p: any) => p && p.isNewPlayer).length;
+
+    let team1Synergy = options?.team1Synergy ?? 100;
+    let team2Synergy = options?.team2Synergy ?? 100;
+
+    if (t1NewPlayersCount > 0) {
+      team1Synergy = Math.max(30, team1Synergy - (t1NewPlayersCount * 15));
+    }
+    if (t2NewPlayersCount > 0) {
+      team2Synergy = Math.max(30, team2Synergy - (t2NewPlayersCount * 15));
+    }
+
     const t1SynergyMod = 0.985 + (team1Synergy / 100) * 0.03;
     const t2SynergyMod = 0.985 + (team2Synergy / 100) * 0.03;
 
@@ -206,8 +217,14 @@ export class MatchEngine {
       const role = pData.assignedRole || pData.role || 'Rifler';
       const originalRole = pData.originalRole || pData.role || role;
       const isAdaptedRole = !!pData.isAdaptedRole;
+      const isNewPlayer = !!pData.isNewPlayer;
       let rawRating = parseFloat(pData.rating) || parseFloat(pData.valRating) || 100;
       if (rawRating < 10) rawRating = rawRating * 100; // Map HLTV 1.15 to 115
+
+      // New player adaptation penalty: стреляет так же, но плохо выдает обязанности команде
+      if (isNewPlayer) {
+        rawRating *= 0.95; // Минимальное снижение общего скилла (тайминги разменов)
+      }
 
       // Load individual player perks from Settings -> Индивидуальные Рейты
       const perk = getPlayerPerks(nickname);
@@ -294,14 +311,15 @@ export class MatchEngine {
           reaction = skillVal * 1.01;
           speedBonus = 0.01;
       } else if (isSupport) {
-          aim = skillVal * 1.00;
-          iq = skillVal * 1.01;
-          movement = skillVal * 1.01;
-          utility = skillVal * 1.00;
+          // Support / Anchor: plays disciplined crossfires & utility, does not push solo
+          aim = skillVal * 0.94;
+          iq = skillVal * 1.03;
+          movement = skillVal * 0.98;
+          utility = skillVal * 1.08;
           focus *= 1.00;
-          aggression = 0.94;
-          impact = 1.00;
-          reaction = skillVal * 1.00;
+          aggression = 0.65;
+          impact = 0.88;
+          reaction = skillVal * 0.95;
           speedBonus = 0.00;
       } else if (isCaptain) {
           // Captain / IGL focuses on calling strats; mechanical skill is preserved close to team level
@@ -383,6 +401,17 @@ export class MatchEngine {
         if (perk.killMultiplier) aim *= perk.killMultiplier;
         if (perk.deathMultiplier) reaction *= (1.0 / Math.max(0.5, perk.deathMultiplier));
       }
+
+      // New player adaptation penalty (shoots fine but plays for himself / poor coordination)
+      if (isNewPlayer) {
+        aim *= 1.05;       // Стреляет даже чуть агрессивнее/лучше (игра на статистику)
+        reaction *= 0.85;  // Плохая реакция на командные коллы
+        utility *= 0.65;   // Не знает раскидок команды, играет "вслепую"
+        iq *= 0.70;        // Низкое понимание командных стратегий
+        impact *= 0.80;    // Низкий вклад в победу раунда (не вовремя зашел, не дождался)
+        focus *= 0.85;     // Часто отвлекается от задачи раунда
+        aggression *= 1.20; // Играет больше на себя, лезет в ненужные дуэли
+      }
       
       const p: Player = {
         id: pId,
@@ -392,6 +421,7 @@ export class MatchEngine {
         role,
         originalRole,
         isAdaptedRole,
+        isNewPlayer,
         rating,
         aim: Math.max(40, aim),
         iq: Math.max(40, iq),

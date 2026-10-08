@@ -20,7 +20,9 @@ import {
   syncRooms,
   deleteRoom,
   deleteAllRooms,
-  logAudit
+  logAudit,
+  findRoom,
+  recordRoomQuota
 } from "./server/roomsManager";
 import { 
   recordFirestoreRead, 
@@ -32,7 +34,7 @@ import {
   markQuotaExhausted
 } from "./server/firebaseQuotaTracker";
 import { initializeApp as initFirebaseApp } from 'firebase/app';
-import { getFirestore, doc as fsDoc, setDoc as fsSetDoc, deleteDoc as fsDeleteDoc, setLogLevel } from 'firebase/firestore';
+import { getFirestore, doc as fsDoc, setDoc as fsSetDoc, deleteDoc as fsDeleteDoc, setLogLevel, writeBatch as fsWriteBatch, collection as fsCollection, query as fsQuery, where as fsWhere, getDocs as fsGetDocs } from 'firebase/firestore';
 
 try {
   setLogLevel('silent');
@@ -249,12 +251,26 @@ class FallbackDB {
   public delete(collectionName: string, id: string) {
     if (this.data[collectionName]) {
       let modified = false;
+      const lowerId = String(id || '').toLowerCase().trim();
       if (this.data[collectionName][id]) {
         delete this.data[collectionName][id];
         modified = true;
       }
       for (const [key, item] of Object.entries(this.data[collectionName])) {
-        if (item && (item.id === id || item._id === id || item.matchId === id || key === id)) {
+        if (!item) continue;
+        const iId = String(item.id || '').toLowerCase();
+        const iUnderscoreId = String(item._id || '').toLowerCase();
+        const iNick = String(item.nickname || '').toLowerCase();
+        const iName = String(item.name || '').toLowerCase();
+        const iKey = String(key || '').toLowerCase();
+
+        if (
+          iId === lowerId || 
+          iUnderscoreId === lowerId || 
+          iKey === lowerId || 
+          (iNick && iNick === lowerId) || 
+          (iName && iName === lowerId)
+        ) {
           delete this.data[collectionName][key];
           modified = true;
         }
@@ -266,8 +282,19 @@ class FallbackDB {
   public deleteAllForUser(collectionName: string, userId: string) {
     if (this.data[collectionName]) {
       let modified = false;
+      const cleanUser = String(userId || '').toLowerCase().trim();
+      const prefix = cleanUser.replace(/_(cs2|so2)$/, '');
       for (const [key, item] of Object.entries(this.data[collectionName])) {
-        if (item && (item.userId === userId || item.channelId === userId || item.botUserId === userId)) {
+        if (!item) continue;
+        const uId = String(item.userId || '').toLowerCase();
+        const cId = String(item.channelId || '').toLowerCase();
+        const bId = String(item.botUserId || '').toLowerCase();
+        const kStr = String(key || '').toLowerCase();
+
+        if (
+          uId === cleanUser || cId === cleanUser || bId === cleanUser ||
+          (prefix && (uId.startsWith(prefix) || cId.startsWith(prefix) || kStr.includes(prefix)))
+        ) {
           delete this.data[collectionName][key];
           modified = true;
         }
@@ -1141,6 +1168,21 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       
     fs.writeFileSync(path.join(uploadDir, filename), buf);
     if (hasDist) fs.writeFileSync(path.join(distDir, filename), buf);
+
+    const userParam = req.query.userId || req.query.room || req.headers['x-room-id'] || 'bamep';
+    const upRoom = findRoom(String(userParam));
+    const desc = isBg ? 'фоновое изображение' : (isAvatar ? 'аватар игрока' : 'логотип команды');
+    logAudit({
+      roomId: upRoom ? upRoom.id : String(userParam),
+      username: upRoom ? upRoom.username : String(userParam),
+      channelName: upRoom ? upRoom.channelName : 'Комната',
+      action: 'FILE_UPLOAD',
+      method: 'POST',
+      path: '/api/upload',
+      ip: req.ip || 'unknown',
+      quotaCost: { reads: 0, writes: 0, isCache: true },
+      details: `Загружен файл: ${desc} (${filename}, ${(buf.length / 1024).toFixed(1)} КБ) | Взято лимитов: 0 (локальное хранилище сервера)`
+    });
     
     res.json({ url: `/uploads/${filename}` });
   } catch (err: any) {
@@ -1748,9 +1790,9 @@ Return ONLY a valid JSON object without backticks, with this exact schema:
       lastError = err;
       console.warn(`Extraction with ${modelName} failed, trying next model:`, err.message?.substring(0, 100));
       
-      // If it's a 503 (high demand), wait a bit before trying the next model
+      // If it's a 503 (high demand), wait a bit longer before trying the next model
       if (err.message?.includes('503') || err.message?.includes('high demand')) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 4000));
       }
     }
   }
@@ -4501,7 +4543,20 @@ app.post("/api/settings/save", async (req, res) => {
       botInstances.set(userId, newBot);
     }
 
-    console.log(`Settings saved for user ${userId}, botToken provided: ${!!botToken}`); res.json({ success: true });
+    console.log(`Settings saved for user ${userId}, botToken provided: ${!!botToken}`); 
+    const sRoom = findRoom(userId);
+    logAudit({
+      roomId: sRoom ? sRoom.id : String(userId),
+      username: sRoom ? sRoom.username : String(userId),
+      channelName: sRoom ? sRoom.channelName : 'Комната',
+      action: 'SETTINGS_UPDATE',
+      method: 'POST',
+      path: '/api/settings/save',
+      ip: req.ip || 'unknown',
+      quotaCost: { reads: 0, writes: 1, isCache: false },
+      details: `Сохранены настройки комнаты (стартовый баланс: ${startingMoney || 500000}, бот: ${botToken ? 'настроен' : 'не задан'}) | Взято лимитов: +1 запись`
+    });
+    res.json({ success: true });
   } catch (error: any) {
     console.error("Error in settings save endpoint:", error);
     res.status(500).json({ error: error.message });
@@ -4532,24 +4587,27 @@ function isDeepEqual(obj1: any, obj2: any): boolean {
 // Sync client-side localStorage cache to the resilient fallback DB
 app.post("/api/sync-cache", async (req, res) => {
   try {
-    const { userId, settings, players, teams, swapOffers, tournaments, matches, tgUsers, tgVetos, mapStats } = req.body;
+    const { userId, settings, players, teams, swapOffers, tournaments, matches, tgUsers, tgVetos, mapStats, actionType, actionDetails } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "Missing userId" });
     }
 
     const { canonicalId, aliases } = getRoomAliases(userId);
+    const activeRoom = findRoom(userId) || findRoom(canonicalId);
+    const roomIdentifier = activeRoom ? activeRoom.id : canonicalId;
+    const roomUsername = activeRoom ? activeRoom.username : canonicalId;
+    const roomChannelName = activeRoom ? activeRoom.channelName : canonicalId;
 
-    // Rate-limiting check with 'sync' action (does NOT record as DATA_WRITE in audit unless documents actually change)
+    // Rate-limiting check
     const tracking = trackRoomRequest(
-      canonicalId, 
+      roomIdentifier, 
       'POST', 
       '/api/sync-cache', 
       req.ip || 'unknown', 
-      'sync', 
-      `Синхронизация кэша: ${teams?.length || 0} команд, ${players?.length || 0} игроков (в память сервера, 0 квоты Firestore)`
+      'sync'
     );
     if (!tracking.isAllowed) {
-      console.warn(`Blocked sync request from room ${canonicalId}: ${tracking.error}`);
+      console.warn(`Blocked sync request from room ${roomIdentifier}: ${tracking.error}`);
       return res.status(403).json({ error: tracking.error, isLocked: true });
     }
 
@@ -4714,19 +4772,58 @@ app.post("/api/sync-cache", async (req, res) => {
     if (tgVetos) await syncCollection('tgVetos', tgVetos, 'userId');
     if (mapStats) await syncCollection('mapStats', mapStats, 'userId');
 
-    // Only record Firestore writes if documents actually changed!
+    // Build human-friendly activity summary and quota usage
+    let actionLabel = actionType || (totalCloudWrites > 0 ? 'DATA_WRITE' : 'DATA_SYNC');
+    let summaryText = actionDetails || '';
+
+    if (!summaryText) {
+      if (Array.isArray(teams) && teams.length > 0) {
+        const teamNames = teams.map((t: any) => t?.name).filter(Boolean).slice(0, 3).join(', ');
+        const extra = teams.length > 3 ? ` и еще ${teams.length - 3}` : '';
+        actionLabel = teams.length === 1 ? 'TEAM_SAVED' : 'TEAMS_SYNCED';
+        summaryText = `Команды: ${teamNames}${extra} (всего ${teams.length} команд, ${players?.length || 0} игроков)`;
+      } else if (Array.isArray(tournaments) && tournaments.length > 0) {
+        actionLabel = 'TOURNAMENT_SYNC';
+        summaryText = `Турнир: "${tournaments[0]?.name || 'Сетка'}" (формат ${tournaments[0]?.type || 'турнир'})`;
+      } else if (Array.isArray(matches) && matches.length > 0) {
+        actionLabel = 'MATCH_SAVED';
+        summaryText = `Матчи: синхронизировано ${matches.length} матчей`;
+      } else if (settings) {
+        actionLabel = 'SETTINGS_UPDATE';
+        summaryText = `Обновлены настройки комнаты`;
+      } else {
+        actionLabel = 'CACHE_SYNC';
+        summaryText = `Синхронизация данных комнаты (${teams?.length || 0} команд, ${players?.length || 0} игроков)`;
+      }
+    }
+
     if (totalCloudWrites > 0) {
-      recordFirestoreWrite(totalCloudWrites, canonicalId, 'sync-cache');
+      recordFirestoreWrite(totalCloudWrites, roomIdentifier, 'sync-cache');
+      recordRoomQuota(roomIdentifier, 0, totalCloudWrites);
       logAudit({
-        roomId: canonicalId,
-        username: canonicalId,
-        action: 'DATA_WRITE',
+        roomId: roomIdentifier,
+        username: roomUsername,
+        channelName: roomChannelName,
+        action: actionLabel,
         method: 'POST',
         path: '/api/sync-cache',
         ip: req.ip || 'unknown',
-        details: `Синхронизировано ${totalCloudWrites} измененных записей в облако Firestore (остальные ${teams?.length || 0} команд и ${players?.length || 0} игроков взяты из кэша без расхода квоты)`
+        quotaCost: { reads: 0, writes: totalCloudWrites, isCache: false },
+        details: `${summaryText} | Взято лимитов: +${totalCloudWrites} зап. в облако Firestore (расход комнаты сегодня: ${activeRoom?.writesToday || totalCloudWrites} зап., ${activeRoom?.readsToday || 0} чт.)`
       });
     } else {
+      recordRoomQuota(roomIdentifier, 0, 0);
+      logAudit({
+        roomId: roomIdentifier,
+        username: roomUsername,
+        channelName: roomChannelName,
+        action: actionLabel,
+        method: 'POST',
+        path: '/api/sync-cache',
+        ip: req.ip || 'unknown',
+        quotaCost: { reads: 0, writes: 0, isCache: true },
+        details: `${summaryText} | Взято лимитов: 0 (серверный кэш, квота Firestore сохранена) | Баланс комнаты: ${activeRoom?.writesToday || 0} зап., ${activeRoom?.readsToday || 0} чт.`
+      });
       console.log(`[sync-cache] 0 documents modified for room ${canonicalId}. Cloud Firestore quota preserved (0 writes used).`);
     }
 
@@ -4778,95 +4875,6 @@ app.get("/api/settings/:userId", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-// Helper: generate initial full CS2 rosters and free agents for any room so players never disappear
-function getInitialRosterForRoom(canonicalId: string) {
-  const seedTeams = [
-    {
-      id: `t_${canonicalId}_navi`,
-      name: 'Natus Vincere',
-      channelId: canonicalId,
-      userId: canonicalId,
-      logoUrl: '',
-      players: [
-        { id: `p_${canonicalId}_aleksib`, nickname: 'Aleksib', role: 'captain', rating: 98, valRating: 980, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId },
-        { id: `p_${canonicalId}_jl`, nickname: 'jL', role: 'rifler', rating: 110, valRating: 1100, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId },
-        { id: `p_${canonicalId}_b1t`, nickname: 'b1t', role: 'opener', rating: 108, valRating: 1080, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId },
-        { id: `p_${canonicalId}_w0nderful`, nickname: 'w0nderful', role: 'sniper', rating: 112, valRating: 1120, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId },
-        { id: `p_${canonicalId}_im`, nickname: 'iM', role: 'rifler', rating: 105, valRating: 1050, team: 'Natus Vincere', teamId: `t_${canonicalId}_navi`, channelId: canonicalId }
-      ]
-    },
-    {
-      id: `t_${canonicalId}_spirit`,
-      name: 'Team Spirit',
-      channelId: canonicalId,
-      userId: canonicalId,
-      logoUrl: '',
-      players: [
-        { id: `p_${canonicalId}_chopper`, nickname: 'chopper', role: 'captain', rating: 95, valRating: 950, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId },
-        { id: `p_${canonicalId}_donk`, nickname: 'donk', role: 'opener', rating: 125, valRating: 1250, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId },
-        { id: `p_${canonicalId}_sh1ro`, nickname: 'sh1ro', role: 'sniper', rating: 118, valRating: 1180, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId },
-        { id: `p_${canonicalId}_magixx`, nickname: 'magixx', role: 'support', rating: 100, valRating: 1000, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId },
-        { id: `p_${canonicalId}_zont1x`, nickname: 'zont1x', role: 'rifler', rating: 106, valRating: 1060, team: 'Team Spirit', teamId: `t_${canonicalId}_spirit`, channelId: canonicalId }
-      ]
-    },
-    {
-      id: `t_${canonicalId}_vitality`,
-      name: 'Team Vitality',
-      channelId: canonicalId,
-      userId: canonicalId,
-      logoUrl: '',
-      players: [
-        { id: `p_${canonicalId}_apex`, nickname: 'apEX', role: 'captain', rating: 96, valRating: 960, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId },
-        { id: `p_${canonicalId}_zywoo`, nickname: 'ZywOo', role: 'sniper', rating: 122, valRating: 1220, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId },
-        { id: `p_${canonicalId}_spinx`, nickname: 'Spinx', role: 'rifler', rating: 112, valRating: 1120, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId },
-        { id: `p_${canonicalId}_flamez`, nickname: 'flameZ', role: 'opener', rating: 109, valRating: 1090, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId },
-        { id: `p_${canonicalId}_mezii`, nickname: 'mezii', role: 'support', rating: 102, valRating: 1020, team: 'Team Vitality', teamId: `t_${canonicalId}_vitality`, channelId: canonicalId }
-      ]
-    },
-    {
-      id: `t_${canonicalId}_faze`,
-      name: 'FaZe Clan',
-      channelId: canonicalId,
-      userId: canonicalId,
-      logoUrl: '',
-      players: [
-        { id: `p_${canonicalId}_karrigan`, nickname: 'karrigan', role: 'captain', rating: 93, valRating: 930, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId },
-        { id: `p_${canonicalId}_broky`, nickname: 'broky', role: 'sniper', rating: 113, valRating: 1130, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId },
-        { id: `p_${canonicalId}_ropz`, nickname: 'ropz', role: 'lurker', rating: 111, valRating: 1110, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId },
-        { id: `p_${canonicalId}_frozen`, nickname: 'frozen', role: 'rifler', rating: 110, valRating: 1100, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId },
-        { id: `p_${canonicalId}_rain`, nickname: 'rain', role: 'opener', rating: 104, valRating: 1040, team: 'FaZe Clan', teamId: `t_${canonicalId}_faze`, channelId: canonicalId }
-      ]
-    },
-    {
-      id: `t_${canonicalId}_g2`,
-      name: 'G2 Esports',
-      channelId: canonicalId,
-      userId: canonicalId,
-      logoUrl: '',
-      players: [
-        { id: `p_${canonicalId}_snax`, nickname: 'Snax', role: 'captain', rating: 94, valRating: 940, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId },
-        { id: `p_${canonicalId}_m0nesy`, nickname: 'm0NESY', role: 'sniper', rating: 121, valRating: 1210, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId },
-        { id: `p_${canonicalId}_niko`, nickname: 'NiKo', role: 'rifler', rating: 116, valRating: 1160, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId },
-        { id: `p_${canonicalId}_hunter`, nickname: 'huNter-', role: 'rifler', rating: 106, valRating: 1060, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId },
-        { id: `p_${canonicalId}_malbsmd`, nickname: 'malbsMd', role: 'opener', rating: 114, valRating: 1140, team: 'G2 Esports', teamId: `t_${canonicalId}_g2`, channelId: canonicalId }
-      ]
-    }
-  ];
-
-  const seedFreeAgents = [
-    { id: `p_${canonicalId}_s1mple`, nickname: 's1mple', role: 'sniper', rating: 125, valRating: 1250, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
-    { id: `p_${canonicalId}_perfecto`, nickname: 'Perfecto', role: 'support', rating: 105, valRating: 1050, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
-    { id: `p_${canonicalId}_electronic`, nickname: 'electroNic', role: 'rifler', rating: 112, valRating: 1120, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
-    { id: `p_${canonicalId}_boombl4`, nickname: 'Boombl4', role: 'captain', rating: 102, valRating: 1020, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
-    { id: `p_${canonicalId}_cadian`, nickname: 'cadiaN', role: 'captain', rating: 104, valRating: 1040, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
-    { id: `p_${canonicalId}_degster`, nickname: 'degster', role: 'sniper', rating: 111, valRating: 1110, channelId: canonicalId, userId: canonicalId, isAcademy: false, createdAt: new Date().toISOString() },
-    { id: `p_${canonicalId}_donk_jr`, nickname: 'donk Jr', role: 'opener', rating: 115, valRating: 1150, channelId: canonicalId, userId: canonicalId, isAcademy: true, createdAt: new Date().toISOString() },
-    { id: `p_${canonicalId}_m0nesy_jr`, nickname: 'm0NESY Jr', role: 'sniper', rating: 118, valRating: 1180, channelId: canonicalId, userId: canonicalId, isAcademy: true, createdAt: new Date().toISOString() }
-  ];
-
-  return { teams: seedTeams, freeAgents: seedFreeAgents };
-}
 
 // Resilient fallback backup data fetch API Endpoint
 app.get("/api/backup-data/:userId", async (req, res) => {
@@ -4932,6 +4940,20 @@ app.post("/api/matches/delete", async (req, res) => {
     }
     fallbackDb.delete('matches', matchId);
     console.log(`[API] Successfully deleted match ${matchId} for user ${userId || 'unknown'}`);
+
+    const mRoom = findRoom(userId);
+    logAudit({
+      roomId: mRoom ? mRoom.id : String(userId || 'unknown'),
+      username: mRoom ? mRoom.username : String(userId || 'unknown'),
+      channelName: mRoom ? mRoom.channelName : 'Комната',
+      action: 'MATCH_DELETED',
+      method: 'POST',
+      path: '/api/matches/delete',
+      ip: req.ip || 'unknown',
+      quotaCost: { reads: 0, writes: 0, isCache: true },
+      details: `Удален матч (ID: ${matchId}) | Взято лимитов: 0 (кэш)`
+    });
+
     res.json({ success: true });
   } catch (err: any) {
     console.error("Error in match delete API:", err.message);
@@ -4981,6 +5003,20 @@ app.post("/api/teams/delete", async (req, res) => {
 
     fallbackDb.flush();
     console.log(`[API] Successfully deleted team ${teamId} for user ${userId || canonicalId}`);
+
+    const tRoom = findRoom(userId) || findRoom(canonicalId);
+    logAudit({
+      roomId: tRoom ? tRoom.id : canonicalId,
+      username: tRoom ? tRoom.username : canonicalId,
+      channelName: tRoom ? tRoom.channelName : 'Комната',
+      action: 'TEAM_DELETED',
+      method: 'POST',
+      path: '/api/teams/delete',
+      ip: req.ip || 'unknown',
+      quotaCost: { reads: 0, writes: 1, isCache: false },
+      details: `Удалена команда (ID: ${teamId}) | Взято лимитов: +1 запись Firestore`
+    });
+
     res.json({ success: true });
   } catch (err: any) {
     console.error("Error in team delete API:", err.message);
@@ -5004,11 +5040,11 @@ app.post("/api/teams/clear/:userId", async (req, res) => {
 
     // Also delete from Firestore if active
     try {
-      if (db) {
-        const q = query(collection(db, 'teams'), where('channelId', '==', canonicalId));
-        const snap = await getDocs(q);
+      if (firestoreCloudDb) {
+        const q = fsQuery(fsCollection(firestoreCloudDb, 'teams'), fsWhere('channelId', '==', canonicalId));
+        const snap = await fsGetDocs(q);
         if (!snap.empty) {
-          const batch = writeBatch(db);
+          const batch = fsWriteBatch(firestoreCloudDb);
           snap.docs.forEach(docSnap => batch.delete(docSnap.ref));
           await batch.commit();
         }
@@ -5052,6 +5088,20 @@ app.post("/api/players/delete", async (req, res) => {
 
     fallbackDb.flush();
     console.log(`[API] Successfully deleted player ${playerId} for user ${userId || canonicalId}`);
+
+    const pRoom = findRoom(userId) || findRoom(canonicalId);
+    logAudit({
+      roomId: pRoom ? pRoom.id : canonicalId,
+      username: pRoom ? pRoom.username : canonicalId,
+      channelName: pRoom ? pRoom.channelName : 'Комната',
+      action: 'PLAYER_DELETED',
+      method: 'POST',
+      path: '/api/players/delete',
+      ip: req.ip || 'unknown',
+      quotaCost: { reads: 0, writes: 1, isCache: false },
+      details: `Удален игрок (ID: ${playerId}) | Взято лимитов: +1 запись Firestore`
+    });
+
     res.json({ success: true });
   } catch (err: any) {
     console.error("Error in player delete API:", err.message);
@@ -5075,11 +5125,11 @@ app.post("/api/players/clear/:userId", async (req, res) => {
 
     // Also delete from Firestore if active
     try {
-      if (db) {
-        const q = query(collection(db, 'players'), where('channelId', '==', canonicalId));
-        const snap = await getDocs(q);
+      if (firestoreCloudDb) {
+        const q = fsQuery(fsCollection(firestoreCloudDb, 'players'), fsWhere('channelId', '==', canonicalId));
+        const snap = await fsGetDocs(q);
         if (!snap.empty) {
-          const batch = writeBatch(db);
+          const batch = fsWriteBatch(firestoreCloudDb);
           snap.docs.forEach(docSnap => batch.delete(docSnap.ref));
           await batch.commit();
         }
@@ -5279,8 +5329,22 @@ app.get("/api/admin/quota-stats", async (req, res) => {
     const roomStats = getQuotaStats();
     const firestoreTelemetry = await fetchLiveQuotaFromFirestore();
 
+    const enrichedBreakdown = (roomStats.roomBreakdown || []).map((r: any) => {
+      const act = firestoreTelemetry.roomActivity?.[r.channelId] || 
+                  firestoreTelemetry.roomActivity?.[r.username] || 
+                  firestoreTelemetry.roomActivity?.[r.id] || 
+                  firestoreTelemetry.roomActivity?.[`channel_${r.username}`] || 
+                  null;
+      return {
+        ...r,
+        readsToday: Math.max(r.readsToday || 0, act?.reads || 0),
+        writesToday: Math.max(r.writesToday || 0, act?.writes || 0)
+      };
+    });
+
     const combinedStats = {
       ...roomStats,
+      roomBreakdown: enrichedBreakdown,
       readsToday: Math.max(roomStats.readsToday, firestoreTelemetry.readsToday),
       writesToday: Math.max(roomStats.writesToday, firestoreTelemetry.writesToday),
       remainingReads: firestoreTelemetry.remainingReads,
@@ -5316,7 +5380,20 @@ app.post("/api/admin/quota-stats/sync-firestore", async (req, res) => {
 app.get("/api/admin/rooms", (req, res) => {
   try {
     const roomsList = getAllRooms();
-    res.json({ success: true, rooms: roomsList });
+    const telemetry = getTelemetrySnapshot();
+    const enrichedRooms = roomsList.map(r => {
+      const act = telemetry.roomActivity?.[r.channelId] || 
+                  telemetry.roomActivity?.[r.username] || 
+                  telemetry.roomActivity?.[r.id] || 
+                  telemetry.roomActivity?.[`channel_${r.username}`] || 
+                  null;
+      return {
+        ...r,
+        readsToday: Math.max(r.readsToday || 0, act?.reads || 0),
+        writesToday: Math.max(r.writesToday || 0, act?.writes || 0)
+      };
+    });
+    res.json({ success: true, rooms: enrichedRooms });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

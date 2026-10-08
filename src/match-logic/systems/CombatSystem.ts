@@ -115,18 +115,18 @@ export class CombatSystem {
       const targetTeamAlive = Object.values(state.players).filter(p => p.teamId === target.teamId && p.alive).length;
       
       if (shooterTeamAlive === 1 && targetTeamAlive >= 1) {
-        // Desperation boost for the last survivor (clutch situation)
-        effectiveAim += (targetTeamAlive * 1.5);
-        effectiveIq += (targetTeamAlive * 1.2);
+        // Desperation boost for the last survivor (clutch situation) - balanced composure
+        effectiveAim += Math.min(3.5, targetTeamAlive * 0.7);
+        effectiveIq += Math.min(3.0, targetTeamAlive * 0.5);
         
-        // Clutch Luck: ANY player has a 20% chance to "lock in" and get a massive boost
-        if (this.random() < 0.20) {
-          effectiveAim += 6;
-          effectiveIq += 5;
+        // Clutch Luck: modest lock-in chance
+        if (this.random() < 0.12) {
+          effectiveAim += 3;
+          effectiveIq += 2.5;
         }
 
         if (shooter.perk?.clutchBonus) {
-          effectiveAim += shooter.perk.clutchBonus * 20; 
+          effectiveAim += shooter.perk.clutchBonus * 12; 
         }
       }
     }
@@ -139,6 +139,7 @@ export class CombatSystem {
     const baseIqRatio = Math.max(0.10, effectiveIq / 100);
     const pRoleLower = (shooter.role || '').toLowerCase();
     const isShooterEntry = pRoleLower.includes('entry') || pRoleLower.includes('opener') || pRoleLower.includes('энтри');
+    const isShooterRifler = pRoleLower.includes('rifler') || pRoleLower.includes('рифлер');
     const isShooterSupport = pRoleLower.includes('support') || pRoleLower.includes('саппорт');
     const isShooterLurker = pRoleLower.includes('lurker') || pRoleLower.includes('люркер');
     const isShooterCaptain = pRoleLower.includes('captain') || pRoleLower.includes('igl') || pRoleLower.includes('капитан');
@@ -163,8 +164,12 @@ export class CombatSystem {
       if (state.tick < (shooter.reactionTimer + 15)) {
         hitChance *= 1.05; // Subtle opening duel sharpness
       }
+    } else if (isShooterRifler) {
+      // Primary riflers: core fragging firepower
+      hitChance = 0.51 + (aimRatio - 1.0) * 0.45 * progress;
     } else if (isShooterSupport) {
-      // Support players are standard riflers, no artificial penalty
+      // Support players: utility and crossfire focus, slightly lower solo frags
+      hitChance *= 0.96;
     }
 
     // Soft multi-kill fatigue (scales after each kill in round so teammates contribute and rounds are shared)
@@ -390,6 +395,9 @@ export class CombatSystem {
         target.hp = 0;
         shooter.statistics.kills++;
         (shooter as any).roundKills = ((shooter as any).roundKills || 0) + 1;
+        if ((shooter as any).clutchOpponentsAtStart) {
+          (shooter as any).killsInClutch = ((shooter as any).killsInClutch || 0) + 1;
+        }
         if (isHeadshot) shooter.statistics.headshots++;
         target.statistics.deaths++;
         
@@ -411,9 +419,13 @@ export class CombatSystem {
         // Trade kill detection: did target kill a teammate of shooter within TRADE_WINDOW_TICKS?
         let isTrade = false;
         const tradeWindowTicks = RATING_CONFIG.TRADE_WINDOW_TICKS;
+        
+        // New players are harder to trade because of poor positioning/coordination
+        const effectiveTradeWindow = shooter.isNewPlayer ? tradeWindowTicks * 0.6 : tradeWindowTicks;
+
         for (let i = recentDeaths.length - 1; i >= 0; i--) {
             const rd = recentDeaths[i];
-            if (state.tick - rd.tick > tradeWindowTicks) break; // outside trade window
+            if (state.tick - rd.tick > effectiveTradeWindow) break; // outside trade window
             if (rd.killerId === target.id && rd.victimTeamId === shooter.teamId) {
                 // Legitimate trade kill!
                 shooter.statistics.trades = (shooter.statistics.trades || 0) + 1;
@@ -547,12 +559,15 @@ export class CombatSystem {
         // Alert victim teammates about killer position for trade fragging
         for (const mate of Object.values(state.players)) {
             if (mate.alive && mate.teamId === target.teamId) {
+                // New players are less likely to alert teammates immediately or have poor comms
+                const commsDelay = (mate.isNewPlayer || target.isNewPlayer) ? 5 : 0;
+                
                 mate.knownEnemies.set(shooter.id, {
                     enemyId: shooter.id,
                     position: { ...shooter.position },
                     nodeId: shooter.currentNodeId,
-                    timestamp: state.tick,
-                    confidence: 1.0
+                    timestamp: state.tick + commsDelay,
+                    confidence: (mate.isNewPlayer || target.isNewPlayer) ? 0.7 : 1.0
                 });
                 // If nearby, target killer for trade frag
                 if (mate.currentNodeId === target.currentNodeId) {

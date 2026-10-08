@@ -48,10 +48,11 @@ export class PlayerAI {
         }
     }
 
-    // 3. Support -> Entry Adaptation
-    if (p.role === 'Support') {
+    // 3. Rifler -> Entry Adaptation (2nd entry / trade fragger pushes if primary entry fell)
+    if (p.role === 'Rifler') {
+        const isExecuting = team.strategy.includes('EXECUTE') || team.strategy.includes('FAST');
         const entryAlive = teamAlive.some(pl => pl.role === 'Entry' || (pl as any).originalRole === 'Entry');
-        if (!entryAlive) {
+        if (isExecuting && !entryAlive) {
             p.role = 'Entry';
             p.isAdaptedRole = true;
         }
@@ -287,8 +288,8 @@ export class PlayerAI {
 
     // 1. Base weights from role specialization
     const priorities: BehaviorPriorities = {
-      aggression: isEntry ? 1.00 : (isSniper ? 0.40 : (isSupport ? 0.55 : (isIGL ? 0.45 : 0.65))),
-      caution: isEntry ? 0.35 : (isSniper ? 0.90 : (isLurker ? 0.85 : (isIGL ? 0.75 : (isSupport ? 0.70 : 0.40)))),
+      aggression: isEntry ? 1.00 : (isSniper ? 0.40 : (isSupport ? 0.42 : (isIGL ? 0.45 : 0.70))),
+      caution: isEntry ? 0.35 : (isSniper ? 0.90 : (isLurker ? 0.85 : (isIGL ? 0.75 : (isSupport ? 0.80 : 0.38)))),
       support: isSupport ? 1.00 : (isIGL ? 0.80 : 0.40),
       lurk: isLurker ? 0.95 : 0.05,
       objective: 0.75

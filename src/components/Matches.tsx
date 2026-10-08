@@ -88,18 +88,22 @@ export default function Matches({ user }: { user: any }) {
       const deletedRaw = localStorage.getItem(`deleted_matches_${roomId}`) || localStorage.getItem(`deleted_matches_${user.uid}`);
       const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
 
-      // 1. Proactively backfill any finished tournament matches if available
-      try {
-        const userTournaments = loadTournaments(roomId);
-        userTournaments.forEach(t => {
-          if (t && t.id) {
-            syncAndBackfillTournamentMatches(roomId, t);
-          }
-        });
-      } catch (err) {}
-
-      // 2. Load from localStorage immediately for high responsiveness
+      // 1. Load from localStorage immediately for high responsiveness
       let rawLocalMatches = JSON.parse(localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${user.uid}`) || '[]');
+
+      // Clean up any fake synthetic matches where player names are team name + number (e.g. "NaVi #1")
+      if (Array.isArray(rawLocalMatches)) {
+        rawLocalMatches = rawLocalMatches.filter((m: any) => {
+          if (!m) return false;
+          // Check if match has fake synthesized players like "Team #1"
+          const hasFakeNumberedPlayers = 
+            (Array.isArray(m.team1Stats) && m.team1Stats.some((p: any) => p && typeof p.nickname === 'string' && /#\d+$/.test(p.nickname.trim()))) ||
+            (Array.isArray(m.team2Stats) && m.team2Stats.some((p: any) => p && typeof p.nickname === 'string' && /#\d+$/.test(p.nickname.trim()))) ||
+            (m.mvp && typeof m.mvp.nickname === 'string' && /#\d+$/.test(m.mvp.nickname.trim()));
+          return !hasFakeNumberedPlayers;
+        });
+        saveMatchesToLocalStorage(roomId, rawLocalMatches);
+      }
 
       // 3. If local matches are empty, immediately query backup data from server
       if (!Array.isArray(rawLocalMatches) || rawLocalMatches.length === 0) {

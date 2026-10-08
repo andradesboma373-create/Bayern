@@ -12,6 +12,8 @@ export interface Room {
   isLocked: boolean;
   lockReason?: string;
   totalRequestsToday: number;
+  readsToday?: number;
+  writesToday?: number;
   lastActive: string;
 }
 
@@ -20,10 +22,16 @@ export interface AuditLogEntry {
   timestamp: string;
   roomId: string;
   username: string;
+  channelName?: string;
   action: string;
   method: string;
   path: string;
   ip: string;
+  quotaCost?: {
+    reads?: number;
+    writes?: number;
+    isCache?: boolean;
+  };
   details?: string;
   isAbuse?: boolean;
 }
@@ -45,6 +53,8 @@ const DEFAULT_ROOMS: Room[] = [
     createdAt: '2026-09-01T00:00:00.000Z',
     isLocked: false,
     totalRequestsToday: 0,
+    readsToday: 0,
+    writesToday: 0,
     lastActive: new Date().toISOString()
   },
   {
@@ -57,6 +67,8 @@ const DEFAULT_ROOMS: Room[] = [
     createdAt: '2026-09-01T00:00:00.000Z',
     isLocked: false,
     totalRequestsToday: 0,
+    readsToday: 0,
+    writesToday: 0,
     lastActive: new Date().toISOString()
   },
   {
@@ -69,6 +81,8 @@ const DEFAULT_ROOMS: Room[] = [
     createdAt: '2026-09-02T00:00:00.000Z',
     isLocked: false,
     totalRequestsToday: 0,
+    readsToday: 0,
+    writesToday: 0,
     lastActive: new Date().toISOString()
   },
   {
@@ -81,6 +95,8 @@ const DEFAULT_ROOMS: Room[] = [
     createdAt: '2026-09-19T00:00:00.000Z',
     isLocked: false,
     totalRequestsToday: 0,
+    readsToday: 0,
+    writesToday: 0,
     lastActive: new Date().toISOString()
   }
 ];
@@ -242,7 +258,11 @@ setInterval(() => {
       maxReads: 50000,
       maxWrites: 20000
     };
-    rooms.forEach(r => { r.totalRequestsToday = 0; });
+    rooms.forEach(r => { 
+      r.totalRequestsToday = 0;
+      r.readsToday = 0;
+      r.writesToday = 0;
+    });
     persistRooms();
   }
 }, 60000);
@@ -266,7 +286,12 @@ export function authenticateRoom(username: string, password: string): { success:
 
 export function getAllRooms(): Omit<Room, 'password'>[] {
   ensureStorage();
-  return rooms.map(({ password, ...rest }) => rest);
+  return rooms.map(({ password, ...rest }) => ({
+    ...rest,
+    readsToday: rest.readsToday || 0,
+    writesToday: rest.writesToday || 0,
+    totalRequestsToday: rest.totalRequestsToday || 0
+  }));
 }
 
 export function createRoom(username: string, password: string, channelName: string, role: 'user' | 'admin' = 'user'): { success: boolean; room?: Room; error?: string } {
@@ -345,6 +370,8 @@ export function resetRoomQuota(roomId: string): { success: boolean; error?: stri
     return { success: false, error: "Комната не найдена" };
   }
   room.totalRequestsToday = 0;
+  room.readsToday = 0;
+  room.writesToday = 0;
   room.isLocked = false;
   room.lockReason = undefined;
   persistRooms();
@@ -352,11 +379,12 @@ export function resetRoomQuota(roomId: string): { success: boolean; error?: stri
   logAudit({
     roomId: room.id,
     username: room.username,
+    channelName: room.channelName,
     action: 'QUOTA_RESET',
     method: 'POST',
     path: '/api/admin/rooms/reset',
     ip: 'admin',
-    details: 'Счетчик активности сброшен, блокировка снята'
+    details: 'Счетчик активности и квот сброшен, блокировка снята'
   });
 
   return { success: true };
@@ -434,13 +462,52 @@ export function logAudit(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) {
   }
 }
 
+export function findRoom(identifier: string): Room | undefined {
+  if (!identifier) return undefined;
+  ensureStorage();
+  const clean = String(identifier).replace('@matchsimulator.com', '').trim().toLowerCase();
+  return rooms.find(r => 
+    r.id.toLowerCase() === clean || 
+    r.username.toLowerCase() === clean || 
+    r.channelId.toLowerCase() === clean ||
+    r.channelId.toLowerCase() === `channel_${clean}` ||
+    `channel_${r.username.toLowerCase()}` === clean
+  );
+}
+
+export function recordRoomQuota(roomIdOrUsername: string, reads: number = 0, writes: number = 0) {
+  ensureStorage();
+  const room = findRoom(roomIdOrUsername);
+  if (room) {
+    room.readsToday = (room.readsToday || 0) + reads;
+    room.writesToday = (room.writesToday || 0) + writes;
+    room.totalRequestsToday = (room.totalRequestsToday || 0) + 1;
+    room.lastActive = new Date().toISOString();
+  }
+  dailyQuota.readsToday += reads;
+  dailyQuota.writesToday += writes;
+  persistRooms();
+}
+
 export function getRoomAuditLogs(roomIdOrUsername: string): AuditLogEntry[] {
-  const search = roomIdOrUsername.toLowerCase();
+  ensureStorage();
+  const search = (roomIdOrUsername || '').trim().toLowerCase();
+  if (search === 'all') {
+    return auditLogs;
+  }
+  const room = findRoom(search);
+  const validIds = new Set<string>([search]);
+  if (room) {
+    validIds.add(room.id.toLowerCase());
+    validIds.add(room.username.toLowerCase());
+    validIds.add(room.channelId.toLowerCase());
+    if (room.channelName) validIds.add(room.channelName.toLowerCase());
+  }
+
   return auditLogs.filter(l => 
-    l.roomId.toLowerCase() === search || 
-    l.username.toLowerCase() === search ||
-    search === 'all' ||
-    search === 'bamep'
+    validIds.has(l.roomId.toLowerCase()) || 
+    validIds.has(l.username.toLowerCase()) ||
+    (l.channelName && validIds.has(l.channelName.toLowerCase()))
   );
 }
 
@@ -468,6 +535,8 @@ export function getQuotaStats() {
       isLocked: r.isLocked,
       lockReason: r.lockReason,
       totalRequestsToday: r.totalRequestsToday,
+      readsToday: r.readsToday || 0,
+      writesToday: r.writesToday || 0,
       lastActive: r.lastActive
     }))
   };
@@ -486,18 +555,20 @@ export function trackRoomRequest(
 ): { isAllowed: boolean; error?: string } {
   ensureStorage();
 
-
-  
-
-  // Find room by channelId or username
-  const cleanId = (userIdOrChannel || '').replace('@matchsimulator.com', '');
-  const room = rooms.find(r => r.channelId === cleanId || r.username === cleanId || r.id === cleanId);
+  // Find room by channelId, username, or id
+  const room = findRoom(userIdOrChannel);
 
   if (!room) {
     return { isAllowed: true };
   }
-  if (opType === 'read') dailyQuota.readsToday++;
-  if (opType === 'write') dailyQuota.writesToday++;
+  if (opType === 'read') {
+    dailyQuota.readsToday++;
+    room.readsToday = (room.readsToday || 0) + 1;
+  }
+  if (opType === 'write') {
+    dailyQuota.writesToday++;
+    room.writesToday = (room.writesToday || 0) + 1;
+  }
   room.totalRequestsToday = (room.totalRequestsToday || 0) + 1;
   room.lastActive = new Date().toISOString();
 
@@ -526,11 +597,13 @@ export function trackRoomRequest(
     logAudit({
       roomId: room.id,
       username: room.username,
+      channelName: room.channelName,
       action: 'RATE_LIMIT_ABUSE_LOCKED',
       method,
       path,
       ip,
       isAbuse: true,
+      quotaCost: { reads: 0, writes: 0, isCache: true },
       details: `Аномальный спам: зафиксировано ${timestamps.length} запросов за 60 секунд. Комната отправлена на проверку.`
     });
 
@@ -545,10 +618,16 @@ export function trackRoomRequest(
     logAudit({
       roomId: room.id,
       username: room.username,
+      channelName: room.channelName,
       action: opType === 'write' ? 'DATA_WRITE' : (opType === 'sync' ? 'CACHE_SYNC' : 'DATA_READ'),
       method,
       path,
       ip,
+      quotaCost: { 
+        reads: opType === 'read' ? 1 : 0, 
+        writes: opType === 'write' ? 1 : 0, 
+        isCache: opType === 'sync' 
+      },
       details: details || `Запрос: ${method} ${path}`
     });
   }
