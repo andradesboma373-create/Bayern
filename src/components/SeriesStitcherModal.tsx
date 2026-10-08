@@ -6,7 +6,7 @@ import {
 import { downloadElementAsImage } from '../lib/exportImage';
 import TeamLogo from './TeamLogo';
 import PlayerAvatar from './PlayerAvatar';
-import { getCanonicalRoomId } from './setka_tourn/storage';
+import { getCanonicalRoomId, updateBetaTournamentMatchResult } from './setka_tourn/storage';
 
 export interface SeriesMapData {
   id: string;
@@ -39,11 +39,12 @@ export interface SeriesMapData {
 
 interface Props {
   user?: any;
+  tournamentId?: string;
   onClose: () => void;
   onSavedToTop?: (matchData: any) => void;
 }
 
-export default function SeriesStitcherModal({ user, onClose, onSavedToTop }: Props) {
+export default function SeriesStitcherModal({ user, tournamentId, onClose, onSavedToTop }: Props) {
   const [format, setFormat] = useState<'BO3' | 'BO5'>('BO3');
   const [maps, setMaps] = useState<SeriesMapData[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -519,6 +520,7 @@ export default function SeriesStitcherModal({ user, onClose, onSavedToTop }: Pro
         score2: seriesScore2,
         format,
         date: new Date().toLocaleDateString('ru-RU'),
+        tournamentId: tournamentId || undefined,
         players: allPlayersCombined,
         mvp: aggregatedSeriesData.mvp,
         maps: maps.map(m => ({
@@ -535,6 +537,30 @@ export default function SeriesStitcherModal({ user, onClose, onSavedToTop }: Pro
       const existingMatches = JSON.parse(existingMatchesRaw);
       existingMatches.unshift(stitchedMatch);
       localStorage.setItem('skleyka_matches', JSON.stringify(existingMatches));
+
+      // Also sync to tournament if available
+      if (tournamentId) {
+        const uid = user?.uid || 'guest';
+        const roomId = getCanonicalRoomId(uid);
+        updateBetaTournamentMatchResult(
+          roomId,
+          tournamentId,
+          aggregatedSeriesData.team1Name,
+          aggregatedSeriesData.team2Name,
+          seriesScore1,
+          seriesScore2
+        );
+        if (uid !== roomId) {
+          updateBetaTournamentMatchResult(
+            uid,
+            tournamentId,
+            aggregatedSeriesData.team1Name,
+            aggregatedSeriesData.team2Name,
+            seriesScore1,
+            seriesScore2
+          );
+        }
+      }
 
       // Also update in all tops
       const existingTopsRaw = localStorage.getItem('skleyka_all_tops');

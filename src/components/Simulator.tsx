@@ -1532,6 +1532,7 @@ export default function Simulator({ user }: { user: any }) {
       {showSeriesStitcher && (
         <SeriesStitcherModal 
           user={user}
+          tournamentId={selectedTournament}
           onClose={() => setShowSeriesStitcher(false)}
         />
       )}

@@ -273,6 +273,40 @@ export default function TournamentSettingsForm({
       try {
         const content = re.target?.result as string;
         const parsed = JSON.parse(content);
+
+        // 1. Full tournament structure check
+        if (parsed.stages && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
+          if (confirm("В файле обнаружена полная структура турнира со стадиями. Заменить текущие настройки турнира данными из файла?")) {
+            setStages(parsed.stages);
+            if (parsed.name) setName(parsed.name);
+            
+            // If there are matches in the stages, also backfill them to Top Skleyki for convenience
+            const allMatches: any[] = [];
+            parsed.stages.forEach((stg: any) => {
+              if (stg.bracketRounds) stg.bracketRounds.flat().forEach((m: any) => m && allMatches.push(m));
+              if (stg.groups) stg.groups.forEach((g: any) => g.matches && allMatches.push(...g.matches));
+              if (stg.swissRounds) stg.swissRounds.flat().forEach((m: any) => m && allMatches.push(m));
+              if (stg.gslGroups) stg.gslGroups.forEach((g: any) => {
+                if (g.upperBracket) g.upperBracket.flat().forEach((m: any) => m && allMatches.push(m));
+                if (g.lowerBracket) g.lowerBracket.flat().forEach((m: any) => m && allMatches.push(m));
+              });
+            });
+
+            if (allMatches.length > 0) {
+              const existingSkleyka = JSON.parse(localStorage.getItem('skleyka_matches') || '[]');
+              const combined = [...allMatches.filter(m => m.isFinished || m.winnerId), ...existingSkleyka];
+              // De-duplicate by id
+              const unique = Array.from(new Map(combined.map(m => [m.id, m])).values());
+              localStorage.setItem('skleyka_matches', JSON.stringify(unique));
+            }
+
+            setTeamsTouched(true);
+            alert("Структура турнира и матчи успешно импортированы!");
+            return;
+          }
+        }
+
+        // 2. Standard teams extraction
         let incoming: any[] = [];
         if (Array.isArray(parsed)) incoming = parsed;
         else if (parsed.teams && Array.isArray(parsed.teams)) incoming = parsed.teams;

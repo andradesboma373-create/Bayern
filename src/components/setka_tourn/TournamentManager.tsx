@@ -1884,6 +1884,23 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                             📋 СОСТАВЫ
                           </button>
 
+                          <button 
+                            onClick={() => {
+                              const dataStr = JSON.stringify(activeTournament, null, 2);
+                              const blob = new Blob([dataStr], { type: 'application/json' });
+                              const url = URL.createObjectURL(blob);
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.download = `${activeTournament.name || 'tournament'}_data.json`;
+                              link.click();
+                              URL.revokeObjectURL(url);
+                            }} 
+                            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border border-blue-500/20 flex items-center gap-2 cursor-pointer"
+                            title="Скачать JSON данные турнира (бэкап)"
+                          >
+                            <Download className="w-4 h-4" /> JSON
+                          </button>
+
                           {!hasStarted && (
                               <button 
                                   onClick={() => {
