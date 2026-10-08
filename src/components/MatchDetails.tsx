@@ -175,6 +175,36 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
         <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40 sticky top-0 z-10">
           <h2 className="text-xl font-black text-white uppercase tracking-widest">ДЕТАЛИ МАТЧА</h2>
           <div className="flex items-center gap-2">
+            {match?.tournamentId && !isDownloading && (
+              <button 
+                onClick={async () => {
+                   try {
+                      const { updateBetaTournamentMatchResult, getCanonicalRoomId } = await import('./setka_tourn/storage');
+                      const userId = match.userId || 'guest';
+                      const roomId = getCanonicalRoomId(userId);
+                      updateBetaTournamentMatchResult(
+                        roomId,
+                        match.tournamentId,
+                        t1Name,
+                        t2Name,
+                        t1Score,
+                        t2Score
+                      );
+                      alert("Результат успешно сохранен в базу турнира!");
+                      onClose();
+                      navigate(`/tournaments-beta/${match.tournamentId}`);
+                   } catch (e) {
+                      console.error(e);
+                      alert("Ошибка при сохранении");
+                   }
+                }}
+                className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors cursor-pointer"
+                title="Сохранить результат в базу турнира"
+              >
+                <Check className="w-4 h-4" />
+                <span className="text-sm hidden sm:inline">Сохранить</span>
+              </button>
+            )}
             <button onClick={downloadPhoto} className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors cursor-pointer" title="Скачать как изображение">
               <Download className="w-4 h-4" />
               <span className="text-sm hidden sm:inline">Скачать</span>
@@ -223,15 +253,37 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
             {match?.tournamentId && !isDownloading && (
               <div className="flex flex-col items-center gap-3 mb-6 relative z-10 animate-bounce-slow">
                 <button 
-                  onClick={() => {
-                    onClose();
-                    navigate(`/tournaments-beta/${match.tournamentId}`);
+                  onClick={async () => {
+                    // Try to save the match to the tournament if it's not already linked properly
+                    try {
+                        const { updateBetaTournamentMatchResult, getCanonicalRoomId } = await import('./setka_tourn/storage');
+                        const userId = match.userId || 'guest';
+                        const roomId = getCanonicalRoomId(userId);
+                        
+                        updateBetaTournamentMatchResult(
+                            roomId,
+                            match.tournamentId,
+                            t1Name,
+                            t2Name,
+                            t1Score,
+                            t2Score
+                        );
+                        
+                        onClose();
+                        navigate(`/tournaments-beta/${match.tournamentId}`);
+                    } catch (e) {
+                        console.error("Error saving match result to tournament from details view:", e);
+                        // Fallback: just navigate
+                        onClose();
+                        navigate(`/tournaments-beta/${match.tournamentId}`);
+                    }
                   }}
-                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl shadow-[0_0_30px_rgba(37,99,235,0.3)] transition-all flex items-center gap-3 group cursor-pointer uppercase tracking-widest text-sm"
+                  className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all flex items-center gap-3 group cursor-pointer uppercase tracking-widest text-sm"
                 >
-                  <Trophy className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                  ПРОДВИНУТЬ В ТУРНИРЕ
+                  <Check className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  СОХРАНИТЬ МАТЧ В БАЗЕ
                 </button>
+                <p className="text-[10px] text-emerald-400/60 font-bold uppercase tracking-wider">Результат будет записан в сетку</p>
               </div>
             )}
 

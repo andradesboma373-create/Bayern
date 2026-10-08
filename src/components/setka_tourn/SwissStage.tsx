@@ -235,7 +235,6 @@ export default function SwissStage({
     onUpdate({ ...tournament, swissRounds: newRounds });
   };
 
-  // Quick winner setter (click team)
   const setQuickWinner = (rIdx: number, mIdx: number, winnerTeam: Team) => {
     const newRounds = [...swissRounds];
     newRounds[rIdx] = [...newRounds[rIdx]];
@@ -246,18 +245,33 @@ export default function SwissStage({
       match.winnerId = null;
       match.score1 = 0;
       match.score2 = 0;
+      match.isFinished = false;
     } else {
       match.winnerId = winnerTeam.id;
+      match.isFinished = true;
       if (winnerTeam.id === match.team1.id) {
-        match.score1 = Math.max(match.score1, 1);
-        if (match.score2 >= match.score1) match.score2 = 0;
+        match.score1 = Math.max(match.score1 || 0, 1);
+        if ((match.score2 || 0) >= match.score1) match.score2 = 0;
       } else {
-        match.score2 = Math.max(match.score2, 1);
-        if (match.score1 >= match.score2) match.score1 = 0;
+        match.score2 = Math.max(match.score2 || 0, 1);
+        if ((match.score1 || 0) >= match.score2) match.score1 = 0;
       }
     }
     newRounds[rIdx][mIdx] = match;
-    onUpdate({ ...tournament, swissRounds: newRounds });
+    
+    // Auto-check for next round generation
+    const updatedTournament = { ...tournament, swissRounds: newRounds };
+    const currentRound = newRounds[rIdx];
+    const isRoundFinished = currentRound.every(rm => rm.winnerId !== null || (rm.team1?.id === 'BYE' || rm.team2?.id === 'BYE'));
+    
+    if (isRoundFinished && rIdx === swissRounds.length - 1 && swissRounds.length < totalRounds) {
+      const nextRound = generateNextSwissRound(tournament.teams, newRounds, winsToAdvance, lossesToEliminate);
+      if (nextRound && nextRound.length > 0) {
+        updatedTournament.swissRounds = [...newRounds, nextRound];
+      }
+    }
+    
+    onUpdate(updatedTournament);
   };
 
   const advanceWinner = (rIdx: number, mIdx: number) => {
@@ -265,11 +279,32 @@ export default function SwissStage({
     newRounds[rIdx] = [...newRounds[rIdx]];
     const match = { ...newRounds[rIdx][mIdx] };
 
-    if (match.score1 > match.score2) match.winnerId = match.team1?.id || null;
-    else if (match.score2 > match.score1) match.winnerId = match.team2?.id || null;
+    if ((match.score1 || 0) > (match.score2 || 0)) {
+      match.winnerId = match.team1?.id || null;
+      match.isFinished = true;
+    } else if ((match.score2 || 0) > (match.score1 || 0)) {
+      match.winnerId = match.team2?.id || null;
+      match.isFinished = true;
+    } else {
+      // Draw or equal - can't advance in Swiss usually but let's just set finished if scores are there
+      return;
+    }
 
     newRounds[rIdx][mIdx] = match;
-    onUpdate({ ...tournament, swissRounds: newRounds });
+    
+    // Auto-check for next round generation
+    const updatedTournament = { ...tournament, swissRounds: newRounds };
+    const currentRound = newRounds[rIdx];
+    const isRoundFinished = currentRound.every(rm => rm.winnerId !== null || (rm.team1?.id === 'BYE' || rm.team2?.id === 'BYE'));
+    
+    if (isRoundFinished && rIdx === swissRounds.length - 1 && swissRounds.length < totalRounds) {
+      const nextRound = generateNextSwissRound(tournament.teams, newRounds, winsToAdvance, lossesToEliminate);
+      if (nextRound && nextRound.length > 0) {
+        updatedTournament.swissRounds = [...newRounds, nextRound];
+      }
+    }
+
+    onUpdate(updatedTournament);
   };
 
   const undoMatchWinner = (rIdx: number, mIdx: number) => {

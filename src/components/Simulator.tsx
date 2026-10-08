@@ -993,6 +993,31 @@ export default function Simulator({ user }: { user: any }) {
             </h2>
           </div>
           <div className="flex gap-4">
+            {result?.tournamentId && !isDownloading && (
+              <button 
+                onClick={async () => {
+                   try {
+                      const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
+                      updateBetaTournamentMatchResult(
+                        roomId,
+                        result.tournamentId,
+                        result.team1Name,
+                        result.team2Name,
+                        result.team1Score,
+                        result.team2Score
+                      );
+                      alert("Результат успешно сохранен в базу турнира!");
+                      navigate(`/tournaments-beta/${result.tournamentId}`);
+                   } catch (e) {
+                      console.error(e);
+                      alert("Ошибка при сохранении");
+                   }
+                }}
+                className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 cursor-pointer border border-emerald-500/30"
+              >
+                <Check className="w-4 h-4" /> СОХРАНИТЬ МАТЧ В БАЗЕ
+              </button>
+            )}
             <button onClick={downloadPhoto} className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 cursor-pointer">
               <span>📷</span> СКАЧАТЬ ФОТО
             </button>
@@ -1046,13 +1071,35 @@ export default function Simulator({ user }: { user: any }) {
             {isOverall && selectedTournament && !isDownloading && (
               <div className="flex flex-col items-center gap-3 mb-6 relative z-10 animate-bounce-slow">
                 <button 
-                  onClick={() => navigate(`/tournaments-beta/${selectedTournament}`)}
-                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl shadow-[0_0_30px_rgba(37,99,235,0.3)] transition-all flex items-center gap-3 group cursor-pointer uppercase tracking-widest text-sm"
+                  onClick={async () => {
+                    // Force an extra save just in case
+                    const matchToSave = { ...result, maps: result.maps.map((m: any) => { const { roundLogs, ...rest } = m; return rest; }) };
+                    const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
+                    
+                    try {
+                      // 1. Update tournament match state again to be sure
+                      updateBetaTournamentMatchResult(
+                        roomId,
+                        selectedTournament,
+                        result.team1Name,
+                        result.team2Name,
+                        result.team1Score,
+                        result.team2Score
+                      );
+                      
+                      // 2. Navigate back
+                      navigate(`/tournaments-beta/${selectedTournament}`);
+                    } catch (e) {
+                      console.error("Error saving match to tournament:", e);
+                      alert("Ошибка при сохранении в турнир");
+                    }
+                  }}
+                  className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all flex items-center gap-3 group cursor-pointer uppercase tracking-widest text-sm"
                 >
-                  <Trophy className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                  ПРОДВИНУТЬ В ТУРНИРЕ
+                  <Check className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  СОХРАНИТЬ МАТЧ В БАЗЕ
                 </button>
-                <p className="text-[10px] text-blue-400/60 font-bold uppercase tracking-wider">Результат сохранен в сетку</p>
+                <p className="text-[10px] text-emerald-400/60 font-bold uppercase tracking-wider">Результат будет записан в сетку</p>
               </div>
             )}
 
