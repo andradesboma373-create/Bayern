@@ -1,7 +1,7 @@
 import { loadTournaments, compactTournamentForStorage, cleanupTournamentStorageQuota, getCanonicalRoomId } from './components/setka_tourn/storage';
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity, Folder, Flame } from 'lucide-react';
+import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity, Folder, Flame, Image } from 'lucide-react';
 import { auth, logout, db } from './firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from './firebase';
 import { collection, query, where, getDocs, onSnapshot } from './firebase';
@@ -26,7 +26,7 @@ import AdminAnalytics from './components/AdminAnalytics';
 import ChannelLogin from './components/ChannelLogin';
 import AccessDenied from './components/AccessDenied';
 
-function Sidebar({ isOpen, onClose, user, onOpenSo2Media }: { isOpen: boolean, onClose: () => void, user: any, onOpenSo2Media?: () => void }) {
+function NavPanel({ user, onLogout, onShowLogin, onOpenMedia }: { user: any, onLogout: () => void, onShowLogin: () => void, onOpenMedia: () => void }) {
   const location = useLocation();
   const [game, setGame] = useGameUniverse();
   
@@ -36,117 +36,158 @@ function Sidebar({ isOpen, onClose, user, onOpenSo2Media }: { isOpen: boolean, o
     (user?.channelName || '').toLowerCase().includes('bamep');
 
   const navItems = [
-    { icon: Gamepad2, label: 'Симулятор', path: '/' },
-    { icon: BarChart2, label: 'Статистика', path: '/stats' },
-    { icon: Calendar, label: 'Матчи', path: '/matches' },
-    { icon: Trophy, label: 'Турниры', path: '/tournaments' },
-    { icon: Sparkles, label: 'Турниры (Бета)', path: '/tournaments-beta' },
+    { icon: Gamepad2, label: 'Симулятор', path: '/', color: 'text-blue-400' },
+    { icon: BarChart2, label: 'Статистика', path: '/stats', color: 'text-emerald-400' },
+    { icon: Calendar, label: 'Матчи', path: '/matches', color: 'text-amber-400' },
+    { icon: Trophy, label: 'Турниры', path: '/tournaments', color: 'text-purple-400' },
+    { icon: Sparkles, label: 'Турниры Бета', path: '/tournaments-beta', color: 'text-orange-400' },
+  ];
+
+  const adminItems = isBamepAdmin ? [
+    { icon: Database, label: 'Карты', path: '/map-center' },
+    { icon: Activity, label: 'Аналитика', path: '/analytics' },
+  ] : [];
+
+  const secondaryItems = [
     { icon: Users, label: 'Команды', path: '/teams' },
     { icon: User, label: 'Игроки', path: '/players' },
-    { icon: Newspaper, label: 'Новости', path: '/news' },
-    { icon: Zap, label: 'Трансферы', path: '/transfers' },
-    ...(isBamepAdmin ? [
-    { icon: Database, label: 'Карты и Тактики', path: '/map-center', admin: true },
-      { icon: Activity, label: 'Аналитика', path: '/analytics', admin: true },
-    ] : []),
     { icon: Settings, label: 'Настройки', path: '/settings' },
   ];
 
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => setIsMounted(true), []);
-
-  if (!isMounted) return null;
-
   return (
-    <>
-      {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm" onClick={onClose} />}
-      <div className={`fixed inset-y-0 left-0 w-64 bg-[#12121a] border-r border-white/5 h-full flex flex-col z-50 transform transition-transform duration-300 lg:relative lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="p-6 flex items-center justify-between gap-3 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="text-blue-500">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/>
-              </svg>
-            </div>
-            <div className="font-black tracking-widest text-lg text-white">MATCH<br/><span className="text-sm font-semibold tracking-[0.2em] text-white/50">SIMULATOR</span></div>
-          </div>
-          <button onClick={onClose} className="lg:hidden text-white/50 hover:text-white p-1">
-            <X className="w-6 h-6" />
-          </button>
+    <div className="w-64 h-screen bg-[#0a0a0f] border-r border-white/5 flex flex-col py-6 z-50 shrink-0">
+      {/* Logo */}
+      <div className="px-6 mb-10 flex items-center gap-3">
+        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/>
+          </svg>
         </div>
-      
-        {/* Global Game Selector */}
-        <div className="px-4 pt-2 mb-4">
-          <div className="flex flex-col gap-2">
-            <span className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em] ml-1">Дисциплина</span>
-            <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
-              <button 
-                onClick={() => setGame('cs2')} 
-                className={`flex-1 py-2 rounded-lg text-xs font-black transition-all uppercase tracking-wider ${game === 'cs2' ? 'bg-[#ff8f00] text-black shadow-lg shadow-[#ff8f00]/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
-              >
-                CS2
-              </button>
-              <button 
-                onClick={() => setGame('so2')} 
-                className={`flex-1 py-2 rounded-lg text-xs font-black transition-all uppercase tracking-wider ${game === 'so2' ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/20' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
-              >
-                SO2
-              </button>
-            </div>
-          </div>
+        <div className="flex flex-col">
+          <span className="text-sm font-black uppercase tracking-tighter leading-none">Match</span>
+          <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest leading-none">Simulator</span>
         </div>
+      </div>
 
-        <div className="flex-1 py-2 px-4 flex flex-col gap-1.5 overflow-y-auto">
-          {navItems.map((item, idx) => {
-            const isActive = location.pathname === item.path;
-            return (
-              <Link 
-                key={idx} 
-                to={item.path} 
-                onClick={onClose} 
-                className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
-                  isActive 
-                    ? 'bg-blue-600/15 text-blue-400 font-bold border border-blue-500/20' 
-                    : 'text-white/60 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <item.icon className={`w-5 h-5 ${item.admin ? 'text-amber-400' : ''}`} />
-                  <span className="font-semibold text-sm">{item.label}</span>
-                </div>
-                {item.admin && (
-                  <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                    bamep
-                  </span>
+      {/* Main Nav */}
+      <div className="flex-1 flex flex-col gap-1 w-full px-3 overflow-y-auto custom-scrollbar no-scrollbar">
+        <div className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] px-4 mb-2">Основное</div>
+        {navItems.map((item, idx) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <Link 
+              key={idx} 
+              to={item.path} 
+              className={`group flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-200 ${
+                isActive 
+                  ? 'bg-blue-600/10 text-white shadow-[inset_0_0_20px_rgba(37,99,235,0.05)]' 
+                  : 'text-white/40 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <item.icon className={`w-5 h-5 shrink-0 transition-transform duration-300 group-hover:scale-110 ${isActive ? item.color : ''}`} />
+              <span className={`text-[13px] font-bold uppercase tracking-wide ${isActive ? 'text-white' : ''}`}>
+                {item.label}
+              </span>
+              {isActive && (
+                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+              )}
+            </Link>
+          );
+        })}
+
+        <div className="my-6 border-t border-white/5 mx-4" />
+
+        {/* Secondary Nav */}
+        <div className="flex flex-col gap-1">
+          <div className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] px-4 mb-2">Управление</div>
+          {( [...secondaryItems, ...adminItems] as any[]).map((item, idx) => {
+            const isActive = item.path ? location.pathname === item.path : false;
+            const content = (
+              <>
+                <item.icon className="w-5 h-5 shrink-0" />
+                <span className="text-[13px] font-bold uppercase tracking-wide">{item.label}</span>
+                {isActive && (
+                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/20" />
                 )}
-              </Link>
+              </>
+            );
+
+            const className = `group flex items-center gap-3.5 px-4 py-2.5 rounded-xl transition-all duration-200 ${
+              isActive 
+                ? 'bg-white/5 text-white' 
+                : 'text-white/30 hover:text-white hover:bg-white/5'
+            }`;
+
+            if (item.path) {
+              return (
+                <Link key={idx} to={item.path} className={className}>
+                  {content}
+                </Link>
+              );
+            }
+
+            return (
+              <button key={idx} onClick={item.onClick} className={className}>
+                {content}
+              </button>
             );
           })}
         </div>
-
-        <div className="p-4 border-t border-white/5 bg-black/30 m-3 rounded-2xl">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-[10px] text-white/40 uppercase font-black tracking-wider">Текущий канал</div>
-              <div className="text-xs font-bold text-white truncate font-mono">
-                {user?.displayName || user?.name || 'Гость'}
-              </div>
-            </div>
-            {isBamepAdmin ? (
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
-                👑 Админ
-              </span>
-            ) : (
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 shrink-0">
-                🎮 Игрок
-              </span>
-            )}
-          </div>
-        </div>
       </div>
-    </>
+
+      {/* Footer Actions */}
+      <div className="mt-auto flex flex-col gap-4 pt-6 px-4">
+        {/* Game Selector */}
+        <div className="grid grid-cols-2 gap-2 p-1.5 bg-black/40 rounded-2xl border border-white/5">
+          <button 
+            onClick={() => setGame('cs2')} 
+            className={`py-2 rounded-xl text-[10px] font-black transition-all ${game === 'cs2' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-white/20 hover:text-white'}`}
+          >
+            CS2
+          </button>
+          <button 
+            onClick={() => setGame('so2')} 
+            className={`py-2 rounded-xl text-[10px] font-black transition-all ${game === 'so2' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' : 'text-white/20 hover:text-white'}`}
+          >
+            SO2
+          </button>
+        </div>
+
+        {/* User Profile */}
+        {user ? (
+          <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5 group relative">
+            <div className="w-10 h-10 rounded-xl border border-white/10 overflow-hidden shrink-0">
+              <img src={user.photoURL || `/api/avatar/${encodeURIComponent(user.displayName || user.name || "?")}`} className="w-full h-full object-cover" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-black text-white truncate uppercase tracking-tight">{user.displayName || user.name}</div>
+              <div className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">{user.role || 'Player'}</div>
+            </div>
+            
+            <button 
+              onClick={onLogout}
+              className="p-2 text-white/20 hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10"
+              title="Выйти"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button 
+            onClick={onShowLogin}
+            className="w-full flex items-center gap-3 p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl transition-all shadow-lg shadow-blue-600/20"
+          >
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <User className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black uppercase tracking-widest">Войти</span>
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
+
 
 
 const CHANNELS = [
@@ -156,121 +197,6 @@ const CHANNELS = [
   { username: 'airy', password: '212121', channelId: 'channel_airy', channelName: 'бомбардиро крокодило' }
 ];
 
-function TopBar({ user, onCustomLogin, onLogout, onToggleSidebar, onOpenSo2Media }: { user: any, onCustomLogin: () => void, onLogout: () => void, onToggleSidebar: () => void, onOpenSo2Media?: () => void }) {
-  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
-  const [game, setGame] = useGameUniverse();
-  const [dbUser, setDbUser] = useState<any>(() => {
-    if (!user) return null;
-    try {
-      const cached = localStorage.getItem(`cached_db_user_${user.name}`);
-      return cached ? JSON.parse(cached) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-
-  useEffect(() => {
-    if (!user) {
-      setDbUser(null);
-      setIsQuotaExceeded(false);
-      return;
-    }
-
-    const loadLocalDbUser = () => {
-      try {
-        const raw = localStorage.getItem(`tgUsers_${user.uid}`);
-        if (raw) {
-          const list = JSON.parse(raw);
-          if (Array.isArray(list)) {
-            const found = list.find((u: any) => 
-              (u.username && u.username.toLowerCase() === user.name?.toLowerCase()) ||
-              (u.firstName && u.firstName.toLowerCase() === user.name?.toLowerCase())
-            );
-            if (found) {
-              setDbUser(found);
-              localStorage.setItem(`cached_db_user_${user.name}`, JSON.stringify(found));
-              return;
-            }
-          }
-        }
-        
-        // Fallback to cached_db_user
-        const cached = localStorage.getItem(`cached_db_user_${user.name}`);
-        if (cached) {
-          setDbUser(JSON.parse(cached));
-        } else {
-          setDbUser(null);
-        }
-      } catch (e) {
-        console.warn("Failed to load local dbUser:", e);
-      }
-    };
-
-    loadLocalDbUser();
-
-    // Listen to custom db-user-updated event to update the TopBar balance instantly
-    window.addEventListener('db-user-updated', loadLocalDbUser);
-    return () => {
-      window.removeEventListener('db-user-updated', loadLocalDbUser);
-    };
-  }, [user]);
-
-  const rawStatus = dbUser && dbUser.status ? dbUser.status : 'Участник';
-  const currentStatus = (rawStatus === 'Менеджер (Лидер)' || rawStatus === 'Менеджер' || rawStatus === 'Лидер') ? 'Участник' : rawStatus;
-
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => setIsMounted(true), []);
-
-  if (!isMounted) return <div className="h-20 border-b border-white/5"></div>;
-
-  return (
-    <div className="h-20 border-b border-white/5 px-4 lg:px-8 flex items-center justify-between">
-      <div className="flex items-center gap-3 lg:gap-4">
-        <button onClick={onToggleSidebar} className="lg:hidden p-2 -ml-2 text-white/70 hover:text-white rounded-xl hover:bg-white/5">
-          <MoreVertical className="w-6 h-6" />
-        </button>
-        <div className="flex items-center gap-2 bg-white/5 px-3 py-2 lg:px-4 rounded-xl text-sm font-semibold text-white">
-          <Trophy className="w-4 h-4 text-yellow-500" />
-          <span>Турниры</span>
-        </div>
-        {isQuotaExceeded && (
-          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 px-3.5 py-1.5 rounded-xl text-xs font-semibold animate-pulse" title="Суточный лимит запросов к базе данных Firestore исчерпан. Приложение временно использует локально сохраненный кэш.">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            <span>Офлайн-режим (Кэш)</span>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-6">
-        {user ? (
-          <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-xl">
-            <div className="text-right hidden md:block">
-              <div className="text-sm font-bold text-white flex items-center gap-1.5 justify-end">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                {user.displayName || user.name}
-              </div>
-              <div className="text-[10px] text-blue-400 font-mono font-black uppercase tracking-wider leading-none mt-1">
-                {currentStatus}
-              </div>
-            </div>
-            <img src={user.photoURL || `/api/avatar/${encodeURIComponent(user.displayName || user.name || "?")}`} className="w-10 h-10 rounded-full border border-white/10" />
-            <button onClick={onLogout} className="p-2 text-white/50 hover:text-white cursor-pointer ml-1" title="Выйти">
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <button onClick={onCustomLogin} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(37,99,235,0.2)] cursor-pointer">
-              <User className="w-4 h-4" />
-              <span>Вход по каналу</span>
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -278,7 +204,6 @@ export default function App() {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     // Check if there is already a custom user saved in localStorage
@@ -721,26 +646,19 @@ export default function App() {
   return (
     <Router>
       <div className="flex h-screen bg-[#08080c] font-sans text-white overflow-hidden">
-        <Sidebar 
-          isOpen={isSidebarOpen} 
-          onClose={() => setIsSidebarOpen(false)} 
+        <NavPanel 
           user={user} 
-          onOpenSo2Media={() => setShowSo2Media(true)}
+          onLogout={handleLogout} 
+          onShowLogin={() => setShowLoginModal(true)} 
+          onOpenMedia={() => setShowSo2Media(true)}
         />
+        
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
           {/* Background decorations */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/20 rounded-full blur-[100px] pointer-events-none -translate-y-1/2 translate-x-1/3"></div>
           <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none translate-y-1/3 -translate-x-1/3"></div>
           
-          <TopBar 
-            user={user} 
-            onCustomLogin={() => setShowLoginModal(true)} 
-            onLogout={handleLogout} 
-            onToggleSidebar={() => setIsSidebarOpen(true)} 
-            onOpenSo2Media={() => setShowSo2Media(true)}
-          />
-          
-          <div className="flex-1 overflow-y-auto z-10 p-4 lg:p-8">
+          <div className="flex-1 overflow-y-auto z-10 p-4 lg:p-8 custom-scrollbar">
             <Routes>
               <Route path="/" element={<Simulator user={user} />} />
               <Route path="/stats" element={<Statistics user={user} />} />

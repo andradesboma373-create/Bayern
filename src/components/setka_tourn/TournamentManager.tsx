@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2, Users, ArrowLeftRight } from 'lucide-react';
+import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2, Users, ArrowLeftRight, Layout, Database } from 'lucide-react';
 import { Tournament, TournamentSettings, Team, Match, Group } from './types';
 import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage, setTournamentBgImage, setTournamentLogoUrl, syncTournamentsWithServer, normalizeTournament } from './storage';
 import SingleEliminationStage from './SingleEliminationStage';
@@ -225,6 +225,7 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
   const [showMvpModal, setShowMvpModal] = useState(false);
   const [showRosters, setShowRosters] = useState(false);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
+  const [showDashboardHub, setShowDashboardHub] = useState(false);
   const [isSeedingOpen, setIsSeedingOpen] = useState(false);
   const [seedingTeams, setSeedingTeams] = useState<Team[]>([]);
   const [historyStack, setHistoryStack] = useState<Tournament[]>([]);
@@ -1885,6 +1886,29 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                           </button>
 
                           <button 
+                            onClick={() => setIsSwapMode(!isSwapMode)} 
+                            className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg ${
+                              isSwapMode 
+                                ? 'bg-orange-500 text-white shadow-orange-500/30 animate-pulse' 
+                                : 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20'
+                            }`}
+                            title="Включить режим ручного изменения команд в матчах"
+                          >
+                            <ArrowLeftRight className="w-4 h-4" /> ИЗМЕНИТЬ ПАРЫ
+                          </button>
+
+                          <button 
+                            onClick={() => setShowDashboardHub(!showDashboardHub)} 
+                            className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg ${
+                              showDashboardHub 
+                                ? 'bg-blue-600 text-white shadow-blue-500/30' 
+                                : 'bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20'
+                            }`}
+                          >
+                            <Layout className="w-4 h-4" /> ПАНЕЛЬ
+                          </button>
+
+                          <button 
                             onClick={() => {
                               const dataStr = JSON.stringify(activeTournament, null, 2);
                               const blob = new Blob([dataStr], { type: 'application/json' });
@@ -1920,7 +1944,218 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                   </div>
               </div>
 
+              {/* DASHBOARD HUB PANEL (The "New Panel with Buttons" user asked to continue) */}
+              {showDashboardHub && activeTournament && (
+                  <div className="fixed top-[88px] bottom-0 right-0 w-80 bg-[#0b0b0f]/95 backdrop-blur-xl border-l border-white/10 z-[35] shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col overflow-hidden">
+                      <div className="p-5 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-blue-500/10 to-transparent">
+                          <div className="flex items-center gap-2">
+                              <Layout className="w-4 h-4 text-blue-400" />
+                              <h3 className="text-xs font-black text-white uppercase tracking-widest">Панель Управления</h3>
+                          </div>
+                          <button 
+                            onClick={() => setShowDashboardHub(false)}
+                            className="p-1.5 hover:bg-white/5 text-white/40 hover:text-white rounded-lg transition-all"
+                          >
+                              <X className="w-4 h-4" />
+                          </button>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                          {/* 1. Stage Progress Section */}
+                          <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Прогресс Стадий</span>
+                                  <span className="text-[10px] font-mono text-blue-400">
+                                      {activeTournament.activeStage || 1} / {(activeTournament.settings?.stages?.length || 1)}
+                                  </span>
+                              </div>
+                              <div className="space-y-1.5">
+                                  {(activeTournament.settings?.stages || [{ name: 'Стадия 1', type: 'playoff' }]).map((stg, sIdx) => {
+                                      const isCurrent = (activeTournament.activeStage || 1) === (sIdx + 1);
+                                      return (
+                                          <button
+                                              key={sIdx}
+                                              onClick={() => handleUpdateActive({ ...activeTournament, activeStage: (sIdx + 1) as any })}
+                                              className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+                                                  isCurrent 
+                                                      ? 'bg-blue-600/10 border-blue-500/50 text-white shadow-lg' 
+                                                      : 'bg-white/5 border-transparent text-white/40 hover:bg-white/10'
+                                              }`}
+                                          >
+                                              <div className="flex items-center gap-3">
+                                                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${isCurrent ? 'bg-blue-500 text-white' : 'bg-white/5 text-white/30'}`}>
+                                                      {sIdx + 1}
+                                                  </div>
+                                                  <span className="text-[11px] font-bold uppercase truncate max-w-[140px]">{stg.name || `Стадия ${sIdx + 1}`}</span>
+                                              </div>
+                                              {isCurrent && <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />}
+                                          </button>
+                                      );
+                                  })}
+                              </div>
+                          </div>
+
+                          {/* 2. Quick Tournament Stats */}
+                          <div className="space-y-3 pt-4 border-t border-white/5">
+                              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Статистика Турнира</span>
+                              <div className="grid grid-cols-2 gap-2">
+                                  <div className="bg-black/40 border border-white/5 p-3 rounded-xl">
+                                      <div className="text-[9px] font-black text-white/20 uppercase mb-1">Команд</div>
+                                      <div className="text-lg font-black text-white font-mono">{activeTournament.teams?.length || 0}</div>
+                                  </div>
+                                  <div className="bg-black/40 border border-white/5 p-3 rounded-xl">
+                                      <div className="text-[9px] font-black text-white/20 uppercase mb-1">Матчей</div>
+                                      <div className="text-lg font-black text-white font-mono">{activeTournament.matchIds?.length || 0}</div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          {/* 3. Global Actions Panel */}
+                          <div className="space-y-3 pt-4 border-t border-white/5">
+                              <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Быстрые Действия</span>
+                              <div className="flex flex-col gap-2">
+                                  <button 
+                                      onClick={() => setShowTop20(true)}
+                                      className="w-full flex items-center gap-3 p-3 bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 text-purple-300 rounded-xl transition-all group"
+                                  >
+                                      <Trophy className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                      <span className="text-[10px] font-black uppercase tracking-widest">Рейтинг ТОП-20</span>
+                                  </button>
+                                  
+                                  <button 
+                                      onClick={() => setShowRosters(true)}
+                                      className="w-full flex items-center gap-3 p-3 bg-zinc-800/50 hover:bg-zinc-800 border border-white/10 text-white/80 rounded-xl transition-all group"
+                                  >
+                                      <Users className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                      <span className="text-[10px] font-black uppercase tracking-widest">Составы команд</span>
+                                  </button>
+
+                                  <button 
+                                      onClick={() => setIsSwapMode(!isSwapMode)}
+                                      className={`w-full flex items-center gap-3 p-3 border rounded-xl transition-all group ${
+                                        isSwapMode 
+                                          ? 'bg-orange-500/20 border-orange-500/50 text-orange-200' 
+                                          : 'bg-orange-600/10 hover:bg-orange-600/20 border-orange-500/20 text-orange-300'
+                                      }`}
+                                  >
+                                      <ArrowLeftRight className={`w-4 h-4 group-hover:rotate-180 transition-transform ${isSwapMode ? 'animate-spin-slow' : ''}`} />
+                                      <span className="text-[10px] font-black uppercase tracking-widest">Изменить пары</span>
+                                  </button>
+
+                                  <button 
+                                      onClick={() => setIsEditingSettings(true)}
+                                      className="w-full flex items-center gap-3 p-3 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-300 rounded-xl transition-all group"
+                                  >
+                                      <Settings className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                      <span className="text-[10px] font-black uppercase tracking-widest">Настройки</span>
+                                  </button>
+
+                                  {canUndoTournament(activeTournament) && (
+                                      <button 
+                                          onClick={() => handleUndoTournamentRounds(1)}
+                                          className="w-full flex items-center gap-3 p-3 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-300 rounded-xl transition-all group"
+                                      >
+                                          <Undo2 className="w-4 h-4 group-hover:-rotate-45 transition-transform" />
+                                          <span className="text-[10px] font-black uppercase tracking-widest">Отменить шаг</span>
+                                      </button>
+                                  )}
+                              </div>
+                          </div>
+
+                          {/* 4. Recent Stitched Results Section */}
+                          <div className="space-y-3 pt-4 border-t border-white/5">
+                              <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Результаты Склеек</span>
+                                  <button 
+                                    onClick={() => navigate('/matches')} 
+                                    className="text-[9px] font-black text-blue-400 hover:text-blue-300 uppercase transition-colors"
+                                  >
+                                    Все →
+                                  </button>
+                              </div>
+                              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                                  {JSON.parse(localStorage.getItem('skleyka_matches') || '[]').slice(0, 5).map((m: any, idx: number) => {
+                                      // Try to find stage name
+                                      const allStages = JSON.parse(localStorage.getItem('match_stages_guest') || '[]'); // Simplistic fallback
+                                      const stage = allStages.find((s: any) => s.id === m.stageId);
+                                      
+                                      return (
+                                          <div key={m.id || idx} className="bg-white/[0.02] border border-white/5 p-2 rounded-lg flex items-center justify-between hover:bg-white/5 transition-all">
+                                              <div className="flex flex-col min-w-0">
+                                                  <div className="text-[10px] font-bold text-white/90 truncate">{m.team1Name} vs {m.team2Name}</div>
+                                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                                      <div className="text-[8px] font-black text-white/30 uppercase">{m.date || 'Сегодня'}</div>
+                                                      {m.stageId && (
+                                                          <div className="text-[7px] font-black text-blue-400/80 bg-blue-500/10 px-1 rounded border border-blue-500/20 uppercase truncate max-w-[80px]">
+                                                              {stage?.name || 'Stage'}
+                                                          </div>
+                                                      )}
+                                                  </div>
+                                              </div>
+                                              <div className="text-[10px] font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded font-mono ml-2">
+                                                  {m.score1}:{m.score2}
+                                              </div>
+                                          </div>
+                                      );
+                                  })}
+                                  {JSON.parse(localStorage.getItem('skleyka_matches') || '[]').length === 0 && (
+                                      <div className="py-4 text-center text-[9px] text-white/20 italic">
+                                          Нет недавних склеек
+                                      </div>
+                                  )}
+                              </div>
+                          </div>
+
+                          {/* 5. External Data Section */}
+                          <div className="space-y-3 pt-4 border-t border-white/5 pb-10">
+                              <div className="flex items-center gap-2">
+                                  <Database className="w-3 h-3 text-emerald-400" />
+                                  <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Внешние Данные</span>
+                              </div>
+                              <div className="bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-xl space-y-2">
+                                  <p className="text-[9px] text-emerald-400/60 font-medium leading-relaxed">
+                                      Склейки и файлы команд автоматически синхронизируются при совпадении имен.
+                                  </p>
+                                  <button 
+                                      onClick={() => {
+                                          const dataStr = JSON.stringify(activeTournament, null, 2);
+                                          const blob = new Blob([dataStr], { type: 'application/json' });
+                                          const url = URL.createObjectURL(blob);
+                                          const link = document.createElement('a');
+                                          link.href = url;
+                                          link.download = `${activeTournament.name || 'tournament'}_data.json`;
+                                          link.click();
+                                          URL.revokeObjectURL(url);
+                                      }}
+                                      className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                  >
+                                      Экспорт JSON (Бэкап)
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="p-4 border-t border-white/5 bg-black/40">
+                          <button 
+                              onClick={toggleTournamentCompleted}
+                              className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                                  activeTournament.completed || activeTournament.status === 'completed'
+                                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20'
+                              }`}
+                          >
+                              {activeTournament.completed || activeTournament.status === 'completed' ? (
+                                  <>🏁 Завершен</>
+                              ) : (
+                                  <>🏆 Завершить Турнир</>
+                              )}
+                          </button>
+                      </div>
+                  </div>
+              )}
+
               <div className="w-full max-w-none px-4 sm:px-8 mx-auto animate-in fade-in duration-500">
+
                   <div 
                       ref={stageRef}
                       data-exporting={isExporting}
@@ -2752,6 +2987,78 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                       onClose={() => setShowMvpModal(false)}
                   />
               )}
+
+              {showRosters && activeTournament && (
+                  <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[60] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                      <div className="bg-[#0b0b0f] border border-white/10 rounded-[2.5rem] w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col">
+                          <div className="p-8 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-blue-500/10 to-transparent">
+                              <div className="flex items-center gap-5">
+                                  <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                                      <Users className="w-8 h-8" />
+                                  </div>
+                                  <div>
+                                      <h3 className="font-black text-2xl text-white uppercase tracking-tight">Составы команд</h3>
+                                      <p className="text-sm text-white/40 font-medium">Управление участниками и их ростерами в турнире</p>
+                                  </div>
+                              </div>
+                              <button 
+                                  onClick={() => setShowRosters(false)}
+                                  className="p-3 hover:bg-white/5 text-white/30 hover:text-white rounded-2xl transition-all cursor-pointer"
+                              >
+                                  <X className="w-8 h-8" />
+                              </button>
+                          </div>
+
+                          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-black/20">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {(activeTournament.teams || []).map((team, idx) => {
+                                      const roster = activeTournament.settings?.rosters?.find(r => r.id === team.id || r.name === team.name);
+                                      const players = roster?.players || team.players || [];
+                                      
+                                      return (
+                                          <div key={team.id || idx} className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 hover:border-white/10 transition-all group">
+                                              <div className="flex items-center gap-4 mb-4 pb-4 border-b border-white/5">
+                                                  <TeamLogo teamName={team.name} logoUrl={team.logoUrl} sizeClassName="w-12 h-12" />
+                                                  <div>
+                                                      <h4 className="font-black text-white uppercase tracking-tight group-hover:text-blue-400 transition-colors">{team.name}</h4>
+                                                      <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">{players.length} игроков</p>
+                                                  </div>
+                                              </div>
+                                              
+                                              <div className="space-y-2">
+                                                  {players.length > 0 ? (
+                                                      players.map((p: any, pIdx: number) => (
+                                                          <div key={pIdx} className="flex items-center justify-between bg-black/40 px-4 py-2 rounded-xl border border-white/5 group/player hover:border-blue-500/30 transition-all">
+                                                              <div className="flex items-center gap-3">
+                                                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                                                                  <span className="text-xs font-bold text-white/80 group-hover/player:text-white transition-colors">{p.nickname || p.name}</span>
+                                                              </div>
+                                                              <span className="text-[9px] font-black text-white/20 uppercase tracking-widest">{p.role || 'Игрок'}</span>
+                                                          </div>
+                                                      ))
+                                                  ) : (
+                                                      <div className="py-4 text-center">
+                                                          <p className="text-[10px] font-bold text-white/20 uppercase italic">Состав не указан</p>
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          </div>
+
+                          <div className="p-8 border-t border-white/5 bg-black/40 flex justify-center">
+                              <button 
+                                  onClick={() => setShowRosters(false)}
+                                  className="px-10 py-3 bg-white/5 hover:bg-white/10 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl border border-white/10 transition-all cursor-pointer"
+                              >
+                                  Закрыть
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              )}
           </div>
       </div>
   );
@@ -2829,16 +3136,6 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                 <span>SO2</span>
               </button>
             </div>
-            {activeGame === 'so2' && (
-              <button
-                onClick={() => setShowSo2Folder(true)}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border border-orange-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                title="Открыть библиотеку логотипов и фото игроков Standoff 2"
-              >
-                <ImageIcon className="w-3.5 h-3.5" />
-                <span>Медиатека SO2</span>
-              </button>
-            )}
           </div>
           <p className="text-white/50 text-sm mt-1">
             {activeGame === 'so2' 
