@@ -159,7 +159,8 @@ export default function Simulator({ user }: { user: any }) {
   const setGame = setActiveGame;
   const [format, setFormat] = useState('BO3');
   const [isSimulating, setIsSimulating] = useState(false);
-    const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<any>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const [team1, setTeam1] = useState<SimulatorPlayer[]>(DEFAULT_TEAM_T);
   const [team2, setTeam2] = useState<SimulatorPlayer[]>(DEFAULT_TEAM_CT);
@@ -548,6 +549,7 @@ export default function Simulator({ user }: { user: any }) {
 
   const downloadPhoto = async () => {
     if (!result || !resultContainerRef.current) return;
+    setIsDownloading(true);
     try {
       const { toPng } = await import('html-to-image');
       const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -578,6 +580,7 @@ export default function Simulator({ user }: { user: any }) {
         // Restore original styles
         resultContainerRef.current.style.width = originalWidth;
         resultContainerRef.current.style.minWidth = originalMinWidth;
+        setIsDownloading(false);
       }
       
       const downloadAnchorNode = document.createElement('a');
@@ -1040,7 +1043,20 @@ export default function Simulator({ user }: { user: any }) {
               </div>
             )}
 
-            {result.bo !== 1 && Array.isArray(result.maps) && (
+            {isOverall && selectedTournament && !isDownloading && (
+              <div className="flex flex-col items-center gap-3 mb-6 relative z-10 animate-bounce-slow">
+                <button 
+                  onClick={() => navigate(`/tournaments-beta/${selectedTournament}`)}
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl shadow-[0_0_30px_rgba(37,99,235,0.3)] transition-all flex items-center gap-3 group cursor-pointer uppercase tracking-widest text-sm"
+                >
+                  <Trophy className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                  ПРОДВИНУТЬ В ТУРНИРЕ
+                </button>
+                <p className="text-[10px] text-blue-400/60 font-bold uppercase tracking-wider">Результат сохранен в сетку</p>
+              </div>
+            )}
+
+            {result.bo !== 1 && Array.isArray(result.maps) && !isDownloading && (
               <div className="mt-6 flex flex-col items-center gap-3 relative z-10">
                 <button 
                   onClick={() => setSelectedResultTab('overall')}

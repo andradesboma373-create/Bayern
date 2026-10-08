@@ -1489,6 +1489,19 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                   const updatedGroups = [...newT.gslGroups];
                   updatedGroups[gIdx] = updatedGroup;
                   newT.gslGroups = updatedGroups;
+
+                  // Auto-advance to Stage 2 if all GSL groups finished
+                  const allFinished = newT.gslGroups.every(group => {
+                      const standings = getGslGroupStandings(group, advanceCount);
+                      return standings.isGroupFinished;
+                  });
+                  if (allFinished && newT.activeStage === 1) {
+                      const stage2Type = newT.settings?.stage2Type || 'tiered';
+                      if (stage2Type === 'tiered') {
+                          newT.tieredBracketRounds = generateTieredPlayoffBracket(newT.gslGroups, advanceCount);
+                          newT.activeStage = 2;
+                      }
+                  }
               }
           }
       } else if (matchInfo && matchInfo.stage === 'tiered_playoff') {
@@ -1520,6 +1533,19 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
               else if (score2 > score1) m.winnerId = m.team2?.id;
               m.isFinished = true;
               newRounds[matchInfo.rIdx][matchInfo.mIdx] = m;
+              
+              // Check if round is finished and generate next Swiss round if needed
+              const currentRound = newRounds[matchInfo.rIdx];
+              const isRoundFinished = currentRound.every(rm => rm.isFinished || (rm.team1?.id === 'BYE' || rm.team2?.id === 'BYE'));
+              if (isRoundFinished) {
+                  const winsToAdvance = newT.settings?.swissWinsToAdvance || 3;
+                  const lossesToEliminate = newT.settings?.swissLossesToEliminate || 3;
+                  const nextRound = generateNextSwissRound(newT.teams || [], newRounds, winsToAdvance, lossesToEliminate);
+                  if (nextRound) {
+                      newRounds.push(nextRound);
+                  }
+              }
+              
               newT.swissRounds = newRounds;
           }
       } else if (matchInfo && matchInfo.stage === 'playoff') {

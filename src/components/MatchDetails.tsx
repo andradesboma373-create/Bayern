@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { X, Download } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, Download, Trophy } from 'lucide-react';
 import TeamLogo from './TeamLogo';
 import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { RatingSystem } from '../match-logic/systems/RatingSystem';
@@ -104,7 +105,9 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
 }
 
 export default function MatchDetails({ match, onClose }: { match: any, onClose: () => void }) {
+  const navigate = useNavigate();
   const resultContainerRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const t1Name = match?.team1Name || match?.team1?.name || (typeof match?.team1 === 'string' ? match.team1 : '') || 'Команда 1';
   const t2Name = match?.team2Name || match?.team2?.name || (typeof match?.team2 === 'string' ? match.team2 : '') || 'Команда 2';
@@ -114,6 +117,7 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
 
   const downloadPhoto = async () => {
     if (!resultContainerRef.current) return;
+    setIsDownloading(true);
     try {
       const { toPng } = await import('html-to-image');
       const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -151,6 +155,8 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
     } catch (e: any) {
       console.error('Ошибка создания изображения:', e?.message || e);
       alert('Error creating image: ' + (e?.message || e));
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -214,6 +220,21 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
               </div>
             )}
 
+            {match?.tournamentId && !isDownloading && (
+              <div className="flex flex-col items-center gap-3 mb-6 relative z-10 animate-bounce-slow">
+                <button 
+                  onClick={() => {
+                    onClose();
+                    navigate(`/tournaments-beta/${match.tournamentId}`);
+                  }}
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl shadow-[0_0_30px_rgba(37,99,235,0.3)] transition-all flex items-center gap-3 group cursor-pointer uppercase tracking-widest text-sm"
+                >
+                  <Trophy className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                  ПРОДВИНУТЬ В ТУРНИРЕ
+                </button>
+              </div>
+            )}
+
             <div className="mt-8 flex flex-col items-center gap-3">
               <button 
                 onClick={() => setSelectedResultTab('overall')}
@@ -221,7 +242,7 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
               >
                 ОБЩАЯ СТАТИСТИКА
               </button>
-              {mapsList.length > 0 && (
+              {mapsList.length > 0 && !isDownloading && (
                 <div className="flex justify-center gap-3 flex-wrap">
                   {mapsList.map((mapItem: any, i: number) => {
                     const mName = mapItem?.mapName || mapItem?.name || `Карта ${i + 1}`;

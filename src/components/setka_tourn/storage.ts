@@ -6,6 +6,8 @@ import {
   generateSingleEliminationBracket,
   BYE_TEAM
 } from "./doubleEliminationLogic";
+import { updateGslMatch, advanceTieredPlayoffMatch, generateTieredPlayoffBracket, getGslGroupStandings } from "./gslLogic";
+import { generateNextSwissRound } from "./swissLogic";
 import { db, deleteDoc, doc, setDoc } from "../../firebase";
 import { safeLocalStorageSet } from "../../lib/utils";
 import { SO2_TEAMS } from "../../lib/so2Assets";
@@ -1250,9 +1252,11 @@ export const updateBetaTournamentMatchResult = (
     }
 
     if (!updated && tourney.swissRounds) {
-      for (const round of tourney.swissRounds) {
+      for (let rIdx = 0; rIdx < tourney.swissRounds.length; rIdx++) {
+        const round = tourney.swissRounds[rIdx];
         if (!Array.isArray(round)) continue;
-        for (const m of round) {
+        for (let mIdx = 0; mIdx < round.length; mIdx++) {
+          const m = round[mIdx];
           if (!m || !m.team1 || !m.team2) continue;
           const m1 = normalize(m.team1.name || "");
           const m2 = normalize(m.team2.name || "");
@@ -1271,6 +1275,17 @@ export const updateBetaTournamentMatchResult = (
                   : null;
             m.isFinished = true;
             updated = true;
+
+            // Check if round is finished and generate next if needed
+            const isRoundFinished = round.every(rm => rm.isFinished || (rm.team1?.id === 'BYE' || rm.team2?.id === 'BYE'));
+            if (isRoundFinished) {
+               const winsToAdvance = tourney.settings?.swissWinsToAdvance || 3;
+               const lossesToEliminate = tourney.settings?.swissLossesToEliminate || 3;
+               const nextRound = generateNextSwissRound(tourney.teams || [], tourney.swissRounds, winsToAdvance, lossesToEliminate);
+               if (nextRound) {
+                  tourney.swissRounds.push(nextRound);
+               }
+            }
             break;
           }
         }
@@ -1279,8 +1294,15 @@ export const updateBetaTournamentMatchResult = (
     }
 
     if (!updated && tourney.gslGroups) {
-      for (const g of tourney.gslGroups) {
-        const checkBracket = (b: any[]) => {
+      for (let gIdx = 0; gIdx < tourney.gslGroups.length; gIdx++) {
+        const g = tourney.gslGroups[gIdx];
+        const advanceCount = tourney.settings?.gslAdvanceCount || 3;
+        
+        let foundInBracket: 'upper' | 'lower' | null = null;
+        let foundRIdx = -1;
+        let foundMIdx = -1;
+
+        const checkBracket = (b: any[], type: 'upper' | 'lower') => {
           for (let r = 0; r < b.length; r++) {
             for (let m = 0; m < b[r].length; m++) {
               const match = b[r][m];
@@ -1288,38 +1310,62 @@ export const updateBetaTournamentMatchResult = (
               const m1 = normalize(match.team1.name || "");
               const m2 = normalize(match.team2.name || "");
               if ((m1 === name1 && m2 === name2) || (m1 === name2 && m2 === name1)) {
-                match.score1 = m1 === name1 ? team1Score : team2Score;
-                match.score2 = m1 === name1 ? team2Score : team1Score;
-                match.winnerId = match.score1 > match.score2 ? match.team1.id : match.score2 > match.score1 ? match.team2.id : null;
-                match.isFinished = true;
+                foundInBracket = type;
+                foundRIdx = r;
+                foundMIdx = m;
                 return true;
               }
             }
           }
           return false;
         };
-        if (g.upperBracket && checkBracket(g.upperBracket)) { updated = true; break; }
-        if (g.lowerBracket && checkBracket(g.lowerBracket)) { updated = true; break; }
+
+        if (checkBracket(g.upperBracket, 'upper') || checkBracket(g.lowerBracket, 'lower')) {
+            const updatedGroup = updateGslMatch(g, foundInBracket!, foundRIdx, foundMIdx, team1Score, team2Score, advanceCount);
+            tourney.gslGroups[gIdx] = updatedGroup;
+            updated = true;
+            
+            // Auto-advance to tiered playoff if all GSL groups finished
+            const allFinished = tourney.gslGroups.every(group => {
+               const standings = getGslGroupStandings(group, advanceCount);
+               return standings.isGroupFinished;
+            });
+            
+            if (allFinished && tourney.activeStage === 1) {
+               const stage2Type = tourney.settings?.stage2Type || 'tiered';
+               if (stage2Type === 'tiered') {
+                  tourney.tieredBracketRounds = generateTieredPlayoffBracket(tourney.gslGroups, advanceCount);
+                  tourney.activeStage = 2;
+               }
+            }
+            break;
+        }
       }
     }
 
     if (!updated && tourney.tieredBracketRounds) {
-      for (let r = 0; r < tourney.tieredBracketRounds.length; r++) {
-        for (let m = 0; m < tourney.tieredBracketRounds[r].length; m++) {
-          const match = tourney.tieredBracketRounds[r][m];
+      const rounds = tourney.tieredBracketRounds;
+      let foundR = -1;
+      let foundM = -1;
+
+      for (let r = 0; r < rounds.length; r++) {
+        for (let m = 0; m < rounds[r].length; m++) {
+          const match = rounds[r][m];
           if (!match || !match.team1 || !match.team2) continue;
           const m1 = normalize(match.team1.name || "");
           const m2 = normalize(match.team2.name || "");
           if ((m1 === name1 && m2 === name2) || (m1 === name2 && m2 === name1)) {
-            match.score1 = m1 === name1 ? team1Score : team2Score;
-            match.score2 = m1 === name1 ? team2Score : team1Score;
-            match.winnerId = match.score1 > match.score2 ? match.team1.id : match.score2 > match.score1 ? match.team2.id : null;
-            match.isFinished = true;
-            updated = true;
+            foundR = r;
+            foundM = m;
             break;
           }
         }
-        if (updated) break;
+        if (foundR !== -1) break;
+      }
+
+      if (foundR !== -1) {
+         tourney.tieredBracketRounds = advanceTieredPlayoffMatch(rounds, foundR, foundM, team1Score, team2Score);
+         updated = true;
       }
     }
 
