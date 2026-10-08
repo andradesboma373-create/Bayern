@@ -163,12 +163,12 @@ export default function Matches({ user }: { user: any }) {
           return;
         }
         // Safe query without composite index requirement (sort in-memory)
-        const q = query(collection(db, 'matches'), where('userId', '==', roomId), limit(150));
+        const q = query(collection(db, 'matches'), where('userId', '==', roomId), limit(1000));
         const qs = await getDocs(q);
         
         let allDocs = qs.docs;
         if (allDocs.length === 0) {
-          const qChannel = query(collection(db, 'matches'), where('channelId', '==', roomId), limit(150));
+          const qChannel = query(collection(db, 'matches'), where('channelId', '==', roomId), limit(1000));
           const qsChannel = await getDocs(qChannel);
           allDocs = qsChannel.docs;
         }

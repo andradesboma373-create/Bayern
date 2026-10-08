@@ -211,7 +211,11 @@ export default function SwissStage({
   const isCurrentRoundFinished = () => {
     if (swissRounds.length === 0) return false;
     const currentRound = swissRounds[swissRounds.length - 1];
-    return Array.isArray(currentRound) && currentRound.every(m => m.winnerId !== null);
+    if (!Array.isArray(currentRound)) return false;
+    return currentRound.every(m => 
+      m.winnerId !== null || 
+      (m.team1?.id === 'BYE' || m.team2?.id === 'BYE')
+    );
   };
 
   // Check if entire Swiss Stage is finished
@@ -809,9 +813,11 @@ export default function SwissStage({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-black/40 backdrop-blur-md px-6 py-5 rounded-2xl border border-white/10 shadow-2xl">
         <div className="flex flex-col">
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight font-sans">
-              {tournament.name || 'Tournament'}
-            </h2>
+            {!isLogosOnly && (
+              <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight font-sans">
+                {tournament.name || 'Tournament'}
+              </h2>
+            )}
             <span className="bg-[#ff8f00]/20 text-[#ff8f00] text-[11px] font-black px-2.5 py-0.5 rounded-full border border-[#ff8f00]/30 tracking-wider">
               {winsToAdvance} ПОБЕДЫ ДЛЯ ВЫХОДА
             </span>
@@ -864,18 +870,34 @@ export default function SwissStage({
           )}
 
           {!isExporting && swissRounds.length < totalRounds && (
-            <button
-              onClick={handleGenerateNextRound}
-              disabled={!isCurrentRoundFinished()}
-              className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                isCurrentRoundFinished()
-                  ? 'bg-gradient-to-r from-[#ff8f00] to-amber-500 hover:from-[#ffa733] hover:to-amber-400 text-black shadow-[0_0_20px_rgba(255,143,0,0.4)] scale-105'
-                  : 'bg-white/5 text-white/30 border border-white/10 cursor-not-allowed'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Следующий раунд ({swissRounds.length + 1})</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleGenerateNextRound}
+                disabled={!isCurrentRoundFinished()}
+                className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                  isCurrentRoundFinished()
+                    ? 'bg-gradient-to-r from-[#ff8f00] to-amber-500 hover:from-[#ffa733] hover:to-amber-400 text-black shadow-[0_0_20px_rgba(255,143,0,0.4)] scale-105'
+                    : 'bg-white/5 text-white/30 border border-white/10 cursor-not-allowed'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Следующий раунд ({swissRounds.length + 1})</span>
+              </button>
+
+              {isSwapMode && !isCurrentRoundFinished() && (
+                <button
+                  onClick={() => {
+                    if (window.confirm("Принудительно сгенерировать следующий раунд? Это может привести к непредсказуемым результатам, если текущий раунд не завершен.")) {
+                      handleGenerateNextRound();
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                  title="Принудительно сгенерировать раунд (только в режиме редактирования)"
+                >
+                  Принудительно
+                </button>
+              )}
+            </div>
           )}
 
           {!isExporting && (

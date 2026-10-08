@@ -476,7 +476,7 @@ export default function Simulator({ user }: { user: any }) {
           ))
         );
         filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setH2hMatches(filtered.slice(0, 5));
+        setH2hMatches(filtered.slice(0, 50));
       } catch (e) {
         
         const localMatches = JSON.parse(localStorage.getItem(`matches_${user.uid}`) || '[]');
@@ -487,7 +487,7 @@ export default function Simulator({ user }: { user: any }) {
           )
         );
         filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setH2hMatches(filtered.slice(0, 5));
+        setH2hMatches(filtered.slice(0, 50));
       }
     };
     fetchH2H();

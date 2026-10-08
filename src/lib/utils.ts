@@ -165,8 +165,8 @@ export function saveMatchesToLocalStorage(userId: string, matchesArray: any[]) {
     return dB - dA;
   });
 
-  // Keep up to 30 newest matches. Strip heavy base64 and round logs to guarantee small footprint.
-  const cleaned = sorted.slice(0, 30).map((m: any) => {
+  // Keep up to 500 newest matches. Strip heavy base64 and round logs to guarantee small footprint.
+  const cleaned = sorted.slice(0, 500).map((m: any) => {
     if (!m) return m;
     
     const t1Name = m.team1Name || m.team1?.name || (typeof m.team1 === 'string' ? m.team1 : 'Команда 1');
@@ -215,7 +215,7 @@ export function saveMatchesToLocalStorage(userId: string, matchesArray: any[]) {
   });
 
   // Safe fallback writer loop using safeLocalStorageSet
-  const sliceCounts = [30, 20, 15, 10, 5, 2, 1, 0];
+  const sliceCounts = [500, 300, 200, 100, 50, 30, 20, 15, 10, 5, 2, 1, 0];
   for (const count of sliceCounts) {
     const payload = count === 0 ? [] : cleaned.slice(0, count);
     if (safeLocalStorageSet(`matches_${userId}`, payload)) {

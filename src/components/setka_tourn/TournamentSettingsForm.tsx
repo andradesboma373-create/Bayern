@@ -883,6 +883,7 @@ export default function TournamentSettingsForm({
                     <select
                       value={stages[activeStageIdx].type}
                       onChange={(e) => {
+                        setFormatTouched(true);
                         const updated = [...stages];
                         updated[activeStageIdx].type = e.target.value as any;
                         setStages(updated);
@@ -1171,7 +1172,10 @@ export default function TournamentSettingsForm({
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setEliminationType('single')}
+                    onClick={() => {
+                      setEliminationType('single');
+                      setFormatTouched(true);
+                    }}
                     className={`py-3 px-4 rounded-2xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
                       eliminationType === 'single'
                         ? 'bg-purple-600 text-white border border-purple-400 shadow-md'
@@ -1182,7 +1186,10 @@ export default function TournamentSettingsForm({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEliminationType('double')}
+                    onClick={() => {
+                      setEliminationType('double');
+                      setFormatTouched(true);
+                    }}
                     className={`py-3 px-4 rounded-2xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
                       eliminationType === 'double'
                         ? 'bg-purple-600 text-white border border-purple-400 shadow-md'
@@ -1232,7 +1239,10 @@ export default function TournamentSettingsForm({
                   </label>
                   <select
                     value={numberOfGroups}
-                    onChange={(e) => setNumberOfGroups(Number(e.target.value))}
+                    onChange={(e) => {
+                      setNumberOfGroups(Number(e.target.value));
+                      setFormatTouched(true);
+                    }}
                     className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white font-bold"
                   >
                     <option value={2}>2 Группы</option>
@@ -1263,7 +1273,10 @@ export default function TournamentSettingsForm({
                   </label>
                   <select
                     value={matchesPerPairing}
-                    onChange={(e) => setMatchesPerPairing(Number(e.target.value) as any)}
+                    onChange={(e) => {
+                      setMatchesPerPairing(Number(e.target.value) as any);
+                      setFormatTouched(true);
+                    }}
                     className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white font-bold"
                   >
                     <option value={1}>1 круг</option>
@@ -1299,7 +1312,10 @@ export default function TournamentSettingsForm({
                       min={1}
                       max={5}
                       value={swissWinsToAdvance}
-                      onChange={(e) => setSwissWinsToAdvance(Number(e.target.value))}
+                      onChange={(e) => {
+                        setSwissWinsToAdvance(Number(e.target.value));
+                        setFormatTouched(true);
+                      }}
                       className="w-full bg-black/60 border border-white/10 rounded-xl p-2.5 text-xs text-white font-bold"
                     />
                   </div>
@@ -1310,7 +1326,10 @@ export default function TournamentSettingsForm({
                       min={1}
                       max={5}
                       value={swissLossesToEliminate}
-                      onChange={(e) => setSwissLossesToEliminate(Number(e.target.value))}
+                      onChange={(e) => {
+                        setSwissLossesToEliminate(Number(e.target.value));
+                        setFormatTouched(true);
+                      }}
                       className="w-full bg-black/60 border border-white/10 rounded-xl p-2.5 text-xs text-white font-bold"
                     />
                   </div>

@@ -26,7 +26,7 @@ import AdminAnalytics from './components/AdminAnalytics';
 import ChannelLogin from './components/ChannelLogin';
 import AccessDenied from './components/AccessDenied';
 
-function NavPanel({ user, onLogout, onShowLogin, onOpenMedia }: { user: any, onLogout: () => void, onShowLogin: () => void, onOpenMedia: () => void }) {
+function NavPanel({ user, onLogout, onShowLogin }: { user: any, onLogout: () => void, onShowLogin: () => void }) {
   const location = useLocation();
   const [game, setGame] = useGameUniverse();
   
@@ -258,7 +258,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(rawMatches);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const needsCleanup = parsed.length > 40 || parsed.some(m => m && m.maps && m.maps.some((map: any) => map && map.roundLogs));
+          const needsCleanup = parsed.length > 500 || parsed.some(m => m && m.maps && m.maps.some((map: any) => map && map.roundLogs));
           if (needsCleanup) {
             console.log("Proactively cleaning up matches in localStorage to resolve quota limit...");
             saveMatchesToLocalStorage(user.uid, parsed);
@@ -650,7 +650,6 @@ export default function App() {
           user={user} 
           onLogout={handleLogout} 
           onShowLogin={() => setShowLoginModal(true)} 
-          onOpenMedia={() => setShowSo2Media(true)}
         />
         
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">

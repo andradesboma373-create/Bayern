@@ -25,7 +25,7 @@ import { safeLocalStorageSet, shuffleArray } from '../../lib/utils';
 import { getCanonicalRoomId } from './storage';
 import { useGameUniverse } from '../../lib/gameUniverse';
 import So2MediaLibraryModal from '../So2MediaLibraryModal';
-import { syncAndBackfillTournamentMatches } from '../../lib/tournamentMatchRecorder';
+import { syncAndBackfillTournamentMatches, recordTournamentMatchResult } from '../../lib/tournamentMatchRecorder';
 import { refreshMapPools } from '../../lib/simulation';
 import { generateStageData, advanceTeamsToStage, getStageAdvancingTeams } from './stageGenerator';
 
@@ -581,6 +581,25 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
     const finalSettings = { ...settings, game: tourneyGame };
     const { initialGroups, initialBracket, initialLosersBracket, initialGrandFinal, initialSwissRounds, initialGslGroups } = generateInitialData(finalSettings, teams);
 
+    // Initialize first stage config for Beta/Multi-stage compatibility
+    const initialStage: TournamentStageConfig = {
+        id: 'stage_1',
+        name: settings.mode === 'swiss' ? 'Швейцарская система' : (settings.mode === 'two_stage' ? 'Групповой этап' : 'Основная сетка'),
+        type: (settings.stage1Type as any) || (settings.mode === 'swiss' ? 'swiss' : (settings.mode === 'two_stage' ? 'groups' : 'playoff')),
+        teams: [...teams],
+        groups: initialGroups.length > 0 ? initialGroups : undefined,
+        gslGroups: initialGslGroups.length > 0 ? initialGslGroups : undefined,
+        bracketRounds: initialBracket.length > 0 ? initialBracket : undefined,
+        losersBracketRounds: initialLosersBracket.length > 0 ? initialLosersBracket : undefined,
+        grandFinal: initialGrandFinal.length > 0 ? initialGrandFinal : undefined,
+        swissRounds: initialSwissRounds.length > 0 ? initialSwissRounds : undefined
+    };
+
+    const finalSettingsWithStages = {
+        ...finalSettings,
+        stages: settings.stages && settings.stages.length > 0 ? settings.stages : [initialStage]
+    };
+
     const t: Tournament = {
       id: Date.now().toString(),
       name,
@@ -588,7 +607,7 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
       game: tourneyGame,
       prizePool: prizePool || (tourneyGame === 'so2' ? '1,500,000 ₽' : '$100,000'),
       createdAt: Date.now(),
-      settings: finalSettings,
+      settings: finalSettingsWithStages,
       teams,
       activeStage: 1,
       completed: false,
@@ -1114,9 +1133,11 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
       }
 
       const formatChanged = activeTournament.settings.mode !== newSettings.mode || 
-                            activeTournament.settings.numberOfGroups !== newSettings.numberOfGroups || 
-                            activeTournament.settings.matchesPerPairing !== newSettings.matchesPerPairing ||
-                            activeTournament.settings.eliminationType !== newSettings.eliminationType;
+                            (activeTournament.settings.numberOfGroups || 2) !== (newSettings.numberOfGroups || 2) || 
+                            (activeTournament.settings.matchesPerPairing || 1) !== (newSettings.matchesPerPairing || 1) ||
+                            (activeTournament.settings.eliminationType || 'single') !== (newSettings.eliminationType || 'single') ||
+                            (activeTournament.settings.swissWinsToAdvance || 3) !== (newSettings.swissWinsToAdvance || 3) ||
+                            (activeTournament.settings.swissLossesToEliminate || 3) !== (newSettings.swissLossesToEliminate || 3);
       
       const oldTeamIds = new Set(activeTournament.teams.map(t => t.id));
       const newTeamIds = new Set(newTeams.map(t => t.id));
@@ -1490,6 +1511,13 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                   updatedGroups[gIdx] = updatedGroup;
                   newT.gslGroups = updatedGroups;
 
+                  // Record match result to global history
+                  const bracket = bracketType === 'upper' ? updatedGroup.upperBracket : updatedGroup.lowerBracket;
+                  const recordedMatch = bracket?.[rIdx]?.[mIdx];
+                  if (recordedMatch) {
+                      recordTournamentMatchResult(userId, newT, recordedMatch, `GSL ${updatedGroup.name || ''}`);
+                  }
+
                   // Auto-advance to Stage 2 if all GSL groups finished
                   const allFinished = newT.gslGroups.every(group => {
                       const standings = getGslGroupStandings(group, advanceCount);
@@ -1509,6 +1537,12 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
           if (newT.tieredBracketRounds) {
               const updatedRounds = advanceTieredPlayoffMatch(newT.tieredBracketRounds, rIdx, mIdx, score1, score2);
               newT.tieredBracketRounds = updatedRounds;
+              
+              // Record match result to global history
+              const recordedMatch = updatedRounds[rIdx]?.[mIdx];
+              if (recordedMatch) {
+                  recordTournamentMatchResult(userId, newT, recordedMatch, 'Playoff');
+              }
           }
       } else if (matchInfo && matchInfo.stage === 'group') {
           const newGroups = newT.groups?.map((g: any) => {
@@ -1518,7 +1552,12 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                   let wId = null;
                   if (score1 > score2) wId = m.team1?.id;
                   else if (score2 > score1) wId = m.team2?.id;
-                  return { ...m, score1, score2, winnerId: wId, isFinished: true };
+                  const updatedM = { ...m, score1, score2, winnerId: wId, isFinished: true };
+                  
+                  // Record match result to global history
+                  recordTournamentMatchResult(userId, newT, updatedM, `${matchInfo.stage} ${g.name || ''}`);
+
+                  return updatedM;
               });
               return { ...g, matches: newMatches };
           });
@@ -1534,6 +1573,9 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
               m.isFinished = true;
               newRounds[matchInfo.rIdx][matchInfo.mIdx] = m;
               
+              // Record match result to global history
+              recordTournamentMatchResult(userId, newT, m, matchInfo.stage);
+
               // Check if round is finished and generate next Swiss round if needed
               const currentRound = newRounds[matchInfo.rIdx];
               const isRoundFinished = currentRound.every(rm => rm.isFinished || (rm.team1?.id === 'BYE' || rm.team2?.id === 'BYE'));
@@ -1571,6 +1613,10 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
               matchToUpdate.score2 = score2;
               if (score1 > score2) matchToUpdate.winnerId = matchToUpdate.team1?.id || null;
               else if (score2 > score1) matchToUpdate.winnerId = matchToUpdate.team2?.id || null;
+              matchToUpdate.isFinished = true;
+
+              // Record match result to global history
+              recordTournamentMatchResult(userId, newT, matchToUpdate, matchInfo.stage);
 
               const winningTeam = score1 > score2 ? matchToUpdate.team1 : matchToUpdate.team2;
               const losingTeam = score1 > score2 ? matchToUpdate.team2 : matchToUpdate.team1;
@@ -1851,15 +1897,34 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                       <ArrowLeft className="w-4 h-4" /> Назад к турниру
                   </button>
                   <h2 className="text-3xl font-black mb-8 text-[#ff8f00]">Настройки турнира</h2>
-                  <TournamentSettingsForm user={user} 
-                      initialName={activeTournament.name}
-                      initialLogoUrl={activeTournament.logoUrl}
-                      initialPrizePool={activeTournament.prizePool || '$100,000'}
-                      initialSettings={activeTournament.settings}
-                      initialTeams={activeTournament.teams}
-                      onSave={handleEditSave}
-                      submitLabel="Сохранить изменения"
-                  />
+                    <TournamentSettingsForm user={user} 
+                        initialName={activeTournament.name}
+                        initialLogoUrl={activeTournament.logoUrl}
+                        initialPrizePool={activeTournament.prizePool || '$100,000'}
+                        initialSettings={
+                            activeTournament.settings.stages && activeTournament.settings.stages.length > 0
+                                ? activeTournament.settings
+                                : {
+                                    ...activeTournament.settings,
+                                    stages: [{
+                                        id: 'stage_1',
+                                        name: activeTournament.settings.mode === 'swiss' ? 'Швейцарская система' : (activeTournament.settings.mode === 'two_stage' ? 'Групповой этап' : 'Основная сетка'),
+                                        type: (activeTournament.settings.stage1Type as any) || (activeTournament.settings.mode === 'swiss' ? 'swiss' : (activeTournament.settings.mode === 'two_stage' ? 'groups' : 'playoff')),
+                                        teams: [...activeTournament.teams],
+                                        groups: activeTournament.groups,
+                                        gslGroups: activeTournament.gslGroups,
+                                        bracketRounds: activeTournament.bracketRounds,
+                                        losersBracketRounds: activeTournament.losersBracketRounds,
+                                        grandFinal: activeTournament.grandFinal,
+                                        swissRounds: activeTournament.swissRounds,
+                                        qualifiersBrackets: activeTournament.qualifiersBrackets
+                                    }]
+                                }
+                        }
+                        initialTeams={activeTournament.teams}
+                        onSave={handleEditSave}
+                        submitLabel="Сохранить изменения"
+                    />
               </div>
           );
       }
@@ -2548,6 +2613,25 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
 
                                               {/* Stage Action Buttons */}
                                               <div className="flex flex-wrap items-center gap-2">
+                                                  <button 
+                                                      onClick={() => setShowRosters(true)} 
+                                                      className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all border border-zinc-700 flex items-center gap-2 cursor-pointer shadow-md active:scale-95"
+                                                  >
+                                                      <Users className="w-3.5 h-3.5" /> СОСТАВЫ
+                                                  </button>
+
+                                                  <button 
+                                                      onClick={() => setIsSwapMode(!isSwapMode)} 
+                                                      className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-md active:scale-95 ${
+                                                          isSwapMode 
+                                                              ? 'bg-orange-600 text-white shadow-orange-500/30' 
+                                                              : 'bg-orange-600/10 hover:bg-orange-600/20 text-orange-400 border border-orange-500/20'
+                                                      }`}
+                                                      title="Включить режим ручного изменения команд в матчах"
+                                                  >
+                                                      <ArrowLeftRight className="w-3.5 h-3.5" /> ИЗМЕНИТЬ ПАРЫ
+                                                  </button>
+
                                                   {currentStageIdx > 0 && configuredStages[currentStageIdx - 1] && (
                                                       <button
                                                           type="button"
