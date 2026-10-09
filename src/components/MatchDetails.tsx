@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Download, Trophy } from 'lucide-react';
+import { X, Download, Trophy, Check } from 'lucide-react';
 import TeamLogo from './TeamLogo';
 import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { RatingSystem } from '../match-logic/systems/RatingSystem';

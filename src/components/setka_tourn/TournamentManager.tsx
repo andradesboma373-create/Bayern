@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2, Users, ArrowLeftRight, Layout, Database } from 'lucide-react';
-import { Tournament, TournamentSettings, Team, Match, Group } from './types';
+import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2, Users, ArrowLeftRight, Layout, Database, Save } from 'lucide-react';
+import { Tournament, TournamentSettings, Team, Match, Group, TournamentStageConfig } from './types';
 import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage, setTournamentBgImage, setTournamentLogoUrl, syncTournamentsWithServer, normalizeTournament } from './storage';
 import SingleEliminationStage from './SingleEliminationStage';
 import GroupStage from './GroupStage';
@@ -229,6 +229,27 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
   const [isSeedingOpen, setIsSeedingOpen] = useState(false);
   const [seedingTeams, setSeedingTeams] = useState<Team[]>([]);
   const [historyStack, setHistoryStack] = useState<Tournament[]>([]);
+  const [isSavingBracket, setIsSavingBracket] = useState(false);
+  const [saveBracketSuccess, setSaveBracketSuccess] = useState(false);
+  const [saveToastMessage, setSaveToastMessage] = useState<string | null>(null);
+
+  const handleManualSaveBracket = () => {
+    if (!activeTournament) return;
+    setIsSavingBracket(true);
+    try {
+      handleUpdateActive(activeTournament);
+      setSaveBracketSuccess(true);
+      setSaveToastMessage("Сетка турнира успешно сохранена в базу данных!");
+      setTimeout(() => {
+        setSaveBracketSuccess(false);
+        setSaveToastMessage(null);
+      }, 3000);
+    } catch (e: any) {
+      alert("Ошибка при сохранении сетки: " + (e?.message || e));
+    } finally {
+      setIsSavingBracket(false);
+    }
+  };
 
   const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0] && activeTournament) {
@@ -1029,6 +1050,24 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
           toSave.winnerName = winnerName;
       }
 
+      // Ensure active stage in settings.stages is strictly synchronized with root brackets
+      if (toSave.settings && Array.isArray(toSave.settings.stages) && toSave.settings.stages.length > 0) {
+        const curStageIdx = Math.min(Math.max(0, (toSave.activeStage || 1) - 1), toSave.settings.stages.length - 1);
+        if (toSave.settings.stages[curStageIdx]) {
+          toSave.settings.stages[curStageIdx] = {
+            ...toSave.settings.stages[curStageIdx],
+            bracketRounds: toSave.bracketRounds || toSave.settings.stages[curStageIdx].bracketRounds,
+            losersBracketRounds: toSave.losersBracketRounds || toSave.settings.stages[curStageIdx].losersBracketRounds,
+            grandFinal: toSave.grandFinal || toSave.settings.stages[curStageIdx].grandFinal,
+            groups: toSave.groups || toSave.settings.stages[curStageIdx].groups,
+            gslGroups: toSave.gslGroups || toSave.settings.stages[curStageIdx].gslGroups,
+            swissRounds: toSave.swissRounds || toSave.settings.stages[curStageIdx].swissRounds,
+            qualifiersBrackets: toSave.qualifiersBrackets || toSave.settings.stages[curStageIdx].qualifiersBrackets,
+            tieredBracketRounds: toSave.tieredBracketRounds || toSave.settings.stages[curStageIdx].tieredBracketRounds,
+          };
+        }
+      }
+
       try {
           saveTournament(userId, toSave);
           setActiveTournament(toSave);
@@ -1441,7 +1480,8 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
               format: (activeTournament.settings?.matchFormat || 'bo3').toUpperCase(),
               selectedTournament: activeTournament.id,
               tournament: activeTournament,
-              matchInfo: matchInfo
+              matchInfo: matchInfo,
+              returnPath: tournamentId ? `/tournaments-beta/${activeTournament.id}` : '/tournaments'
           }
       });
   };
@@ -1943,6 +1983,21 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                       </div>
                       
                       <div className="flex items-center gap-3 flex-wrap">
+                           {/* Save Bracket Button */}
+                           <button 
+                             onClick={handleManualSaveBracket}
+                             disabled={isSavingBracket}
+                             className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg ${
+                               saveBracketSuccess 
+                                 ? 'bg-emerald-500 text-white shadow-emerald-500/40' 
+                                 : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25 active:scale-95'
+                             }`}
+                             title="Гарантированно сохранить сетку турнира и результаты матчей в базу"
+                           >
+                             {saveBracketSuccess ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                             {isSavingBracket ? 'СОХРАНЕНИЕ...' : saveBracketSuccess ? 'СЕТКА СОХРАНЕНА!' : 'СОХРАНИТЬ СЕТКУ'}
+                           </button>
+
                            {/* Quick Zoom Controls */}
                            <div className="flex items-center bg-black/40 rounded-xl border border-white/5 p-1 mr-2">
                               <button 
@@ -2058,6 +2113,14 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                       </div>
                   </div>
               </div>
+
+              {/* Save Toast Notification */}
+              {saveToastMessage && (
+                  <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white font-black text-xs uppercase tracking-wider px-6 py-3 rounded-2xl shadow-2xl shadow-emerald-500/40 flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-200">
+                      <Check className="w-4 h-4" />
+                      <span>{saveToastMessage}</span>
+                  </div>
+              )}
 
               {/* DASHBOARD HUB PANEL (The "New Panel with Buttons" user asked to continue) */}
               {showDashboardHub && activeTournament && (
@@ -3169,7 +3232,7 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                           <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-black/20">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   {(activeTournament.teams || []).map((team, idx) => {
-                                      const roster = activeTournament.settings?.rosters?.find(r => r.id === team.id || r.name === team.name);
+                                      const roster = (activeTournament.settings as any)?.rosters?.find((r: any) => r.id === team.id || r.name === team.name);
                                       const players = roster?.players || team.players || [];
                                       
                                       return (

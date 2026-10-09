@@ -672,7 +672,7 @@ export default function QualifierStage({
                           mIdx={mIdx}
                           onUpdateScore={(type, ri, mi, tn, s) => handleUpdateScore(activeQualIdx, ri, mi, tn, s)}
                           onAdvanceWinner={(type, ri, mi) => handleAdvanceWinner(activeQualIdx, ri, mi)}
-                          onVetoMatch={onVetoMatch}
+                          onVetoMatch={onVetoMatch ? (t1, t2, mi) => onVetoMatch(t1, t2, { ...(mi || {}), stage: 'qualifier', qualIdx: activeQualIdx, rIdx, mIdx }) : undefined}
                           isFinal={isFinalRound}
                           isTop={mIdx % 2 === 0}
                           hasInConnector={rIdx > 0}

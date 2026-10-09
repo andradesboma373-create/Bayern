@@ -8,7 +8,7 @@ interface Props {
   bracketType: 'winners' | 'losers' | 'gf';
   onUpdateScore: (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number, teamNum: 1 | 2, score: number) => void;
   onAdvanceWinner: (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number) => void;
-  onVetoMatch: (t1: Team, t2: Team) => void;
+  onVetoMatch: (t1: Team, t2: Team, matchInfo?: any) => void;
   boxStyle?: any;
   cardThemeColor?: string;
   btnStyle?: string;

@@ -1,5 +1,5 @@
 import { TeamAutocompleteInput } from './TeamAutocompleteInput';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs, updateDoc, writeBatch } from '../firebase';
@@ -13,7 +13,7 @@ import VetoModal from "./VetoModal";
 import MatchStitcherModal from './MatchStitcherModal';
 import SeriesStitcherModal from './SeriesStitcherModal';
 import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass, formatSwing, shuffleArray } from '../lib/utils';
-import { updateBetaTournamentMatchResult, loadTournaments, saveTournament, getCanonicalRoomId } from './setka_tourn/storage';
+import { updateBetaTournamentMatchResult, loadTournaments, saveTournament, getCanonicalRoomId, deserializeTournamentFromFirestore, normalizeTournament } from './setka_tourn/storage';
 import { useGameUniverse } from '../lib/gameUniverse';
 import { Trophy, Sparkles, Layers, ChevronRight, Check } from 'lucide-react';
 
@@ -191,6 +191,18 @@ export default function Simulator({ user }: { user: any }) {
   const [notifyingManagers, setNotifyingManagers] = useState(false);
   const [cs2MapPool, setCs2MapPool] = useState(MAP_POOL_CS2);
   const [s2MapPool, setS2MapPool] = useState(MAP_POOL_S2);
+  const [tournamentMatchInfo, setTournamentMatchInfo] = useState<any>(null);
+  const [tournamentReturnPath, setTournamentReturnPath] = useState<string>('');
+
+  const roomId = useMemo(() => user ? getCanonicalRoomId(user.channelId || user.uid, game) : 'guest', [user, game]);
+
+  const filterTournamentsByGame = useCallback((list: any[]) => {
+    return list.filter(t => {
+      const tGame = t.game || t.settings?.game || 'cs2';
+      if (game === 'so2') return tGame === 'so2';
+      return tGame !== 'so2';
+    }).map((t: any) => ({ ...t, displayName: t.name }));
+  }, [game]);
 
   useEffect(() => {
     fetch('/api/maps/list')
@@ -331,6 +343,14 @@ export default function Simulator({ user }: { user: any }) {
         if (state.selectedTournament) {
           setSelectedTournament(state.selectedTournament);
         }
+        if (state.matchInfo) {
+          setTournamentMatchInfo(state.matchInfo);
+        }
+        if (state.returnPath) {
+          setTournamentReturnPath(state.returnPath);
+        } else if (state.selectedTournament) {
+          setTournamentReturnPath(`/tournaments-beta/${state.selectedTournament}`);
+        }
         setTeam1Synergy(100);
         setTeam2Synergy(100);
         setTeam1Form(0);
@@ -466,7 +486,7 @@ export default function Simulator({ user }: { user: any }) {
         if (user.isLocalDemo) {
           
         }
-        const q = query(collection(db, 'matches'), where('userId', '==', user.uid));
+        const q = query(collection(db, 'matches'), where('userId', '==', roomId));
         const snap = await getDocs(q);
         const combined = snap.docs.map(d => ({...d.data(), id: d.id}));
         const filtered = combined.filter((m: any) => 
@@ -479,7 +499,7 @@ export default function Simulator({ user }: { user: any }) {
         setH2hMatches(filtered.slice(0, 50));
       } catch (e) {
         
-        const localMatches = JSON.parse(localStorage.getItem(`matches_${user.uid}`) || '[]');
+        const localMatches = JSON.parse(localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${user.uid}`) || '[]');
         const filtered = localMatches.filter((m: any) => 
           m.team1Name && m.team2Name && (
             (m.team1Name.toLowerCase() === team1Name.toLowerCase() && m.team2Name.toLowerCase() === team2Name.toLowerCase()) ||
@@ -497,39 +517,55 @@ export default function Simulator({ user }: { user: any }) {
     if (user) {
       const fetchData = async () => {
         // 1. Immediate local cache load for maximum speed and offline support
-        const localTournaments = loadTournaments(user.uid);
-        setTournaments(localTournaments.map((t: any) => ({ ...t, displayName: t.name })));
+        const localTournaments = loadTournaments(roomId);
+        setTournaments(filterTournamentsByGame(localTournaments));
 
-        const localMatches = JSON.parse(localStorage.getItem(`matches_${user.uid}`) || '[]');
+        const localMatches = JSON.parse(localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${user.uid}`) || '[]');
         setHistoryMatches(localMatches.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
         
         try {
           const { migrateMatchesToMapStats } = await import('../lib/mapStats');
-          migrateMatchesToMapStats(user.uid, localMatches);
+          migrateMatchesToMapStats(roomId, localMatches);
         } catch (e) {}
 
         try {
           if (user.isLocalDemo) {
             return;
           }
-          const q = query(collection(db, 'tournaments'), where('userId', '==', user.uid));
+
+          // Fetch remote tournaments for the room
+          const q = query(collection(db, 'tournaments'), where('userId', '==', roomId));
           const qs = await getDocs(q);
-          const dbTourneys = qs.docs.map(d => ({ ...d.data(), id: d.id, displayName: d.data().name }));
-          setTournaments(dbTourneys);
+          const dbTourneys = qs.docs.map(d => {
+            const data = d.data();
+            const deserialized = deserializeTournamentFromFirestore({ ...data, id: d.id });
+            return normalizeTournament(deserialized);
+          });
+          
+          // Merge local and remote without duplicates
+          const mergedTourneys = [...localTournaments];
+          dbTourneys.forEach(dt => {
+            if (!mergedTourneys.find(t => t.id === dt.id)) {
+              mergedTourneys.push(dt);
+            }
+          });
+
+          setTournaments(filterTournamentsByGame(mergedTourneys));
+
           try {
-            localStorage.setItem(`tournaments_${user.uid}`, JSON.stringify(dbTourneys));
+            localStorage.setItem(`tournaments_${roomId}`, JSON.stringify(dbTourneys));
           } catch (e) {}
           
-          const mq = query(collection(db, 'matches'), where('userId', '==', user.uid));
+          const mq = query(collection(db, 'matches'), where('userId', '==', roomId));
           const mqs = await getDocs(mq);
           const dbMatches = mqs.docs.map(d => ({ ...d.data(), id: d.id })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
           setHistoryMatches(dbMatches);
           try {
             const { migrateMatchesToMapStats } = await import('../lib/mapStats');
-            migrateMatchesToMapStats(user.uid, dbMatches);
+            migrateMatchesToMapStats(roomId, dbMatches);
           } catch (e) {}
           try {
-            saveMatchesToLocalStorage(user.uid, dbMatches);
+            saveMatchesToLocalStorage(roomId, dbMatches);
           } catch (e) {}
         } catch (e) {
           console.warn("Using localStorage fallback for tournaments/matches in Simulator", e);
@@ -539,13 +575,13 @@ export default function Simulator({ user }: { user: any }) {
       fetchData();
 
       const handleSync = () => {
-        const updatedTourneys = loadTournaments(user.uid);
-        setTournaments(updatedTourneys.map((t: any) => ({ ...t, displayName: t.name })));
+        const updatedTourneys = loadTournaments(roomId);
+        setTournaments(filterTournamentsByGame(updatedTourneys));
       };
       window.addEventListener('tournaments-updated', handleSync);
       return () => window.removeEventListener('tournaments-updated', handleSync);
     }
-  }, [user]);
+  }, [user, roomId, filterTournamentsByGame]);
 
   const downloadPhoto = async () => {
     if (!result || !resultContainerRef.current) return;
@@ -682,7 +718,8 @@ export default function Simulator({ user }: { user: any }) {
             newMatch.team1Name,
             newMatch.team2Name,
             newMatch.team1Score,
-            newMatch.team2Score
+            newMatch.team2Score,
+            tournamentMatchInfo
           );
           if (user.uid !== roomId) {
             updateBetaTournamentMatchResult(
@@ -691,7 +728,8 @@ export default function Simulator({ user }: { user: any }) {
               newMatch.team1Name,
               newMatch.team2Name,
               newMatch.team1Score,
-              newMatch.team2Score
+              newMatch.team2Score,
+              tournamentMatchInfo
             );
           }
           const localTourneys = loadTournaments(roomId);
@@ -997,17 +1035,31 @@ export default function Simulator({ user }: { user: any }) {
               <button 
                 onClick={async () => {
                    try {
+                      const targetTournId = result.tournamentId || selectedTournament;
                       const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
                       updateBetaTournamentMatchResult(
                         roomId,
-                        result.tournamentId,
+                        targetTournId,
                         result.team1Name,
                         result.team2Name,
                         result.team1Score,
-                        result.team2Score
+                        result.team2Score,
+                        tournamentMatchInfo
                       );
-                      alert("Результат успешно сохранен в базу турнира!");
-                      navigate(`/tournaments-beta/${result.tournamentId}`);
+                      if (user.uid !== roomId) {
+                        updateBetaTournamentMatchResult(
+                          user.uid,
+                          targetTournId,
+                          result.team1Name,
+                          result.team2Name,
+                          result.team1Score,
+                          result.team2Score,
+                          tournamentMatchInfo
+                        );
+                      }
+                      alert("Результат успешно записан в сетку турнира!");
+                      const targetRoute = tournamentReturnPath || `/tournaments-beta/${targetTournId}`;
+                      navigate(targetRoute);
                    } catch (e) {
                       console.error(e);
                       alert("Ошибка при сохранении");
@@ -1072,8 +1124,6 @@ export default function Simulator({ user }: { user: any }) {
               <div className="flex flex-col items-center gap-3 mb-6 relative z-10 animate-bounce-slow">
                 <button 
                   onClick={async () => {
-                    // Force an extra save just in case
-                    const matchToSave = { ...result, maps: result.maps.map((m: any) => { const { roundLogs, ...rest } = m; return rest; }) };
                     const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
                     
                     try {
@@ -1084,11 +1134,25 @@ export default function Simulator({ user }: { user: any }) {
                         result.team1Name,
                         result.team2Name,
                         result.team1Score,
-                        result.team2Score
+                        result.team2Score,
+                        tournamentMatchInfo
                       );
+                      if (user.uid !== roomId) {
+                        updateBetaTournamentMatchResult(
+                          user.uid,
+                          selectedTournament,
+                          result.team1Name,
+                          result.team2Name,
+                          result.team1Score,
+                          result.team2Score,
+                          tournamentMatchInfo
+                        );
+                      }
                       
+                      alert("Результат успешно записан в сетку турнира!");
                       // 2. Navigate back
-                      navigate(`/tournaments-beta/${selectedTournament}`);
+                      const targetRoute = tournamentReturnPath || `/tournaments-beta/${selectedTournament}`;
+                      navigate(targetRoute);
                     } catch (e) {
                       console.error("Error saving match to tournament:", e);
                       alert("Ошибка при сохранении в турнир");

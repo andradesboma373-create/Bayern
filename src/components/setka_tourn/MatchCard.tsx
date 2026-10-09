@@ -276,7 +276,7 @@ export default function MatchCard({
                         bracketMode === 'realtime' ? (
                             onVetoMatch ? (
                                 <button 
-                                    onClick={() => onVetoMatch(match.team1!, match.team2!)} 
+                                    onClick={() => onVetoMatch(match.team1!, match.team2!, { bracketType, rIdx, mIdx, matchId: match.id, stage: 'playoff' })} 
                                     className="w-full mt-2 bg-purple-600 hover:bg-purple-500 text-white border border-purple-400 rounded-lg py-2 px-3 text-xs font-black uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(168,85,247,0.4)] flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
                                     🎮 Сыграть Матч (Симуляция)
@@ -300,7 +300,7 @@ export default function MatchCard({
                                 {onVetoMatch && (
                                     <button 
                                         type="button"
-                                        onClick={() => onVetoMatch(match.team1!, match.team2!)} 
+                                        onClick={() => onVetoMatch(match.team1!, match.team2!, { bracketType, rIdx, mIdx, matchId: match.id, stage: 'playoff' })} 
                                         className="w-full bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-lg py-1.5 px-2 text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
                                         title="Сыграть полноценный матч через симулятор с пиком карт и раундами"
                                     >

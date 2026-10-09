@@ -11,6 +11,7 @@ import { generateNextSwissRound } from "./swissLogic";
 import { db, deleteDoc, doc, setDoc } from "../../firebase";
 import { safeLocalStorageSet } from "../../lib/utils";
 import { SO2_TEAMS } from "../../lib/so2Assets";
+import { recordTournamentMatchResult } from "../../lib/tournamentMatchRecorder";
 
 let memoryCache: Record<string, Tournament[]> = {};
 
@@ -381,6 +382,14 @@ export const serializeTournamentForFirestore = (tournament: Tournament): any => 
           s.qualifiersBrackets_json = JSON.stringify(s.qualifiersBrackets);
           delete s.qualifiersBrackets;
         }
+        if (Array.isArray(s.tieredBracketRounds)) {
+          s.tieredBracketRounds_json = JSON.stringify(s.tieredBracketRounds);
+          delete s.tieredBracketRounds;
+        }
+        if (Array.isArray(s.groups)) {
+          s.groups_json = JSON.stringify(s.groups);
+          delete s.groups;
+        }
         return s;
       })
     };
@@ -417,6 +426,9 @@ export const deserializeTournamentFromFirestore = (data: any): Tournament => {
   if (t.gslGroups_json && (!t.gslGroups || !Array.isArray(t.gslGroups))) {
     try { t.gslGroups = JSON.parse(t.gslGroups_json); } catch (e) {}
   }
+  if (t.groups_json && (!t.groups || !Array.isArray(t.groups))) {
+    try { t.groups = JSON.parse(t.groups_json); } catch (e) {}
+  }
 
   if (t.settings && Array.isArray(t.settings.stages)) {
     t.settings.stages = t.settings.stages.map((stg: any) => {
@@ -430,8 +442,14 @@ export const deserializeTournamentFromFirestore = (data: any): Tournament => {
       const sSwiss = ensureArrayOfRounds(s.swissRounds, s.swissRounds_json);
       if (sSwiss) s.swissRounds = sSwiss;
 
+      const sTiered = ensureArrayOfRounds(s.tieredBracketRounds, s.tieredBracketRounds_json);
+      if (sTiered) s.tieredBracketRounds = sTiered;
+
       if (s.gslGroups_json && (!s.gslGroups || !Array.isArray(s.gslGroups))) {
         try { s.gslGroups = JSON.parse(s.gslGroups_json); } catch (e) {}
+      }
+      if (s.groups_json && (!s.groups || !Array.isArray(s.groups))) {
+        try { s.groups = JSON.parse(s.groups_json); } catch (e) {}
       }
       const sQuals = ensureArrayOfQualifiers(s.qualifiersBrackets, s.qualifiersBrackets_json);
       if (sQuals) s.qualifiersBrackets = sQuals;
@@ -1123,33 +1141,59 @@ export const updateBetaTournamentMatchResult = (
   team2Name: string,
   team1Score: number,
   team2Score: number,
+  matchInfo?: any
 ) => {
   try {
-    const all = loadTournaments(userId);
-    const tourney = all.find((t) => t.id === tournamentId);
+    const roomId = getCanonicalRoomId(userId);
+    let all = loadTournaments(roomId, true);
+    let tourney = all.find((t) => t.id === tournamentId);
+    if (!tourney && userId !== roomId) {
+      const userAll = loadTournaments(userId, true);
+      tourney = userAll.find((t) => t.id === tournamentId);
+    }
+    if (!tourney) {
+      // Fallback: check isolated item
+      const raw = localStorage.getItem(`tournament_item_${roomId}_${tournamentId}`) ||
+                  (userId !== roomId ? localStorage.getItem(`tournament_item_${userId}_${tournamentId}`) : null);
+      if (raw) {
+        try {
+          tourney = normalizeTournament(JSON.parse(raw));
+        } catch (e) {}
+      }
+    }
     if (!tourney) return;
 
     const normalize = (s: string) => (s || "").trim().toLowerCase();
     const name1 = normalize(team1Name);
     const name2 = normalize(team2Name);
 
+    const isMatchForTeams = (m: any) => {
+      if (!m || !m.team1 || !m.team2) return false;
+      const m1 = normalize(m.team1.name || "");
+      const m2 = normalize(m.team2.name || "");
+      if ((m1 === name1 && m2 === name2) || (m1 === name2 && m2 === name1)) return true;
+      if (name1.length > 3 && name2.length > 3) {
+        if ((m1.includes(name1) && m2.includes(name2)) || (m1.includes(name2) && m2.includes(name1))) return true;
+      }
+      return false;
+    };
+
     let updated = false;
 
-    if (tourney.bracketRounds) {
-      const isDouble = tourney.settings?.eliminationType === "double";
-      let wBracket = tourney.bracketRounds
-        ? JSON.parse(JSON.stringify(tourney.bracketRounds))
-        : [];
-      let lBracket = tourney.losersBracketRounds
-        ? JSON.parse(JSON.stringify(tourney.losersBracketRounds))
-        : [];
-      let gFinal = tourney.grandFinal
-        ? JSON.parse(JSON.stringify(tourney.grandFinal))
-        : [];
+    // Helper: update a single playoff bracket structure
+    const applyToPlayoffBracket = (
+      wBracket: any[],
+      lBracket: any[],
+      gFinal: any[],
+      isDouble: boolean,
+      stageLabel: string = 'Playoff'
+    ): boolean => {
+      let bracketUpdated = false;
 
       const searchAndApply = (bracket: any[], type: "w" | "l" | "gf") => {
         for (let rIdx = 0; rIdx < bracket.length; rIdx++) {
-          const actualMatches = type === "gf" ? [bracket[rIdx]] : bracket[rIdx];
+          const actualMatches = type === "gf" ? (Array.isArray(bracket[rIdx]) ? bracket[rIdx] : [bracket[rIdx]]) : bracket[rIdx];
+          if (!Array.isArray(actualMatches)) continue;
           for (let mIdx = 0; mIdx < actualMatches.length; mIdx++) {
             const m = actualMatches[mIdx];
             if (!m || !m.team1 || !m.team2) continue;
@@ -1158,8 +1202,7 @@ export const updateBetaTournamentMatchResult = (
             const m2 = normalize(m.team2.name || "");
 
             let matchFound = false;
-            let s1 = 0,
-              s2 = 0;
+            let s1 = 0, s2 = 0;
 
             if (m1 === name1 && m2 === name2) {
               matchFound = true;
@@ -1169,6 +1212,10 @@ export const updateBetaTournamentMatchResult = (
               matchFound = true;
               s1 = team2Score;
               s2 = team1Score;
+            } else if (isMatchForTeams(m)) {
+              matchFound = true;
+              s1 = team1Score;
+              s2 = team2Score;
             }
 
             if (matchFound) {
@@ -1177,7 +1224,12 @@ export const updateBetaTournamentMatchResult = (
               const winnerTeam = s1 > s2 ? m.team1 : s2 > s1 ? m.team2 : null;
               const loserTeam = s1 > s2 ? m.team2 : s2 > s1 ? m.team1 : null;
               m.winnerId = winnerTeam ? winnerTeam.id : null;
-              updated = true;
+              m.isFinished = true;
+              bracketUpdated = true;
+
+              try {
+                recordTournamentMatchResult(roomId, tourney!, m, stageLabel);
+              } catch (e) {}
 
               if (winnerTeam && loserTeam) {
                 if (isDouble) {
@@ -1196,9 +1248,9 @@ export const updateBetaTournamentMatchResult = (
                     lBracket,
                     gFinal,
                   );
-                  tourney.bracketRounds = cascaded.winnersBracket;
-                  tourney.losersBracketRounds = cascaded.losersBracket;
-                  tourney.grandFinal = cascaded.grandFinal;
+                  wBracket.splice(0, wBracket.length, ...cascaded.winnersBracket);
+                  lBracket.splice(0, lBracket.length, ...cascaded.losersBracket);
+                  gFinal.splice(0, gFinal.length, ...cascaded.grandFinal);
                 } else {
                   if (type === "w" && rIdx < bracket.length - 1) {
                     const nextRoundIdx = rIdx + 1;
@@ -1210,7 +1262,6 @@ export const updateBetaTournamentMatchResult = (
                       else nextMatch.team2 = winnerTeam;
                     }
                   }
-                  tourney.bracketRounds = wBracket;
                 }
               }
               return true;
@@ -1220,96 +1271,205 @@ export const updateBetaTournamentMatchResult = (
         return false;
       };
 
-      if (!updated && wBracket.length > 0)
-        updated = searchAndApply(wBracket, "w");
-      if (!updated && lBracket.length > 0)
-        updated = searchAndApply(lBracket, "l");
-      if (!updated && gFinal.length > 0) updated = searchAndApply(gFinal, "gf");
-    }
+      if (!bracketUpdated && wBracket && wBracket.length > 0) bracketUpdated = searchAndApply(wBracket, "w");
+      if (!bracketUpdated && lBracket && lBracket.length > 0) bracketUpdated = searchAndApply(lBracket, "l");
+      if (!bracketUpdated && gFinal && gFinal.length > 0) bracketUpdated = searchAndApply(gFinal, "gf");
 
-    if (!updated && tourney.groups) {
-      for (const group of tourney.groups) {
+      return bracketUpdated;
+    };
+
+    // Helper: update qualifiers brackets
+    const applyToQualifiersBrackets = (qualBrackets: any[][][]): boolean => {
+      if (!Array.isArray(qualBrackets)) return false;
+      let qualUpdated = false;
+
+      for (let qIdx = 0; qIdx < qualBrackets.length; qIdx++) {
+        const bracket = qualBrackets[qIdx];
+        if (!Array.isArray(bracket)) continue;
+
+        for (let rIdx = 0; rIdx < bracket.length; rIdx++) {
+          const round = bracket[rIdx];
+          if (!Array.isArray(round)) continue;
+
+          for (let mIdx = 0; mIdx < round.length; mIdx++) {
+            const m = round[mIdx];
+            if (!m || !m.team1 || !m.team2) continue;
+
+            let matchFound = false;
+            let s1 = 0, s2 = 0;
+            const m1 = normalize(m.team1.name || "");
+            const m2 = normalize(m.team2.name || "");
+
+            if (m1 === name1 && m2 === name2) {
+              matchFound = true;
+              s1 = team1Score;
+              s2 = team2Score;
+            } else if (m1 === name2 && m2 === name1) {
+              matchFound = true;
+              s1 = team2Score;
+              s2 = team1Score;
+            } else if (isMatchForTeams(m)) {
+              matchFound = true;
+              s1 = team1Score;
+              s2 = team2Score;
+            }
+
+            if (matchFound) {
+              m.score1 = s1;
+              m.score2 = s2;
+              const winnerTeam = s1 > s2 ? m.team1 : s2 > s1 ? m.team2 : null;
+              m.winnerId = winnerTeam ? winnerTeam.id : null;
+              m.isFinished = true;
+              qualUpdated = true;
+
+              try {
+                recordTournamentMatchResult(roomId, tourney!, m, `Квалификация ${qIdx + 1}`);
+              } catch (e) {}
+
+              // Advance winner in single elim qualifiers bracket
+              if (winnerTeam && rIdx < bracket.length - 1) {
+                const nextRoundIdx = rIdx + 1;
+                const nextMatchIdx = Math.floor(mIdx / 2);
+                const isTeam1 = mIdx % 2 === 0;
+                const nextMatch = bracket[nextRoundIdx]?.[nextMatchIdx];
+                if (nextMatch) {
+                  if (isTeam1) nextMatch.team1 = winnerTeam;
+                  else nextMatch.team2 = winnerTeam;
+                }
+              }
+              return true;
+            }
+          }
+        }
+      }
+      return qualUpdated;
+    };
+
+    // Helper: update groups
+    const applyToGroups = (groups: any[]): boolean => {
+      if (!Array.isArray(groups)) return false;
+      let grpUpdated = false;
+
+      for (const group of groups) {
+        if (!group || !Array.isArray(group.matches)) continue;
         for (const m of group.matches) {
           if (!m || !m.team1 || !m.team2) continue;
+          let matchFound = false;
+          let s1 = 0, s2 = 0;
           const m1 = normalize(m.team1.name || "");
           const m2 = normalize(m.team2.name || "");
 
-          if (
-            (m1 === name1 && m2 === name2) ||
-            (m1 === name2 && m2 === name1)
-          ) {
-            m.score1 = m1 === name1 ? team1Score : team2Score;
-            m.score2 = m1 === name1 ? team2Score : team1Score;
-            if (m.score1 > m.score2) m.winnerId = m.team1.id;
-            else if (m.score2 > m.score1) m.winnerId = m.team2.id;
-            else m.isDraw = true;
-            updated = true;
-            break;
+          if (m1 === name1 && m2 === name2) {
+            matchFound = true;
+            s1 = team1Score;
+            s2 = team2Score;
+          } else if (m1 === name2 && m2 === name1) {
+            matchFound = true;
+            s1 = team2Score;
+            s2 = team1Score;
+          } else if (isMatchForTeams(m)) {
+            matchFound = true;
+            s1 = team1Score;
+            s2 = team2Score;
+          }
+
+          if (matchFound) {
+            m.score1 = s1;
+            m.score2 = s2;
+            m.winnerId = s1 > s2 ? m.team1.id : s2 > s1 ? m.team2.id : null;
+            if (s1 === s2) m.isDraw = true;
+            m.isFinished = true;
+            grpUpdated = true;
+            try {
+              recordTournamentMatchResult(roomId, tourney!, m, `Группа ${group.name || ''}`);
+            } catch (e) {}
+            return true;
           }
         }
-        if (updated) break;
       }
-    }
+      return grpUpdated;
+    };
 
-    if (!updated && tourney.swissRounds) {
-      for (let rIdx = 0; rIdx < tourney.swissRounds.length; rIdx++) {
-        const round = tourney.swissRounds[rIdx];
+    // Helper: update swiss
+    const applyToSwiss = (swissRounds: any[][], tourneyTeams: Team[]): boolean => {
+      if (!Array.isArray(swissRounds)) return false;
+      let swissUpdated = false;
+
+      for (let rIdx = 0; rIdx < swissRounds.length; rIdx++) {
+        const round = swissRounds[rIdx];
         if (!Array.isArray(round)) continue;
         for (let mIdx = 0; mIdx < round.length; mIdx++) {
           const m = round[mIdx];
           if (!m || !m.team1 || !m.team2) continue;
+
+          let matchFound = false;
+          let s1 = 0, s2 = 0;
           const m1 = normalize(m.team1.name || "");
           const m2 = normalize(m.team2.name || "");
 
-          if (
-            (m1 === name1 && m2 === name2) ||
-            (m1 === name2 && m2 === name1)
-          ) {
-            m.score1 = m1 === name1 ? team1Score : team2Score;
-            m.score2 = m1 === name1 ? team2Score : team1Score;
-            m.winnerId =
-              m.score1 > m.score2
-                ? m.team1.id
-                : m.score2 > m.score1
-                  ? m.team2.id
-                  : null;
-            m.isFinished = true;
-            updated = true;
+          if (m1 === name1 && m2 === name2) {
+            matchFound = true;
+            s1 = team1Score;
+            s2 = team2Score;
+          } else if (m1 === name2 && m2 === name1) {
+            matchFound = true;
+            s1 = team2Score;
+            s2 = team1Score;
+          } else if (isMatchForTeams(m)) {
+            matchFound = true;
+            s1 = team1Score;
+            s2 = team2Score;
+          }
 
-            // Check if round is finished and generate next if needed
+          if (matchFound) {
+            m.score1 = s1;
+            m.score2 = s2;
+            m.winnerId = s1 > s2 ? m.team1.id : s2 > s1 ? m.team2.id : null;
+            m.isFinished = true;
+            swissUpdated = true;
+
+            try {
+              recordTournamentMatchResult(roomId, tourney!, m, `Швейцарка Раунд ${rIdx + 1}`);
+            } catch (e) {}
+
             const isRoundFinished = round.every(rm => rm.isFinished || (rm.team1?.id === 'BYE' || rm.team2?.id === 'BYE'));
             if (isRoundFinished) {
-               const winsToAdvance = tourney.settings?.swissWinsToAdvance || 3;
-               const lossesToEliminate = tourney.settings?.swissLossesToEliminate || 3;
-               const nextRound = generateNextSwissRound(tourney.teams || [], tourney.swissRounds, winsToAdvance, lossesToEliminate);
-               if (nextRound) {
-                  tourney.swissRounds.push(nextRound);
-               }
+              const winsToAdvance = tourney?.settings?.swissWinsToAdvance || 3;
+              const lossesToEliminate = tourney?.settings?.swissLossesToEliminate || 3;
+              const nextRound = generateNextSwissRound(tourneyTeams || [], swissRounds, winsToAdvance, lossesToEliminate);
+              if (nextRound) {
+                swissRounds.push(nextRound);
+              }
             }
-            break;
+            return true;
           }
         }
-        if (updated) break;
       }
-    }
+      return swissUpdated;
+    };
 
-    if (!updated && tourney.gslGroups) {
-      for (let gIdx = 0; gIdx < tourney.gslGroups.length; gIdx++) {
-        const g = tourney.gslGroups[gIdx];
-        const advanceCount = tourney.settings?.gslAdvanceCount || 3;
-        
+    // Helper: update GSL
+    const applyToGsl = (gslGroups: any[]): boolean => {
+      if (!Array.isArray(gslGroups)) return false;
+      let gslUpdated = false;
+
+      for (let gIdx = 0; gIdx < gslGroups.length; gIdx++) {
+        const g = gslGroups[gIdx];
+        if (!g) continue;
+        const advanceCount = tourney?.settings?.gslAdvanceCount || 3;
+
         let foundInBracket: 'upper' | 'lower' | null = null;
         let foundRIdx = -1;
         let foundMIdx = -1;
 
         const checkBracket = (b: any[], type: 'upper' | 'lower') => {
+          if (!Array.isArray(b)) return false;
           for (let r = 0; r < b.length; r++) {
+            if (!Array.isArray(b[r])) continue;
             for (let m = 0; m < b[r].length; m++) {
               const match = b[r][m];
               if (!match || !match.team1 || !match.team2) continue;
-              const m1 = normalize(match.team1.name || "");
-              const m2 = normalize(match.team2.name || "");
-              if ((m1 === name1 && m2 === name2) || (m1 === name2 && m2 === name1)) {
+              if (isMatchForTeams(match)) {
                 foundInBracket = type;
                 foundRIdx = r;
                 foundMIdx = m;
@@ -1321,40 +1481,170 @@ export const updateBetaTournamentMatchResult = (
         };
 
         if (checkBracket(g.upperBracket, 'upper') || checkBracket(g.lowerBracket, 'lower')) {
-            const updatedGroup = updateGslMatch(g, foundInBracket!, foundRIdx, foundMIdx, team1Score, team2Score, advanceCount);
-            tourney.gslGroups[gIdx] = updatedGroup;
-            updated = true;
-            
-            // Auto-advance to tiered playoff if all GSL groups finished
-            const allFinished = tourney.gslGroups.every(group => {
-               const standings = getGslGroupStandings(group, advanceCount);
-               return standings.isGroupFinished;
-            });
-            
-            if (allFinished && tourney.activeStage === 1) {
-               const stage2Type = tourney.settings?.stage2Type || 'tiered';
-               if (stage2Type === 'tiered') {
-                  tourney.tieredBracketRounds = generateTieredPlayoffBracket(tourney.gslGroups, advanceCount);
-                  tourney.activeStage = 2;
-               }
+          const updatedGroup = updateGslMatch(g, foundInBracket!, foundRIdx, foundMIdx, team1Score, team2Score, advanceCount);
+          gslGroups[gIdx] = updatedGroup;
+          gslUpdated = true;
+
+          const allFinished = gslGroups.every(group => {
+            const standings = getGslGroupStandings(group, advanceCount);
+            return standings.isGroupFinished;
+          });
+
+          if (allFinished && tourney?.activeStage === 1) {
+            const stage2Type = tourney.settings?.stage2Type || 'tiered';
+            if (stage2Type === 'tiered') {
+              tourney.tieredBracketRounds = generateTieredPlayoffBracket(gslGroups, advanceCount);
+              tourney.activeStage = 2;
             }
-            break;
+          }
+          return true;
+        }
+      }
+      return gslUpdated;
+    };
+
+    // ==========================================
+    // 1. UPDATE WITHIN ALL STAGES (BETA TOURNAMENTS)
+    // ==========================================
+    if (tourney.settings && Array.isArray(tourney.settings.stages) && tourney.settings.stages.length > 0) {
+      const activeStageIdx = Math.min(Math.max(0, (tourney.activeStage || 1) - 1), tourney.settings.stages.length - 1);
+
+      for (let sIdx = 0; sIdx < tourney.settings.stages.length; sIdx++) {
+        const stg = tourney.settings.stages[sIdx];
+        if (!stg) continue;
+
+        let stageChanged = false;
+
+        // A. Qualifiers in stage
+        if (stg.qualifiersBrackets && Array.isArray(stg.qualifiersBrackets)) {
+          if (applyToQualifiersBrackets(stg.qualifiersBrackets)) {
+            stageChanged = true;
+          }
+        }
+
+        // B. Playoff in stage
+        if (!stageChanged && stg.bracketRounds && Array.isArray(stg.bracketRounds)) {
+          const isDouble = (stg.type as any) === 'double_elim' || (stg as any).eliminationType === 'double';
+          const wBracket = stg.bracketRounds || [];
+          const lBracket = stg.losersBracketRounds || [];
+          const gFinal = stg.grandFinal || [];
+          if (applyToPlayoffBracket(wBracket, lBracket, gFinal, isDouble, stg.name || 'Playoff')) {
+            stg.bracketRounds = wBracket;
+            stg.losersBracketRounds = lBracket;
+            stg.grandFinal = gFinal;
+            stageChanged = true;
+          }
+        }
+
+        // C. Groups in stage
+        if (!stageChanged && stg.groups && Array.isArray(stg.groups)) {
+          if (applyToGroups(stg.groups)) {
+            stageChanged = true;
+          }
+        }
+
+        // D. Swiss in stage
+        if (!stageChanged && stg.swissRounds && Array.isArray(stg.swissRounds)) {
+          if (applyToSwiss(stg.swissRounds, stg.teams || tourney.teams || [])) {
+            stageChanged = true;
+          }
+        }
+
+        // E. GSL in stage
+        if (!stageChanged && stg.gslGroups && Array.isArray(stg.gslGroups)) {
+          if (applyToGsl(stg.gslGroups)) {
+            stageChanged = true;
+          }
+        }
+
+        // F. Tiered playoff in stage
+        if (!stageChanged && stg.tieredBracketRounds && Array.isArray(stg.tieredBracketRounds)) {
+          const rounds = stg.tieredBracketRounds;
+          let foundR = -1;
+          let foundM = -1;
+          for (let r = 0; r < rounds.length; r++) {
+            if (!Array.isArray(rounds[r])) continue;
+            for (let m = 0; m < rounds[r].length; m++) {
+              if (isMatchForTeams(rounds[r][m])) {
+                foundR = r;
+                foundM = m;
+                break;
+              }
+            }
+            if (foundR !== -1) break;
+          }
+          if (foundR !== -1) {
+            stg.tieredBracketRounds = advanceTieredPlayoffMatch(rounds, foundR, foundM, team1Score, team2Score);
+            stageChanged = true;
+          }
+        }
+
+        if (stageChanged) {
+          updated = true;
+          // Synchronize this stage's brackets to the root tournament fields if active stage or stage 1
+          if (sIdx === activeStageIdx || sIdx === 0) {
+            tourney.bracketRounds = stg.bracketRounds || tourney.bracketRounds;
+            tourney.losersBracketRounds = stg.losersBracketRounds || tourney.losersBracketRounds;
+            tourney.grandFinal = stg.grandFinal || tourney.grandFinal;
+            tourney.groups = stg.groups || tourney.groups;
+            tourney.gslGroups = stg.gslGroups || tourney.gslGroups;
+            tourney.swissRounds = stg.swissRounds || tourney.swissRounds;
+            tourney.qualifiersBrackets = stg.qualifiersBrackets || tourney.qualifiersBrackets;
+            tourney.tieredBracketRounds = stg.tieredBracketRounds || tourney.tieredBracketRounds;
+          }
+          break;
         }
       }
     }
 
-    if (!updated && tourney.tieredBracketRounds) {
+    // ==========================================
+    // 2. ROOT STRUCTURE CHECKS (STANDARD / LEGACY TOURNAMENTS)
+    // ==========================================
+    if (!updated && tourney.bracketRounds && Array.isArray(tourney.bracketRounds)) {
+      const isDouble = tourney.settings?.eliminationType === "double";
+      const wBracket = tourney.bracketRounds || [];
+      const lBracket = tourney.losersBracketRounds || [];
+      const gFinal = tourney.grandFinal || [];
+      if (applyToPlayoffBracket(wBracket, lBracket, gFinal, isDouble, 'Playoff')) {
+        tourney.bracketRounds = wBracket;
+        tourney.losersBracketRounds = lBracket;
+        tourney.grandFinal = gFinal;
+        updated = true;
+      }
+    }
+
+    if (!updated && tourney.qualifiersBrackets && Array.isArray(tourney.qualifiersBrackets)) {
+      if (applyToQualifiersBrackets(tourney.qualifiersBrackets)) {
+        updated = true;
+      }
+    }
+
+    if (!updated && tourney.groups && Array.isArray(tourney.groups)) {
+      if (applyToGroups(tourney.groups)) {
+        updated = true;
+      }
+    }
+
+    if (!updated && tourney.swissRounds && Array.isArray(tourney.swissRounds)) {
+      if (applyToSwiss(tourney.swissRounds, tourney.teams || [])) {
+        updated = true;
+      }
+    }
+
+    if (!updated && tourney.gslGroups && Array.isArray(tourney.gslGroups)) {
+      if (applyToGsl(tourney.gslGroups)) {
+        updated = true;
+      }
+    }
+
+    if (!updated && tourney.tieredBracketRounds && Array.isArray(tourney.tieredBracketRounds)) {
       const rounds = tourney.tieredBracketRounds;
       let foundR = -1;
       let foundM = -1;
-
       for (let r = 0; r < rounds.length; r++) {
+        if (!Array.isArray(rounds[r])) continue;
         for (let m = 0; m < rounds[r].length; m++) {
-          const match = rounds[r][m];
-          if (!match || !match.team1 || !match.team2) continue;
-          const m1 = normalize(match.team1.name || "");
-          const m2 = normalize(match.team2.name || "");
-          if ((m1 === name1 && m2 === name2) || (m1 === name2 && m2 === name1)) {
+          if (isMatchForTeams(rounds[r][m])) {
             foundR = r;
             foundM = m;
             break;
@@ -1362,15 +1652,39 @@ export const updateBetaTournamentMatchResult = (
         }
         if (foundR !== -1) break;
       }
-
       if (foundR !== -1) {
-         tourney.tieredBracketRounds = advanceTieredPlayoffMatch(rounds, foundR, foundM, team1Score, team2Score);
-         updated = true;
+        tourney.tieredBracketRounds = advanceTieredPlayoffMatch(rounds, foundR, foundM, team1Score, team2Score);
+        updated = true;
+      }
+    }
+
+    // If root was updated, synchronize back to settings.stages[activeStage - 1] if present
+    if (updated && tourney.settings && Array.isArray(tourney.settings.stages) && tourney.settings.stages.length > 0) {
+      const activeStageIdx = Math.min(Math.max(0, (tourney.activeStage || 1) - 1), tourney.settings.stages.length - 1);
+      if (tourney.settings.stages[activeStageIdx]) {
+        tourney.settings.stages[activeStageIdx] = {
+          ...tourney.settings.stages[activeStageIdx],
+          bracketRounds: tourney.bracketRounds || tourney.settings.stages[activeStageIdx].bracketRounds,
+          losersBracketRounds: tourney.losersBracketRounds || tourney.settings.stages[activeStageIdx].losersBracketRounds,
+          grandFinal: tourney.grandFinal || tourney.settings.stages[activeStageIdx].grandFinal,
+          groups: tourney.groups || tourney.settings.stages[activeStageIdx].groups,
+          gslGroups: tourney.gslGroups || tourney.settings.stages[activeStageIdx].gslGroups,
+          swissRounds: tourney.swissRounds || tourney.settings.stages[activeStageIdx].swissRounds,
+          qualifiersBrackets: tourney.qualifiersBrackets || tourney.settings.stages[activeStageIdx].qualifiersBrackets,
+          tieredBracketRounds: tourney.tieredBracketRounds || tourney.settings.stages[activeStageIdx].tieredBracketRounds,
+        };
       }
     }
 
     if (updated) {
-      saveTournament(userId, tourney);
+      saveTournament(roomId, tourney);
+      if (userId !== roomId) {
+        saveTournament(userId, tourney);
+      }
+      window.dispatchEvent(new Event("tournaments-updated"));
+      console.log(`[Tournament Match Result] Successfully updated match for tournament ${tournamentId} and saved brackets`);
+    } else {
+      console.warn(`[Tournament Match Result] Match between ${team1Name} and ${team2Name} not found in tournament ${tournamentId}`);
     }
   } catch (err) {
     console.error("Error updating beta tournament match result:", err);

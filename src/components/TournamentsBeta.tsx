@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Trophy, Sparkles, Plus, Search, Calendar, Users, ChevronRight, LayoutGrid, List, Filter, Trash2, Check, X, Layers, RotateCcw, Download, Database, Flame, Eye, Image as ImageIcon, ArrowLeft } from 'lucide-react';
+import { Trophy, Sparkles, Plus, Search, Calendar, Users, ChevronRight, LayoutGrid, List, Filter, Trash2, Check, X, Layers, RotateCcw, Download, Database, Flame, Eye, Image as ImageIcon, ArrowLeft, Upload, Save } from 'lucide-react';
 import { loadTournaments, deleteTournament, getCanonicalRoomId, saveTournament } from './setka_tourn/storage';
 import { Tournament } from './setka_tourn/types';
 import TournamentManager from './setka_tourn/TournamentManager';
@@ -67,6 +67,65 @@ export default function TournamentsBeta({ user }: { user: any }) {
       setDeletingId(null);
       refreshTournaments();
     }
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportAll = () => {
+    try {
+      const dataStr = JSON.stringify(tournaments, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `tournaments_beta_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Ошибка при экспорте сеток");
+    }
+  };
+
+  const handleExportSingle = (e: React.MouseEvent, t: Tournament) => {
+    e.stopPropagation();
+    try {
+      const dataStr = JSON.stringify(t, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${(t.name || 'tournament').replace(/[^a-zA-Z0-9а-яА-Я_-]/g, '_')}_bracket.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Ошибка при выгрузке сетки турнира");
+    }
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        const listToImport = Array.isArray(parsed) ? parsed : [parsed];
+        const targetRoom = user?.channelId || user?.uid;
+        let count = 0;
+        for (const item of listToImport) {
+          if (item && item.id && item.name) {
+            saveTournament(targetRoom, item);
+            count++;
+          }
+        }
+        alert(`Успешно импортировано сеток турниров: ${count}!`);
+        refreshTournaments();
+      } catch (err: any) {
+        alert("Ошибка при чтении файла JSON: " + (err?.message || err));
+      }
+    };
+    reader.readAsText(file);
+    if (e.target) e.target.value = '';
   };
 
   if (view === 'manager' && selectedTournamentId) {
@@ -142,13 +201,37 @@ export default function TournamentsBeta({ user }: { user: any }) {
           <p className="text-zinc-500 mt-2 font-medium">Создавайте сетки, проводите квалификации и управляйте хабом</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImportFile} 
+            accept=".json" 
+            className="hidden" 
+          />
           <button 
             onClick={refreshTournaments}
-            className="p-4 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded-2xl transition-all hover:bg-zinc-800"
+            className="p-4 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded-2xl transition-all hover:bg-zinc-800 cursor-pointer"
             title="Обновить список"
           >
             <RotateCcw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="p-4 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white rounded-2xl transition-all hover:bg-zinc-800 flex items-center gap-2 text-xs font-black uppercase tracking-wider cursor-pointer"
+            title="Импортировать сетку или турнир из JSON файла"
+          >
+            <Upload className="w-5 h-5 text-emerald-400" />
+            <span className="hidden sm:inline">ИМПОРТ СЕТКИ</span>
+          </button>
+          <button 
+            onClick={handleExportAll}
+            disabled={tournaments.length === 0}
+            className="p-4 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white rounded-2xl transition-all hover:bg-zinc-800 flex items-center gap-2 text-xs font-black uppercase tracking-wider cursor-pointer disabled:opacity-50"
+            title="Скачать все сетки турниров в один JSON бэкап файл"
+          >
+            <Download className="w-5 h-5 text-blue-400" />
+            <span className="hidden sm:inline">ЭКСПОРТ СЕТОК</span>
           </button>
           <button 
             onClick={handleCreateNew}
@@ -206,10 +289,17 @@ export default function TournamentsBeta({ user }: { user: any }) {
               onClick={() => handleSelectTournament(t.id)}
               className="group bg-zinc-900 border border-zinc-800 rounded-3xl p-6 hover:border-blue-500/50 hover:bg-zinc-800 transition-all cursor-pointer relative overflow-hidden shadow-2xl hover:shadow-blue-500/10"
             >
-              <div className="absolute top-4 right-4 z-[60]">
+              <div className="absolute top-4 right-4 z-[60] flex items-center gap-2">
+                <button 
+                  onClick={(e) => handleExportSingle(e, t)}
+                  className="p-3 bg-zinc-800/90 hover:bg-blue-600 text-zinc-400 hover:text-white rounded-2xl transition-all transform hover:scale-110 active:scale-95 border border-zinc-700 hover:border-blue-500 shadow-xl backdrop-blur-md group/download pointer-events-auto cursor-pointer"
+                  title="Скачать JSON бэкап этой сетки"
+                >
+                  <Download className="w-5 h-5 transition-transform group-hover/download:scale-110" />
+                </button>
                 <button 
                   onClick={(e) => confirmDelete(e, t.id)}
-                  className="p-3 bg-zinc-800/90 hover:bg-red-600 text-zinc-400 hover:text-white rounded-2xl transition-all transform hover:scale-110 active:scale-95 border border-zinc-700 hover:border-red-500 shadow-xl backdrop-blur-md group/trash pointer-events-auto"
+                  className="p-3 bg-zinc-800/90 hover:bg-red-600 text-zinc-400 hover:text-white rounded-2xl transition-all transform hover:scale-110 active:scale-95 border border-zinc-700 hover:border-red-500 shadow-xl backdrop-blur-md group/trash pointer-events-auto cursor-pointer"
                   title="Удалить турнир"
                 >
                   <Trash2 className="w-5 h-5 transition-transform group-hover/trash:rotate-12" />

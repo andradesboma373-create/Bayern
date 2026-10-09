@@ -1287,7 +1287,7 @@ export default function SwissStage({
                                       {tournament.settings?.bracketMode === 'realtime' && onVetoMatch && match.team1 && match.team2 && (
                                         <button
                                           type="button"
-                                          onClick={() => onVetoMatch(match.team1!, match.team2!)}
+                                          onClick={() => onVetoMatch(match.team1!, match.team2!, { stage: 'swiss', rIdx, mIdx, matchId: match.id })}
                                           className="bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-md uppercase tracking-wider flex items-center gap-1 cursor-pointer"
                                         >
                                           🎮 Veto

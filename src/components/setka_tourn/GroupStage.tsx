@@ -279,7 +279,7 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
                                         {tournament.settings?.bracketMode === 'realtime' ? (
                                             onVetoMatch ? (
                                                 <button 
-                                                    onClick={() => onVetoMatch(match.team1!, match.team2!)} 
+                                                    onClick={() => onVetoMatch(match.team1!, match.team2!, { stage: 'group', groupId: group.id, matchId: match.id })} 
                                                     className="bg-purple-600 hover:bg-purple-500 text-white border border-purple-400 rounded-lg px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(168,85,247,0.4)] flex items-center gap-1 cursor-pointer whitespace-nowrap"
                                                 >
                                                     🎮 Сыграть
