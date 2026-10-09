@@ -980,6 +980,8 @@ export function simulateMatchSeries(
         mapResult.mapName = mapResult.mapName || mapName;
         mapResult.name = mapResult.name || mapName;
         mapResult.mapId = mapResult.mapId || mapName;
+        mapResult.score1 = mapResult.team1Score;
+        mapResult.score2 = mapResult.team2Score;
 
         results.maps.push(mapResult);
 

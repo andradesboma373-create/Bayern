@@ -587,6 +587,9 @@ export default function Simulator({ user }: { user: any }) {
     if (!result || !resultContainerRef.current) return;
     setIsDownloading(true);
     try {
+      // Allow React to re-render DOM with isDownloading state before capture
+      await new Promise(r => setTimeout(r, 100));
+
       const { toPng } = await import('html-to-image');
       const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
       
@@ -1014,7 +1017,8 @@ export default function Simulator({ user }: { user: any }) {
     const firstMapInSeries = (Array.isArray(result?.maps) && result.maps.length > 0) ? result.maps[0] : null;
     
     const bgSourceMap = currentSelectedMap || firstMapInSeries;
-    const activeBgMapName = (bgSourceMap?.mapId || bgSourceMap?.id || bgSourceMap?.mapName || bgSourceMap?.name || 'mirage').toLowerCase().replace(/\s+/g, '');
+    const rawBgName = (bgSourceMap?.mapId || bgSourceMap?.id || bgSourceMap?.mapName || bgSourceMap?.name || 'mirage').toLowerCase();
+    const activeBgMapName = rawBgName.replace(/^de_/i, '').replace(/[\s_-]+/g, '');
 
     const mapScore1 = currentSelectedMap ? (currentSelectedMap.team1Score ?? currentSelectedMap.score1 ?? 0) : 0;
     const mapScore2 = currentSelectedMap ? (currentSelectedMap.team2Score ?? currentSelectedMap.score2 ?? 0) : 0;
@@ -1167,40 +1171,57 @@ export default function Simulator({ user }: { user: any }) {
               </div>
             )}
 
-            {result.bo !== 1 && Array.isArray(result.maps) && !isDownloading && (
-              <div className="mt-6 flex flex-col items-center gap-3 relative z-10">
-                <button 
-                  onClick={() => setSelectedResultTab('overall')}
-                  className={`w-full max-w-md px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center min-h-[48px] ${selectedResultTab === 'overall' ? 'bg-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                >
-                  ОБЩАЯ СТАТИСТИКА СЕРИИ
-                </button>
+            {Array.isArray(result.maps) && result.maps.length > 0 && (
+              <div className="mt-6 flex flex-col items-center gap-3 relative z-10 w-full">
+                {result.bo !== 1 && (
+                  !isDownloading ? (
+                    <button 
+                      onClick={() => setSelectedResultTab('overall')}
+                      className={`w-full max-w-md px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center min-h-[48px] ${selectedResultTab === 'overall' ? 'bg-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                    >
+                      ОБЩАЯ СТАТИСТИКА СЕРИИ
+                    </button>
+                  ) : (
+                    <div className="text-[11px] font-black uppercase tracking-widest text-[#ff8f00] bg-[#ff8f00]/10 border border-[#ff8f00]/30 px-5 py-2 rounded-full mb-1">
+                      СЫГРАННЫЕ КАРТЫ СЕРИИ
+                    </div>
+                  )
+                )}
 
-                <div className="flex flex-nowrap justify-center gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                <div className="flex flex-nowrap justify-center gap-3 overflow-x-auto pb-2 custom-scrollbar max-w-full">
                   {result.maps.map((map: any, i: number) => {
                     const mTitle = map?.mapName || map?.name || map?.mapId || `Карта ${i + 1}`;
-                    const mImg = (map?.mapId || map?.id || map?.mapName || map?.name || 'mirage').toLowerCase().replace(/\s+/g, '');
+                    const rawKey = (map?.mapId || map?.id || map?.mapName || map?.name || 'mirage').toLowerCase();
+                    const cleanKey = rawKey.replace(/^de_/i, '').replace(/[\s_-]+/g, '');
                     const sc1 = map?.team1Score ?? map?.score1 ?? 0;
                     const sc2 = map?.team2Score ?? map?.score2 ?? 0;
 
                     return (
-                      <button 
+                      <div 
                         key={i}
-                        onClick={() => setSelectedResultTab(i)}
-                        className={`relative overflow-hidden group w-[120px] h-[80px] rounded-xl font-bold transition-all ${selectedResultTab === i ? 'ring-2 ring-[#ff8f00] shadow-[0_0_15px_rgba(255,143,0,0.3)]' : 'opacity-70 hover:opacity-100 hover:ring-1 hover:ring-white/20'}`}
+                        onClick={() => !isDownloading && setSelectedResultTab(i)}
+                        className={`relative overflow-hidden group w-[130px] h-[85px] rounded-xl font-bold transition-all ${
+                          !isDownloading ? 'cursor-pointer' : ''
+                        } ${
+                          selectedResultTab === i 
+                            ? 'ring-2 ring-[#ff8f00] shadow-[0_0_15px_rgba(255,143,0,0.3)]' 
+                            : 'opacity-85 hover:opacity-100 hover:ring-1 hover:ring-white/20'
+                        }`}
                       >
                         <div 
                           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('/maps/${mImg}')` }}
+                          style={{ backgroundImage: `url('/maps/${cleanKey}')` }}
                           title={mTitle}
                         />
-                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
-                          <span className="text-[10px] text-white/70 uppercase tracking-widest mb-1 drop-shadow-md truncate max-w-[100px]">{mTitle}</span>
-                          <span className="font-black text-xl text-white drop-shadow-lg">
-                            {sc1}:{sc2}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/60 flex flex-col items-center justify-center p-1">
+                          <span className="text-[10px] text-white/90 uppercase tracking-widest mb-1 drop-shadow-md truncate max-w-[110px] font-bold">{mTitle}</span>
+                          <span className="font-black text-xl text-white drop-shadow-lg flex items-center gap-1.5">
+                            <span className={sc1 > sc2 ? 'text-[#ff8f00]' : 'text-white/80'}>{sc1}</span>
+                            <span className="text-white/30 text-sm">:</span>
+                            <span className={sc2 > sc1 ? 'text-blue-400' : 'text-white/80'}>{sc2}</span>
                           </span>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>

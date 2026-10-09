@@ -1,16 +1,16 @@
 {
   "date": "2026-10-09",
-  "readsToday": 1743,
+  "readsToday": 1776,
   "writesToday": 71,
   "maxReads": 50000,
   "maxWrites": 20000,
-  "remainingReads": 48257,
+  "remainingReads": 48224,
   "remainingWrites": 19929,
-  "percentReads": 3.49,
+  "percentReads": 3.55,
   "percentWrites": 0.36,
-  "percentReadsFormatted": "3.49%",
+  "percentReadsFormatted": "3.55%",
   "percentWritesFormatted": "0.36%",
-  "lastUpdated": "2026-10-09T08:17:47.509Z",
+  "lastUpdated": "2026-10-09T08:54:05.033Z",
   "lastSyncWithFirestore": null,
   "firestoreConnected": true,
   "firestoreDatabaseId": "ai-studio-matchsimulator-cf882484-249e-4726-9c8b-046071d33a59",
@@ -25,9 +25,9 @@
   },
   "roomActivity": {
     "channel_bamep_cs2": {
-      "reads": 1713,
+      "reads": 1746,
       "writes": 0,
-      "lastActive": "2026-10-09T08:17:47.509Z"
+      "lastActive": "2026-10-09T08:53:55.100Z"
     },
     "channel_airy": {
       "reads": 0,

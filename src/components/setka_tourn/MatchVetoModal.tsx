@@ -332,21 +332,30 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
                     <div className="bg-black/30 border border-white/5 rounded-2xl p-5">
                         <h3 className="text-xs font-black text-white/50 uppercase tracking-widest mb-4">Счет по картам</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            {simulationResult.maps.map((m: any, idx: number) => (
-                                <div key={idx} className="bg-white/[0.03] border border-white/10 rounded-xl p-3 flex flex-col justify-between">
-                                    <div className="text-xs font-black text-purple-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-                                        <span>Карта {idx + 1}: {m.mapName}</span>
+                            {simulationResult.maps.map((m: any, idx: number) => {
+                                const s1 = m.team1Score ?? m.score1 ?? 0;
+                                const s2 = m.team2Score ?? m.score2 ?? 0;
+                                const mapImgName = (m.mapName || m.name || 'mirage').toLowerCase().replace(/[^a-z0-9]/g, '');
+                                const subfolder = game === 'so2' ? 'so2' : 'cs2';
+                                return (
+                                <div key={idx} className="bg-white/[0.03] border border-white/10 rounded-xl p-3 flex flex-col justify-between relative overflow-hidden">
+                                    <div 
+                                        className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none"
+                                        style={{ backgroundImage: `url('/maps/${subfolder}/${mapImgName}.jpg')` }}
+                                    />
+                                    <div className="text-xs font-black text-purple-300 uppercase tracking-wider mb-2 flex items-center justify-between relative z-10">
+                                        <span>Карта {idx + 1}: {m.mapName || m.name}</span>
                                     </div>
-                                    <div className="text-lg font-black text-white flex justify-between items-center">
-                                        <span className={m.score1 > m.score2 ? 'text-emerald-400' : 'text-white/60'}>{m.score1}</span>
+                                    <div className="text-lg font-black text-white flex justify-between items-center relative z-10">
+                                        <span className={s1 > s2 ? 'text-emerald-400 font-extrabold' : 'text-white/60'}>{s1}</span>
                                         <span className="text-white/20 text-xs font-mono">VS</span>
-                                        <span className={m.score2 > m.score1 ? 'text-emerald-400' : 'text-white/60'}>{m.score2}</span>
+                                        <span className={s2 > s1 ? 'text-emerald-400 font-extrabold' : 'text-white/60'}>{s2}</span>
                                     </div>
-                                    <div className="text-[10px] font-bold text-white/40 mt-2 text-center">
-                                        Победил: {m.score1 > m.score2 ? team1.name : team2.name}
+                                    <div className="text-[10px] font-bold text-white/50 mt-2 text-center relative z-10">
+                                        Победил: <span className="text-emerald-400">{s1 > s2 ? team1.name : team2.name}</span>
                                     </div>
                                 </div>
-                            ))}
+                            )})}
                         </div>
                     </div>
 

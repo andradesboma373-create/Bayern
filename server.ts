@@ -1073,7 +1073,7 @@ app.get('/api/proxy-image', async (req, res) => {
 
 // Dedicated maps image endpoint with Hanami auto-resolution and CORS headers
 app.get('/maps/:name', (req, res, next) => {
-  let name = (req.params.name || '').toLowerCase();
+  let name = decodeURIComponent(req.params.name || '').toLowerCase().trim();
   // If legacy requests sakura, serve hanami
   if (name.includes('sakura')) {
     name = name.replace('sakura', 'hanami');
@@ -1085,32 +1085,33 @@ app.get('/maps/:name', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'public, max-age=86400');
 
-  // If the name already has an extension, try to serve it directly
-  if (name.includes('.')) {
-    const subdirs = ['', 'cs2', 'so2'];
+  const rawBase = name.replace(/\.(jpg|jpeg|png|webp)$/i, '');
+  const cleanBase = rawBase.replace(/^(de_|cs_)/i, '').replace(/[\s_-]+/g, '');
+  const candidates = Array.from(new Set([name, rawBase, cleanBase, rawBase.replace(/[\s_-]+/g, '')]));
+
+  const extensions = ['', '.jpg', '.png', '.jpeg', '.webp'];
+  const subdirs = ['', 'cs2', 'so2'];
+
+  for (const c of candidates) {
+    if (!c) continue;
     for (const dir of subdirs) {
-        const p1 = path.join(publicDir, dir, name);
-        const p2 = path.join(distDir, dir, name);
-        if (fs.existsSync(p1)) return res.sendFile(p1);
-        if (fs.existsSync(p2)) return res.sendFile(p2);
+      for (const ext of extensions) {
+        const fileName = ext ? `${c.replace(/\.(jpg|jpeg|png|webp)$/i, '')}${ext}` : c;
+        const p1 = path.join(publicDir, dir, fileName);
+        const p2 = path.join(distDir, dir, fileName);
+        if (fs.existsSync(p1) && fs.statSync(p1).isFile()) return res.sendFile(p1);
+        if (fs.existsSync(p2) && fs.statSync(p2).isFile()) return res.sendFile(p2);
+      }
     }
   }
 
-  // Otherwise, try known extensions
-  const pureName = name.replace(/\.(jpg|jpeg|png)$/i, '');
-  const extensions = ['.jpg', '.png', '.jpeg', '.webp'];
-  const subdirs = ['', 'cs2', 'so2'];
-  
-  for (const dir of subdirs) {
-      for (const ext of extensions) {
-        const p1 = path.join(publicDir, dir, pureName + ext);
-        const p2 = path.join(distDir, dir, pureName + ext);
-        if (fs.existsSync(p1)) return res.sendFile(p1);
-        if (fs.existsSync(p2)) return res.sendFile(p2);
-      }
+  // Fallback to default map image instead of returning SPA HTML
+  const defaultFallback = path.join(publicDir, 'cs2', 'mirage.jpg');
+  if (fs.existsSync(defaultFallback)) {
+    return res.sendFile(defaultFallback);
   }
-  
-  next();
+
+  return res.status(404).end();
 });
 
 const server = http.createServer(app);

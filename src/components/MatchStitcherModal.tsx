@@ -84,6 +84,7 @@ const PRESET_TOPS: StitcherTop[] = [
         team2Name: 'FaZe Clan',
         score1: 13,
         score2: 11,
+        priority: 3,
         fileName: 'navi_vs_faze_final.png',
         players: [
           { nickname: 's1mple', team: 'Natus Vincere', kills: 24, deaths: 14, assists: 5, damage: 2100, rating: 1.38 },
@@ -104,6 +105,7 @@ const PRESET_TOPS: StitcherTop[] = [
         team2Name: 'Team Vitality',
         score1: 13,
         score2: 9,
+        priority: 2,
         fileName: 'spirit_vs_vitality.png',
         players: [
           { nickname: 'donk', team: 'Team Spirit', kills: 27, deaths: 12, assists: 6, damage: 2450, rating: 1.62 },
@@ -890,6 +892,33 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
       }
 
       if (!m.players || !Array.isArray(m.players)) return;
+
+      // Smart match priority resolution: check manual priority, stage priority, stage name, or match filename
+      const stage = m.stageId ? stages.find(s => s.id === m.stageId) : null;
+      const stageNameLow = (stage?.name || '').toLowerCase();
+      const fileNameLow = (m.fileName || '').toLowerCase();
+
+      let matchPriority = m.priority || 1;
+      if (stage?.priority && stage.priority > matchPriority) {
+        matchPriority = stage.priority;
+      }
+      if (
+        matchPriority < 3 &&
+        (stageNameLow.includes('финал') || stageNameLow.includes('final') || fileNameLow.includes('final') || fileNameLow.includes('финал')) &&
+        !stageNameLow.includes('полуфинал') && !stageNameLow.includes('semi') && !stageNameLow.includes('1/2') &&
+        !stageNameLow.includes('четверть') && !stageNameLow.includes('1/4')
+      ) {
+        matchPriority = 3;
+      } else if (
+        matchPriority < 2 &&
+        (stageNameLow.includes('полуфинал') || stageNameLow.includes('semi') || stageNameLow.includes('1/2') || fileNameLow.includes('semi'))
+      ) {
+        matchPriority = 2;
+      }
+
+      const isFinalMatch = matchPriority === 3;
+      const isSemiMatch = matchPriority === 2;
+
       m.players.forEach(p => {
         if (!p || !p.nickname) return;
         const key = p.nickname.toLowerCase().trim();
@@ -904,6 +933,10 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
             matchesCount: 0,
             ratingSum: 0,
             highestMatchPriority: 1, // Track if they played in semis/finals
+            playedInFinal: false,
+            playedInSemi: false,
+            finalMatchRating: 0,
+            finalMatchWon: false,
             history: []
           });
         }
@@ -914,11 +947,25 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
         curr.assists += (Number(p.assists) || 0);
         curr.damage += (Number(p.damage) || 0);
         curr.matchesCount += 1;
-        curr.ratingSum += (Number(p.rating) || 1.0);
+        const pRating = Number(p.rating) || 1.0;
+        curr.ratingSum += pRating;
         
-        const matchPriority = m.priority || 1;
         if (matchPriority > curr.highestMatchPriority) {
           curr.highestMatchPriority = matchPriority;
+        }
+
+        if (isFinalMatch) {
+          curr.playedInFinal = true;
+          if (pRating > curr.finalMatchRating) curr.finalMatchRating = pRating;
+          const isT1 = p.team === m.team1Name;
+          const s1 = Number(m.score1) || 0;
+          const s2 = Number(m.score2) || 0;
+          if ((isT1 && s1 > s2) || (!isT1 && s2 > s1)) {
+            curr.finalMatchWon = true;
+          }
+        }
+        if (isSemiMatch) {
+          curr.playedInSemi = true;
         }
 
         if (p.team && curr.team === 'Свободный агент') curr.team = p.team;
@@ -930,13 +977,16 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
           kills: p.kills || 0,
           deaths: p.deaths || 0,
           assists: p.assists || 0,
-          rating: p.rating || 1.0,
+          rating: pRating,
           priority: matchPriority
         });
       });
     });
 
-    const result = Array.from(statsMap.values())
+    const allPlayersList = Array.from(statsMap.values());
+    const maxMatchesInTop = Math.max(...allPlayersList.map(p => p.matchesCount), 1);
+
+    const result = allPlayersList
       .map(p => {
         const rating = p.ratingSum / Math.max(1, p.matchesCount);
         const kd = p.kills / Math.max(1, p.deaths);
@@ -946,26 +996,66 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
         const adr = p.damage / Math.max(1, rounds);
         const impact = Math.max(0.5, 2.13 * kpr + 0.12 * apr - 0.41);
 
-        // Weighted Ranking logic
+        // ========================================================
+        // HLTV & ESPORTS TOURNAMENT MVP & TOP SKLEYKI RANKING
+        // ========================================================
         let weightedRating = rating;
-        
-        // 1. Boost for Finals (priority 3) and Semis (priority 2)
-        if (p.highestMatchPriority === 3) weightedRating += 0.04;
-        else if (p.highestMatchPriority === 2) weightedRating += 0.02;
 
-        // 2. Penalty for low game count if didn't reach high stages
-        if (p.matchesCount < 2 && p.highestMatchPriority < 2) {
-          weightedRating -= 0.08;
-        } else if (p.matchesCount >= 3) {
-          weightedRating += 0.01; // Loyalty/Experience bonus
+        // 1. DISTANCE & SAMPLE SIZE WEIGHTING:
+        // A player with only 1 match when other players played 3-5 playoff matches CANNOT take Top 1 / MVP
+        if (maxMatchesInTop >= 2) {
+          if (p.matchesCount === 1) {
+            // Significant penalty for 1-match sample size variance
+            const singleMatchPenalty = maxMatchesInTop >= 4 ? 0.28 : (maxMatchesInTop === 3 ? 0.22 : 0.16);
+            weightedRating -= singleMatchPenalty;
+            // Additional penalty if they never reached playoffs
+            if (p.highestMatchPriority < 2) {
+              weightedRating -= 0.06;
+            }
+          } else if (p.matchesCount === 2 && maxMatchesInTop >= 4) {
+            weightedRating -= 0.10;
+          }
+
+          // Bonus for tournament endurance & consistent high-volume participation
+          if (p.matchesCount >= 3) {
+            const distanceBonus = Math.min(0.08, (p.matchesCount - 1) * 0.02);
+            weightedRating += distanceBonus;
+          }
         }
 
-        // Competitive Balance Guard: Negative K/D cannot hold top-tier rating
+        // 2. PLAYOFFS & GRAND FINAL IMPACT:
+        // Grand Finalists (priority 3)
+        if (p.highestMatchPriority === 3 || p.playedInFinal) {
+          // Major boost for reaching the Grand Final
+          weightedRating += 0.12;
+
+          // Performance in the Grand Final itself
+          if (p.finalMatchRating >= 1.25) {
+            weightedRating += 0.05; // Dominant final performance
+          } else if (p.finalMatchRating >= 1.10) {
+            weightedRating += 0.03; // Strong final performance
+          }
+
+          // Champion boost: winning the Grand Final
+          if (p.finalMatchWon) {
+            weightedRating += 0.04; // Tournament champion bonus
+          }
+        } else if (p.highestMatchPriority === 2 || p.playedInSemi) {
+          // Semi-finalists
+          weightedRating += 0.05;
+        }
+
+        // 3. COMPETITIVE GUARDS:
+        // Negative K/D guard: cannot be top tier with negative KD
         if (kd < 0.85 && kpr < 0.55) {
           weightedRating = Math.min(0.92, weightedRating);
         } else if (kd < 0.92 && kpr < 0.60) {
           weightedRating = Math.min(0.98, weightedRating);
         }
+
+        // Small volume bonus for total tournament kills contribution
+        if (p.kills >= 60) weightedRating += 0.02;
+        if (p.kills >= 90) weightedRating += 0.02;
 
         return {
           ...p,
@@ -976,7 +1066,7 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
           impact
         };
       })
-      .sort((a, b) => b.weightedRating - a.weightedRating || b.rating - a.rating || b.kd - a.kd);
+      .sort((a, b) => b.weightedRating - a.weightedRating || b.rating - a.rating || b.kd - a.kd || b.kills - a.kills);
 
     return result;
   }, [activeTop.matches, selectedStageId, stages, activeTop.id]);
@@ -1497,11 +1587,36 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                           <TeamLogo teamName={currentTop1Player?.team || ''} sizeClassName="w-4 h-4 opacity-50" />
                           {currentTop1Player?.team || 'Свободный агент'}
                         </div>
+
+                        {currentTop1Player && (
+                          <div className="flex items-center gap-2 mt-2.5 flex-wrap justify-center">
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70">
+                              {currentTop1Player.matchesCount} {currentTop1Player.matchesCount === 1 ? 'матч' : currentTop1Player.matchesCount < 5 ? 'матча' : 'матчей'}
+                            </span>
+                            {currentTop1Player.highestMatchPriority === 3 && (
+                              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                                {currentTop1Player.finalMatchWon ? '🏆 ЧЕМПИОН' : '👑 ФИНАЛИСТ'}
+                              </span>
+                            )}
+                            {currentTop1Player.highestMatchPriority === 2 && (
+                              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-slate-300/20 text-slate-300 border border-slate-300/30">
+                                🥈 ПОЛУФИНАЛ
+                              </span>
+                            )}
+                          </div>
+                        )}
                         
-                        <div className="mt-8 pt-6 border-t border-white/5 w-full grid grid-cols-3 gap-3 text-center">
+                        <div className="mt-6 pt-5 border-t border-white/5 w-full grid grid-cols-3 gap-3 text-center">
                           <div>
-                            <span className="text-[9px] uppercase text-white/20 font-black block mb-1">Rating</span>
-                            <span className="text-lg font-black text-yellow-500 font-mono">{currentTop1Player?.rating.toFixed(2) || '0.00'}</span>
+                            <span className="text-[9px] uppercase text-white/20 font-black block mb-1">MVP Score</span>
+                            <span className="text-lg font-black text-yellow-500 font-mono">
+                              {currentTop1Player ? (currentTop1Player.weightedRating || currentTop1Player.rating).toFixed(2) : '0.00'}
+                            </span>
+                            {currentTop1Player && currentTop1Player.matchesCount > 1 && (
+                              <span className="text-[9px] text-white/30 font-mono block">
+                                ср. {currentTop1Player.rating.toFixed(2)}
+                              </span>
+                            )}
                           </div>
                           <div>
                             <span className="text-[9px] uppercase text-white/20 font-black block mb-1">K/D</span>
@@ -1573,7 +1688,7 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                             <th className="px-4 py-3 text-center font-medium" title="Average Damage per Round">ADR</th>
                             <th className="px-4 py-3 text-center font-medium" title="Impact Rating">Impact</th>
                             <th className="px-4 py-3 text-center font-medium">K/D</th>
-                            <th className="px-4 py-3 text-right font-medium">Rating</th>
+                            <th className="px-4 py-3 text-right font-medium" title="Рейтинг MVP турнира с учётом дистанции, плей-офф и финала">MVP Рейтинг</th>
                             <th className="px-4 py-3 text-center font-medium">Топ-1</th>
                           </tr>
                         </thead>
@@ -1599,9 +1714,21 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                                   >
                                     <PlayerAvatar playerName={p.nickname} sizeClassName="w-9 h-9 rounded-xl shadow-lg border border-white/5" />
                                     <div className="flex flex-col">
-                                      <span className="text-sm font-bold text-white/90 group-hover:text-yellow-400 transition-colors uppercase tracking-wider">
-                                        {p.nickname}
-                                      </span>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-sm font-bold text-white/90 group-hover:text-yellow-400 transition-colors uppercase tracking-wider">
+                                          {p.nickname}
+                                        </span>
+                                        {p.highestMatchPriority === 3 && (
+                                          <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" title="Финалист турнира">
+                                            ФИНАЛ
+                                          </span>
+                                        )}
+                                        {p.highestMatchPriority === 2 && (
+                                          <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-300/20 text-slate-300 border border-slate-300/30" title="Полуфиналист турнира">
+                                            1/2
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 </td>
@@ -1624,9 +1751,20 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                                   {p.kd.toFixed(2)}
                                 </td>
                                 <td className="px-4 py-4 text-right last:rounded-r-2xl">
-                                  <span className="text-sm font-bold text-yellow-500/80 font-mono">
-                                    {p.rating.toFixed(2)}
-                                  </span>
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-sm font-black text-yellow-500 font-mono">
+                                      {p.weightedRating.toFixed(2)}
+                                    </span>
+                                    {p.matchesCount > 1 ? (
+                                      <span className="text-[9px] text-white/30 font-mono" title={`Базовый средний рейтинг: ${p.rating.toFixed(2)} за ${p.matchesCount} матчей`}>
+                                        ср: {p.rating.toFixed(2)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[8px] text-white/20 font-mono uppercase">
+                                        1 матч
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="px-4 py-4 text-center">
                                   <button 

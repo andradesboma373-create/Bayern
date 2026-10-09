@@ -119,6 +119,9 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
     if (!resultContainerRef.current) return;
     setIsDownloading(true);
     try {
+      // Allow DOM to settle with isDownloading state before capture
+      await new Promise(r => setTimeout(r, 100));
+
       const { toPng } = await import('html-to-image');
       const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
       let imgData: string;
@@ -165,61 +168,64 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
 
   const selectedMapObj = (selectedResultTab !== 'overall' && mapsList[selectedResultTab as number]) ? mapsList[selectedResultTab as number] : null;
   const activeMapName = selectedMapObj ? (selectedMapObj.mapName || selectedMapObj.name || 'de_inferno') : (isBO1 && mapsList[0] ? (mapsList[0].mapName || mapsList[0].name || 'de_inferno') : '');
+  const cleanActiveMapKey = activeMapName ? activeMapName.toLowerCase().replace(/^de_/i, '').replace(/[\s_-]+/g, '') : '';
 
   const displayT1Score = selectedMapObj ? (selectedMapObj.team1Score ?? selectedMapObj.score1 ?? 0) : (isBO1 && mapsList[0] ? (mapsList[0].team1Score ?? mapsList[0].score1 ?? t1Score) : t1Score);
   const displayT2Score = selectedMapObj ? (selectedMapObj.team2Score ?? selectedMapObj.score2 ?? 0) : (isBO1 && mapsList[0] ? (mapsList[0].team2Score ?? mapsList[0].score2 ?? t2Score) : t2Score);
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div ref={resultContainerRef} className="bg-[#0a0a0f] border border-white/10 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div ref={resultContainerRef} className={`bg-[#0a0a0f] border border-white/10 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col ${isDownloading ? 'overflow-visible' : 'max-h-[90vh] overflow-hidden'}`}>
         <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40 sticky top-0 z-10">
           <h2 className="text-xl font-black text-white uppercase tracking-widest">ДЕТАЛИ МАТЧА</h2>
-          <div className="flex items-center gap-2">
-            {match?.tournamentId && !isDownloading && (
-              <button 
-                onClick={async () => {
-                   try {
-                      const { updateBetaTournamentMatchResult, getCanonicalRoomId } = await import('./setka_tourn/storage');
-                      const userId = match.userId || 'guest';
-                      const roomId = getCanonicalRoomId(userId);
-                      updateBetaTournamentMatchResult(
-                        roomId,
-                        match.tournamentId,
-                        t1Name,
-                        t2Name,
-                        t1Score,
-                        t2Score
-                      );
-                      alert("Результат успешно сохранен в базу турнира!");
-                      onClose();
-                      navigate(`/tournaments-beta/${match.tournamentId}`);
-                   } catch (e) {
-                      console.error(e);
-                      alert("Ошибка при сохранении");
-                   }
-                }}
-                className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors cursor-pointer"
-                title="Сохранить результат в базу турнира"
-              >
-                <Check className="w-4 h-4" />
-                <span className="text-sm hidden sm:inline">Сохранить</span>
+          {!isDownloading && (
+            <div className="flex items-center gap-2">
+              {match?.tournamentId && (
+                <button 
+                  onClick={async () => {
+                     try {
+                        const { updateBetaTournamentMatchResult, getCanonicalRoomId } = await import('./setka_tourn/storage');
+                        const userId = match.userId || 'guest';
+                        const roomId = getCanonicalRoomId(userId);
+                        updateBetaTournamentMatchResult(
+                          roomId,
+                          match.tournamentId,
+                          t1Name,
+                          t2Name,
+                          t1Score,
+                          t2Score
+                        );
+                        alert("Результат успешно сохранен в базу турнира!");
+                        onClose();
+                        navigate(`/tournaments-beta/${match.tournamentId}`);
+                     } catch (e) {
+                        console.error(e);
+                        alert("Ошибка при сохранении");
+                     }
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors cursor-pointer"
+                  title="Сохранить результат в базу турнира"
+                >
+                  <Check className="w-4 h-4" />
+                  <span className="text-sm hidden sm:inline">Сохранить</span>
+                </button>
+              )}
+              <button onClick={downloadPhoto} className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors cursor-pointer" title="Скачать как изображение">
+                <Download className="w-4 h-4" />
+                <span className="text-sm hidden sm:inline">Скачать</span>
               </button>
-            )}
-            <button onClick={downloadPhoto} className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors cursor-pointer" title="Скачать как изображение">
-              <Download className="w-4 h-4" />
-              <span className="text-sm hidden sm:inline">Скачать</span>
-            </button>
-            <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+              <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          )}
         </div>
         
-        <div className="p-6 overflow-y-auto">
+        <div className={`p-6 ${isDownloading ? 'overflow-visible' : 'overflow-y-auto'}`}>
           <div 
             className="bg-gradient-to-br from-[#12121a] to-[#1a1a24] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden mb-6"
-            style={activeMapName ? {
-              backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.85), rgba(26,26,36,0.95)), url('/maps/${activeMapName.toLowerCase()}.jpg')`,
+            style={cleanActiveMapKey ? {
+              backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.85), rgba(26,26,36,0.95)), url('/maps/${cleanActiveMapKey}')`,
               backgroundSize: 'cover',
               backgroundPosition: 'center'
             } : {}}
@@ -287,38 +293,48 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
               </div>
             )}
 
-            <div className="mt-8 flex flex-col items-center gap-3">
-              <button 
-                onClick={() => setSelectedResultTab('overall')}
-                className={`w-full max-w-md px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 border cursor-pointer ${selectedResultTab === 'overall' ? 'bg-white/10 border-white/30 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]' : 'bg-transparent border-white/5 text-white/40 hover:bg-white/5 hover:border-white/10'}`}
-              >
-                ОБЩАЯ СТАТИСТИКА
-              </button>
-              {mapsList.length > 0 && !isDownloading && (
-                <div className="flex justify-center gap-3 flex-wrap">
+            <div className="mt-8 flex flex-col items-center gap-3 w-full">
+              {!isDownloading ? (
+                <button 
+                  onClick={() => setSelectedResultTab('overall')}
+                  className={`w-full max-w-md px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 border cursor-pointer ${selectedResultTab === 'overall' ? 'bg-white/10 border-white/30 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]' : 'bg-transparent border-white/5 text-white/40 hover:bg-white/5 hover:border-white/10'}`}
+                >
+                  ОБЩАЯ СТАТИСТИКА
+                </button>
+              ) : (
+                <div className="text-[11px] font-black uppercase tracking-widest text-[#ff8f00] bg-[#ff8f00]/10 border border-[#ff8f00]/30 px-5 py-2 rounded-full mb-1">
+                  СЫГРАННЫЕ КАРТЫ СЕРИИ
+                </div>
+              )}
+              {mapsList.length > 0 && (
+                <div className="flex justify-center gap-3 flex-wrap max-w-full">
                   {mapsList.map((mapItem: any, i: number) => {
                     const mName = mapItem?.mapName || mapItem?.name || `Карта ${i + 1}`;
+                    const rawKey = (mapItem?.mapId || mapItem?.id || mapItem?.mapName || mapItem?.name || 'mirage').toLowerCase();
+                    const cleanKey = rawKey.replace(/^de_/i, '').replace(/[\s_-]+/g, '');
                     const mSc1 = mapItem?.team1Score ?? mapItem?.score1 ?? 0;
                     const mSc2 = mapItem?.team2Score ?? mapItem?.score2 ?? 0;
 
                     return (
-                      <button 
+                      <div 
                         key={i}
-                        onClick={() => setSelectedResultTab(i)}
-                        className={`relative overflow-hidden group w-[120px] h-[80px] rounded-xl font-bold transition-all cursor-pointer ${selectedResultTab === i ? 'ring-2 ring-white/50 shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'opacity-70 hover:opacity-100 hover:ring-1 hover:ring-white/20'}`}
+                        onClick={() => !isDownloading && setSelectedResultTab(i)}
+                        className={`relative overflow-hidden group w-[130px] h-[85px] rounded-xl font-bold transition-all ${!isDownloading ? 'cursor-pointer' : ''} ${selectedResultTab === i ? 'ring-2 ring-white/50 shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'opacity-85 hover:opacity-100 hover:ring-1 hover:ring-white/20'}`}
                       >
                         <div 
                           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('/maps/${mName.toLowerCase()}.jpg')` }}
+                          style={{ backgroundImage: `url('/maps/${cleanKey}')` }}
                           title={mName}
                         />
-                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
-                          <span className="text-[10px] text-white/70 uppercase tracking-widest mb-1 drop-shadow-md">{mName}</span>
-                          <span className="font-black text-xl text-white drop-shadow-lg">
-                            {mSc1}:{mSc2}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/60 flex flex-col items-center justify-center p-1">
+                          <span className="text-[10px] text-white/90 uppercase tracking-widest mb-1 drop-shadow-md truncate max-w-[110px] font-bold">{mName}</span>
+                          <span className="font-black text-xl text-white drop-shadow-lg flex items-center gap-1.5">
+                            <span className={mSc1 > mSc2 ? 'text-[#ff8f00]' : 'text-white/80'}>{mSc1}</span>
+                            <span className="text-white/30 text-sm">:</span>
+                            <span className={mSc2 > mSc1 ? 'text-blue-400' : 'text-white/80'}>{mSc2}</span>
                           </span>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
