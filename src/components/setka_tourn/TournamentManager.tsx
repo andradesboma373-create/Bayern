@@ -2018,6 +2018,17 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                            </div>
 
                            <button 
+                            onClick={() => {
+                              saveTournament(user?.channelId || user?.uid, activeTournament);
+                              alert("Сетка турнира успешно сохранена!");
+                            }} 
+                            className="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg active:scale-95"
+                            title="Принудительно сохранить сетку турнира в локальную базу и облако"
+                          >
+                            <Save className="w-4 h-4" /> СОХРАНИТЬ
+                          </button>
+
+                           <button 
                             onClick={() => setShowTop20(true)} 
                             className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] flex items-center gap-2 cursor-pointer"
                           >
@@ -2558,13 +2569,13 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                               const stageScopedTournament: Tournament = {
                                   ...activeTournament,
                                   teams: currentTeams,
-                                  bracketRounds: currentStageConfig?.bracketRounds || (currentStageIdx === 0 ? activeTournament.bracketRounds : undefined),
-                                  losersBracketRounds: currentStageConfig?.losersBracketRounds || (currentStageIdx === 0 ? activeTournament.losersBracketRounds : undefined),
-                                  grandFinal: currentStageConfig?.grandFinal || (currentStageIdx === 0 ? activeTournament.grandFinal : undefined),
-                                  groups: currentStageConfig?.groups || (currentStageIdx === 0 ? activeTournament.groups : undefined),
-                                  gslGroups: currentStageConfig?.gslGroups || (currentStageIdx === 0 ? activeTournament.gslGroups : undefined),
-                                  swissRounds: currentStageConfig?.swissRounds || (currentStageIdx === 0 ? activeTournament.swissRounds : undefined),
-                                  qualifiersBrackets: currentStageConfig?.qualifiersBrackets || (currentStageIdx === 0 ? activeTournament.qualifiersBrackets : undefined)
+                                  bracketRounds: currentStageConfig?.bracketRounds || (currentStageType === 'playoff' ? activeTournament.bracketRounds : (currentStageIdx === 0 ? activeTournament.bracketRounds : undefined)),
+                                  losersBracketRounds: currentStageConfig?.losersBracketRounds || (currentStageType === 'playoff' ? activeTournament.losersBracketRounds : (currentStageIdx === 0 ? activeTournament.losersBracketRounds : undefined)),
+                                  grandFinal: currentStageConfig?.grandFinal || (currentStageType === 'playoff' ? activeTournament.grandFinal : (currentStageIdx === 0 ? activeTournament.grandFinal : undefined)),
+                                  groups: currentStageConfig?.groups || (currentStageType === 'groups' ? activeTournament.groups : (currentStageIdx === 0 ? activeTournament.groups : undefined)),
+                                  gslGroups: currentStageConfig?.gslGroups || (currentStageType === 'gsl_groups' ? activeTournament.gslGroups : (currentStageIdx === 0 ? activeTournament.gslGroups : undefined)),
+                                  swissRounds: currentStageConfig?.swissRounds || (currentStageType === 'swiss' ? activeTournament.swissRounds : (currentStageIdx === 0 ? activeTournament.swissRounds : undefined)),
+                                  qualifiersBrackets: currentStageConfig?.qualifiersBrackets || (currentStageType === 'qualifier' ? activeTournament.qualifiersBrackets : (currentStageIdx === 0 ? activeTournament.qualifiersBrackets : undefined))
                               };
 
                               const handleUpdateCurrentStage = (updatedStageTourn: Tournament) => {
@@ -2591,16 +2602,14 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                                       }
                                   };
 
-                                  if (currentStageIdx === 0) {
-                                      nextTourn.bracketRounds = updatedStageTourn.bracketRounds;
-                                      nextTourn.losersBracketRounds = updatedStageTourn.losersBracketRounds;
-                                      nextTourn.grandFinal = updatedStageTourn.grandFinal;
-                                      nextTourn.groups = updatedStageTourn.groups;
-                                      nextTourn.gslGroups = updatedStageTourn.gslGroups;
-                                      nextTourn.swissRounds = updatedStageTourn.swissRounds;
-                                      nextTourn.qualifiersBrackets = updatedStageTourn.qualifiersBrackets;
-                                      nextTourn.teams = updatedStageTourn.teams || nextTourn.teams;
-                                  }
+                                  if (updatedStageTourn.bracketRounds) nextTourn.bracketRounds = updatedStageTourn.bracketRounds;
+                                  if (updatedStageTourn.losersBracketRounds) nextTourn.losersBracketRounds = updatedStageTourn.losersBracketRounds;
+                                  if (updatedStageTourn.grandFinal) nextTourn.grandFinal = updatedStageTourn.grandFinal;
+                                  if (updatedStageTourn.groups) nextTourn.groups = updatedStageTourn.groups;
+                                  if (updatedStageTourn.gslGroups) nextTourn.gslGroups = updatedStageTourn.gslGroups;
+                                  if (updatedStageTourn.swissRounds) nextTourn.swissRounds = updatedStageTourn.swissRounds;
+                                  if (updatedStageTourn.qualifiersBrackets) nextTourn.qualifiersBrackets = updatedStageTourn.qualifiersBrackets;
+                                  if (updatedStageTourn.teams) nextTourn.teams = updatedStageTourn.teams;
 
                                   handleUpdateActive(nextTourn);
                               };

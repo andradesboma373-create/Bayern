@@ -31,31 +31,30 @@ export const normalizeTournament = (t: any): Tournament => {
     copy.settings = { ...copy.settings };
   }
 
-  // PRE-NORMALIZATION: If bracketRounds is an object (Firestore format), try to fix it NOW 
-  // before hasPlayoffStage check or any other logic runs.
-  if (copy.bracketRounds && typeof copy.bracketRounds === 'object' && !Array.isArray(copy.bracketRounds)) {
-    const fixed = ensureArrayOfRounds(copy.bracketRounds);
-    if (fixed) copy.bracketRounds = fixed;
+  // PRE-NORMALIZATION: Reconstruct all root fields if they were serialized as JSON strings or Firestore objects
+  const rootBracket = ensureArrayOfRounds(copy.bracketRounds, copy.bracketRounds_json);
+  if (rootBracket) copy.bracketRounds = rootBracket;
+
+  const rootLosers = ensureArrayOfRounds(copy.losersBracketRounds, copy.losersBracketRounds_json);
+  if (rootLosers) copy.losersBracketRounds = rootLosers;
+
+  const rootSwiss = ensureArrayOfRounds(copy.swissRounds, copy.swissRounds_json);
+  if (rootSwiss) copy.swissRounds = rootSwiss;
+
+  const rootTiered = ensureArrayOfRounds(copy.tieredBracketRounds, copy.tieredBracketRounds_json);
+  if (rootTiered) copy.tieredBracketRounds = rootTiered;
+
+  const rootGF = ensureArrayOfMatches(copy.grandFinal, copy.grandFinal_json);
+  if (rootGF) copy.grandFinal = rootGF;
+
+  const rootQuals = ensureArrayOfQualifiers(copy.qualifiersBrackets, copy.qualifiersBrackets_json);
+  if (rootQuals) copy.qualifiersBrackets = rootQuals;
+
+  if (copy.gslGroups_json && (!copy.gslGroups || !Array.isArray(copy.gslGroups))) {
+    try { copy.gslGroups = JSON.parse(copy.gslGroups_json); } catch (e) {}
   }
-  if (copy.losersBracketRounds && typeof copy.losersBracketRounds === 'object' && !Array.isArray(copy.losersBracketRounds)) {
-    const fixed = ensureArrayOfRounds(copy.losersBracketRounds);
-    if (fixed) copy.losersBracketRounds = fixed;
-  }
-  if (copy.tieredBracketRounds && typeof copy.tieredBracketRounds === 'object' && !Array.isArray(copy.tieredBracketRounds)) {
-    const fixed = ensureArrayOfRounds(copy.tieredBracketRounds);
-    if (fixed) copy.tieredBracketRounds = fixed;
-  }
-  if (copy.swissRounds && typeof copy.swissRounds === 'object' && !Array.isArray(copy.swissRounds)) {
-    const fixed = ensureArrayOfRounds(copy.swissRounds);
-    if (fixed) copy.swissRounds = fixed;
-  }
-  if (copy.grandFinal && typeof copy.grandFinal === 'object' && !Array.isArray(copy.grandFinal)) {
-    const fixed = ensureArrayOfMatches(copy.grandFinal);
-    if (fixed) copy.grandFinal = fixed;
-  }
-  if (copy.qualifiersBrackets && typeof copy.qualifiersBrackets === 'object' && !Array.isArray(copy.qualifiersBrackets)) {
-    const fixed = ensureArrayOfQualifiers(copy.qualifiersBrackets);
-    if (fixed) copy.qualifiersBrackets = fixed;
+  if (copy.groups_json && (!copy.groups || !Array.isArray(copy.groups))) {
+    try { copy.groups = JSON.parse(copy.groups_json); } catch (e) {}
   }
 
   const hasGroupStage = (Array.isArray(copy.groups) && copy.groups.length > 0) || 
@@ -190,6 +189,51 @@ export const normalizeTournament = (t: any): Tournament => {
       const s = { ...stg };
       if (!s.id) s.id = `stage_${sIdx + 1}`;
       if (!s.name) s.name = `Стадия ${sIdx + 1}`;
+
+      const sBracket = ensureArrayOfRounds(s.bracketRounds, s.bracketRounds_json);
+      if (sBracket) s.bracketRounds = sBracket;
+
+      const sLosers = ensureArrayOfRounds(s.losersBracketRounds, s.losersBracketRounds_json);
+      if (sLosers) s.losersBracketRounds = sLosers;
+
+      const sSwiss = ensureArrayOfRounds(s.swissRounds, s.swissRounds_json);
+      if (sSwiss) s.swissRounds = sSwiss;
+
+      const sTiered = ensureArrayOfRounds(s.tieredBracketRounds, s.tieredBracketRounds_json);
+      if (sTiered) s.tieredBracketRounds = sTiered;
+
+      const sGF = ensureArrayOfMatches(s.grandFinal, s.grandFinal_json);
+      if (sGF) s.grandFinal = sGF;
+
+      const sQuals = ensureArrayOfQualifiers(s.qualifiersBrackets, s.qualifiersBrackets_json);
+      if (sQuals) s.qualifiersBrackets = sQuals;
+
+      if (s.gslGroups_json && (!s.gslGroups || !Array.isArray(s.gslGroups))) {
+        try { s.gslGroups = JSON.parse(s.gslGroups_json); } catch (e) {}
+      }
+      if (s.groups_json && (!s.groups || !Array.isArray(s.groups))) {
+        try { s.groups = JSON.parse(s.groups_json); } catch (e) {}
+      }
+
+      // Stage fallback from root if stage matches tournament stage type or active stage
+      if (s.type === 'qualifier' && (!s.qualifiersBrackets || s.qualifiersBrackets.length === 0) && copy.qualifiersBrackets?.length) {
+        s.qualifiersBrackets = copy.qualifiersBrackets;
+      }
+      if (s.type === 'swiss' && (!s.swissRounds || s.swissRounds.length === 0) && copy.swissRounds?.length) {
+        s.swissRounds = copy.swissRounds;
+      }
+      if (s.type === 'playoff' && (!s.bracketRounds || s.bracketRounds.length === 0) && copy.bracketRounds?.length) {
+        s.bracketRounds = copy.bracketRounds;
+        if (copy.losersBracketRounds?.length) s.losersBracketRounds = copy.losersBracketRounds;
+        if (copy.grandFinal?.length) s.grandFinal = copy.grandFinal;
+      }
+      if (s.type === 'groups' && (!s.groups || s.groups.length === 0) && copy.groups?.length) {
+        s.groups = copy.groups;
+      }
+      if (s.type === 'gsl_groups' && (!s.gslGroups || s.gslGroups.length === 0) && copy.gslGroups?.length) {
+        s.gslGroups = copy.gslGroups;
+      }
+
       if (Array.isArray(s.teams)) {
         s.teams = s.teams.map((tm: any) => normalizeTeam(tm)).filter(Boolean);
       } else {
@@ -210,13 +254,19 @@ export const normalizeTournament = (t: any): Tournament => {
           matches: Array.isArray(g.matches) ? g.matches.map(normalizeMatch).filter(Boolean) : []
         }));
       }
+      if (Array.isArray(s.qualifiersBrackets)) {
+        s.qualifiersBrackets = s.qualifiersBrackets.map((bracket: any) => 
+          Array.isArray(bracket) ? bracket.map((round: any) => Array.isArray(round) ? round.map(normalizeMatch).filter(Boolean) : []) : []
+        );
+      }
       return s;
     });
   }
 
   // 5. Auto-repair missing playoff bracket if it was lost in transmission or stripped in lightweight storage
   const isPlayoffMode = copy.settings.stage1Type === 'playoff' || copy.settings.mode === 'single_stage';
-  if (isPlayoffMode && (!copy.bracketRounds || copy.bracketRounds.length === 0) && Array.isArray(copy.teams) && copy.teams.length >= 2) {
+  const hasConfiguredStages = Array.isArray(copy.settings?.stages) && copy.settings.stages.length > 0;
+  if (isPlayoffMode && !hasConfiguredStages && (!copy.bracketRounds || copy.bracketRounds.length === 0) && Array.isArray(copy.teams) && copy.teams.length >= 2) {
     // CRITICAL: Double check that bracketRounds is REALLY missing and not just in a format we missed
     if (!copy.bracketRounds_json || copy.bracketRounds_json === '[]') {
         console.warn(`[Tournament Normalizer] Auto-repairing playoff bracket for ${copy.id}. This might reset progress if data was partially lost.`);
