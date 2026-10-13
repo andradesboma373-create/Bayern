@@ -3,7 +3,8 @@ import {
   X, Upload, Trophy, Trash2, Check, AlertCircle, 
   Layers, Download, Loader2, Sparkles, RefreshCw, FileText, ChevronRight, Edit2, ShieldAlert
 } from 'lucide-react';
-import { downloadElementAsImage } from '../lib/exportImage';
+import { downloadElementAsImage, saveElementAsImage } from '../lib/exportImage';
+import { saveFileAs } from '../lib/fileSystem';
 import TeamLogo from './TeamLogo';
 import PlayerAvatar from './PlayerAvatar';
 import { getCanonicalRoomId, updateBetaTournamentMatchResult } from './setka_tourn/storage';
@@ -460,7 +461,7 @@ export default function SeriesStitcherModal({ user, tournamentId, onClose, onSav
     setIsDownloading(true);
     try {
       const fileName = `${aggregatedSeriesData?.team1Name || 'Team1'}_vs_${aggregatedSeriesData?.team2Name || 'Team2'}_${format}_Series.png`;
-      await downloadElementAsImage(stitchedResultRef.current, fileName);
+      await saveElementAsImage(stitchedResultRef.current, fileName);
     } catch (e) {
       console.error('Download error:', e);
     } finally {
@@ -492,13 +493,10 @@ export default function SeriesStitcherModal({ user, tournamentId, onClose, onSav
       overallTeam2Stats: aggregatedSeriesData.team2Aggregated
     };
 
-    const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${aggregatedSeriesData.team1Name}_vs_${aggregatedSeriesData.team2Name}_${format}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    saveFileAs(
+      JSON.stringify(exportObject, null, 2),
+      `${aggregatedSeriesData.team1Name}_vs_${aggregatedSeriesData.team2Name}_${format}.json`
+    );
   };
 
   // Save stitched match directly to Top Skleyki
@@ -903,6 +901,10 @@ export default function SeriesStitcherModal({ user, tournamentId, onClose, onSav
                 ref={stitchedResultRef}
                 className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-8 relative overflow-hidden"
               >
+                {/* Background decorations for realism (low opacity) */}
+                <div className="absolute top-0 left-0 w-64 h-64 bg-[#ff8f00]/2 blur-[100px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
+                <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-500/2 blur-[100px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2"></div>
+
                 {/* Team Logos & Series Score Header */}
                 <div className="bg-black/20 border border-white/5 rounded-xl p-8 text-center relative z-10 mb-6">
                   

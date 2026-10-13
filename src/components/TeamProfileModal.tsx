@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db, doc, updateDoc } from '../firebase';
 import { X, Trophy, Award, Shield, Users, Download, Edit3, Globe, BarChart3, Swords, Settings, Star, Medal, ExternalLink, Check, Calendar, DollarSign, PieChart, TrendingUp, CheckCircle, Crown } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import { saveElementAsImage } from '../lib/exportImage';
 import TeamLogo from './TeamLogo';
 import PlayerAvatar from './PlayerAvatar';
 import PlayerProfileModal from './PlayerProfileModal';
@@ -410,17 +411,11 @@ export default function TeamProfileModal({ team, user, onClose, onUpdateTeam, al
     if (!profileRef.current) return;
     setIsDownloading(true);
     try {
-      const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-      let dataUrl: string;
-      try {
-        dataUrl = await toPng(profileRef.current, { cacheBust: true, pixelRatio: 2, skipFonts: true, fontEmbedCSS: '', imagePlaceholder: transparentPlaceholder });
-      } catch (e) {
-        dataUrl = await toPng(profileRef.current, { pixelRatio: 1.5, skipFonts: true, fontEmbedCSS: '', imagePlaceholder: transparentPlaceholder });
-      }
-      const link = document.createElement('a');
-      link.download = `HLTV_Team_${team.name || 'Team'}.png`;
-      link.href = dataUrl;
-      link.click();
+      const fileName = `HLTV_Team_${team.name || 'Team'}.png`;
+      await saveElementAsImage(profileRef.current, fileName, {
+        backgroundColor: '#10111a',
+        pixelRatio: 3
+      });
     } catch (err) {
       console.error('Error generating image', err);
     } finally {

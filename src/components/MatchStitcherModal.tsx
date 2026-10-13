@@ -8,7 +8,8 @@ import {
 import PlayerAvatar from './PlayerAvatar';
 import TeamLogo from './TeamLogo';
 import { getKdColorClass, compressImage } from '../lib/utils';
-import { downloadElementAsImage } from '../lib/exportImage';
+import { downloadElementAsImage, saveElementAsImage } from '../lib/exportImage';
+import { saveFileAs } from '../lib/fileSystem';
 import { loadTournaments, getCanonicalRoomId } from './setka_tourn/storage';
 import { db, doc, deleteDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc } from '../firebase';
 
@@ -1006,19 +1007,22 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
         if (maxMatchesInTop >= 2) {
           if (p.matchesCount === 1) {
             // Significant penalty for 1-match sample size variance
-            const singleMatchPenalty = maxMatchesInTop >= 4 ? 0.28 : (maxMatchesInTop === 3 ? 0.22 : 0.16);
+            // Increased penalty: 0.35 - 0.45 range to ensure 1-match wonders don't stay at top
+            const singleMatchPenalty = maxMatchesInTop >= 4 ? 0.45 : (maxMatchesInTop === 3 ? 0.38 : 0.30);
             weightedRating -= singleMatchPenalty;
+            
             // Additional penalty if they never reached playoffs
             if (p.highestMatchPriority < 2) {
-              weightedRating -= 0.06;
+              weightedRating -= 0.15;
             }
           } else if (p.matchesCount === 2 && maxMatchesInTop >= 4) {
-            weightedRating -= 0.10;
+            weightedRating -= 0.20;
           }
 
           // Bonus for tournament endurance & consistent high-volume participation
+          // Higher reward for staying power
           if (p.matchesCount >= 3) {
-            const distanceBonus = Math.min(0.08, (p.matchesCount - 1) * 0.02);
+            const distanceBonus = Math.min(0.15, (p.matchesCount - 1) * 0.04);
             weightedRating += distanceBonus;
           }
         }
@@ -1027,26 +1031,37 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
         // Grand Finalists (priority 3)
         if (p.highestMatchPriority === 3 || p.playedInFinal) {
           // Major boost for reaching the Grand Final
-          weightedRating += 0.12;
+          weightedRating += 0.20;
 
           // Performance in the Grand Final itself
-          if (p.finalMatchRating >= 1.25) {
-            weightedRating += 0.05; // Dominant final performance
+          if (p.finalMatchRating >= 1.40) {
+            weightedRating += 0.10; // Legend final performance
+          } else if (p.finalMatchRating >= 1.25) {
+            weightedRating += 0.07; // Dominant final performance
           } else if (p.finalMatchRating >= 1.10) {
-            weightedRating += 0.03; // Strong final performance
+            weightedRating += 0.04; // Strong final performance
           }
 
           // Champion boost: winning the Grand Final
           if (p.finalMatchWon) {
-            weightedRating += 0.04; // Tournament champion bonus
+            weightedRating += 0.08; // Tournament champion bonus
           }
         } else if (p.highestMatchPriority === 2 || p.playedInSemi) {
           // Semi-finalists
-          weightedRating += 0.05;
+          weightedRating += 0.08;
         }
 
         // 3. COMPETITIVE GUARDS:
         // Negative K/D guard: cannot be top tier with negative KD
+        if (kd < 0.90 && kpr < 0.60) {
+          weightedRating -= 0.15;
+        }
+        
+        // Consistency check: if rating is very high but kills are low, it might be an outlier
+        if (rating > 1.30 && kpr < 0.65 && p.matchesCount < 2) {
+          weightedRating -= 0.10;
+        }
+
         if (kd < 0.85 && kpr < 0.55) {
           weightedRating = Math.min(0.92, weightedRating);
         } else if (kd < 0.92 && kpr < 0.60) {
@@ -1097,7 +1112,7 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
     if (!skleykaRef.current) return;
     setIsDownloading(true);
     try {
-      await downloadElementAsImage(
+      await saveElementAsImage(
         skleykaRef.current, 
         `${activeTop.name.replace(/\s+/g, '_')}_all_players_${Date.now()}.png`, 
         { backgroundColor: '#0a0a0f' }
@@ -1164,15 +1179,10 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
       format: "MatchStitcher_v2_Export"
     };
     
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${activeTop.name.replace(/\s+/g, '_')}_stats_all_players.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    saveFileAs(
+      JSON.stringify(data, null, 2),
+      `${activeTop.name.replace(/\s+/g, '_')}_stats_all_players.json`
+    );
   };
 
   const playerDetails = useMemo(() => {
@@ -1546,8 +1556,8 @@ export default function MatchStitcherModal({ user, onClose }: Props) {
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 opacity-50" />
                     
                     {/* Background decorations like in MatchDetails */}
-                    <div className="absolute top-0 left-0 w-96 h-96 bg-yellow-500/5 blur-[120px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2" />
-                    <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/5 blur-[120px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2" />
+                    <div className="absolute top-0 left-0 w-96 h-96 bg-yellow-500/2 blur-[120px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2" />
+                    <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/2 blur-[120px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2" />
                     
                     {/* Header in Export View */}
                     <div className="mb-10 text-center relative z-10">

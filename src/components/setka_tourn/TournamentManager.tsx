@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2, Users, ArrowLeftRight, Layout, Database, Save } from 'lucide-react';
+import { Trophy, Bookmark, Play, Layers, Plus, Check, Trash2, ArrowLeft, Settings, Download, Image as ImageIcon, X, ChevronUp, ChevronDown, ZoomIn, ZoomOut, RotateCcw, Sliders, Palette, Sparkles, Award, Undo2, Users, ArrowLeftRight, Layout, Database, Save, Search } from 'lucide-react';
 import { Tournament, TournamentSettings, Team, Match, Group, TournamentStageConfig } from './types';
 import { loadTournaments, saveTournament, deleteTournament, getTournamentBgImage, setTournamentBgImage, setTournamentLogoUrl, syncTournamentsWithServer, normalizeTournament } from './storage';
 import SingleEliminationStage from './SingleEliminationStage';
@@ -232,6 +232,9 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
   const [isSavingBracket, setIsSavingBracket] = useState(false);
   const [saveBracketSuccess, setSaveBracketSuccess] = useState(false);
   const [saveToastMessage, setSaveToastMessage] = useState<string | null>(null);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isQuickGrid, setIsQuickGrid] = useState(false);
 
   const handleManualSaveBracket = () => {
     if (!activeTournament) return;
@@ -1001,6 +1004,52 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
   };
 
   const handleUpdateActive = (updated: Tournament) => {
+      const isStageSwitch = activeTournament && updated.activeStage !== activeTournament.activeStage;
+      
+      let toSave = { ...updated };
+
+      // CRITICAL BUG FIX: If we are switching stages, we MUST first sync the OLD stage 
+      // and THEN load the NEW stage data into root fields.
+      if (isStageSwitch && activeTournament.settings?.stages) {
+          const oldStageIdx = (activeTournament.activeStage || 1) - 1;
+          const newStageIdx = (updated.activeStage || 1) - 1;
+          const stages = [...(toSave.settings?.stages || [])];
+
+          // 1. Sync CURRENT (old) root data back to its stage before switching
+          if (stages[oldStageIdx]) {
+              stages[oldStageIdx] = {
+                  ...stages[oldStageIdx],
+                  bracketRounds: activeTournament.bracketRounds,
+                  losersBracketRounds: activeTournament.losersBracketRounds,
+                  grandFinal: activeTournament.grandFinal,
+                  groups: activeTournament.groups,
+                  gslGroups: activeTournament.gslGroups,
+                  swissRounds: activeTournament.swissRounds,
+                  qualifiersBrackets: activeTournament.qualifiersBrackets,
+                  tieredBracketRounds: activeTournament.tieredBracketRounds,
+                  teams: activeTournament.teams
+              };
+          }
+
+          // 2. Load TARGET (new) stage data into the ROOT fields so components render the new stage
+          const nextStage = stages[newStageIdx];
+          if (nextStage) {
+              toSave.bracketRounds = nextStage.bracketRounds;
+              toSave.losersBracketRounds = nextStage.losersBracketRounds;
+              toSave.grandFinal = nextStage.grandFinal;
+              toSave.groups = nextStage.groups;
+              toSave.gslGroups = nextStage.gslGroups;
+              toSave.swissRounds = nextStage.swissRounds;
+              toSave.qualifiersBrackets = nextStage.qualifiersBrackets;
+              toSave.tieredBracketRounds = nextStage.tieredBracketRounds;
+              toSave.teams = nextStage.teams || toSave.teams;
+          }
+          
+          if (toSave.settings) {
+              toSave.settings.stages = stages;
+          }
+      }
+
       if (activeTournament) {
         setHistoryStack(prev => {
           try {
@@ -1018,7 +1067,7 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
           }
         });
       }
-      let toSave = { ...updated };
+
       let winnerName = toSave.winnerName || '';
       if (toSave.settings?.stage1Type === 'gsl_groups' && toSave.activeStage === 2 && toSave.tieredBracketRounds && toSave.tieredBracketRounds.length > 0) {
           const lastRound = toSave.tieredBracketRounds[toSave.tieredBracketRounds.length - 1];
@@ -1050,20 +1099,21 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
           toSave.winnerName = winnerName;
       }
 
-      // Ensure active stage in settings.stages is strictly synchronized with root brackets
-      if (toSave.settings && Array.isArray(toSave.settings.stages) && toSave.settings.stages.length > 0) {
+      // Ensure active stage in settings.stages is strictly synchronized with root brackets (standard non-switching update)
+      if (!isStageSwitch && toSave.settings && Array.isArray(toSave.settings.stages) && toSave.settings.stages.length > 0) {
         const curStageIdx = Math.min(Math.max(0, (toSave.activeStage || 1) - 1), toSave.settings.stages.length - 1);
         if (toSave.settings.stages[curStageIdx]) {
           toSave.settings.stages[curStageIdx] = {
             ...toSave.settings.stages[curStageIdx],
-            bracketRounds: toSave.bracketRounds || toSave.settings.stages[curStageIdx].bracketRounds,
-            losersBracketRounds: toSave.losersBracketRounds || toSave.settings.stages[curStageIdx].losersBracketRounds,
-            grandFinal: toSave.grandFinal || toSave.settings.stages[curStageIdx].grandFinal,
-            groups: toSave.groups || toSave.settings.stages[curStageIdx].groups,
-            gslGroups: toSave.gslGroups || toSave.settings.stages[curStageIdx].gslGroups,
-            swissRounds: toSave.swissRounds || toSave.settings.stages[curStageIdx].swissRounds,
-            qualifiersBrackets: toSave.qualifiersBrackets || toSave.settings.stages[curStageIdx].qualifiersBrackets,
-            tieredBracketRounds: toSave.tieredBracketRounds || toSave.settings.stages[curStageIdx].tieredBracketRounds,
+            bracketRounds: toSave.bracketRounds,
+            losersBracketRounds: toSave.losersBracketRounds,
+            grandFinal: toSave.grandFinal,
+            groups: toSave.groups,
+            gslGroups: toSave.gslGroups,
+            swissRounds: toSave.swissRounds,
+            qualifiersBrackets: toSave.qualifiersBrackets,
+            tieredBracketRounds: toSave.tieredBracketRounds,
+            teams: toSave.teams
           };
         }
       }
@@ -1071,10 +1121,18 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
       try {
           saveTournament(userId, toSave);
           setActiveTournament(toSave);
-          setTournaments(loadTournaments(userId));
+          // Optimization: Update the specific tournament in the local list without a full reload from storage
+          // to prevent race conditions or loading old data if storage isn't fully flushed yet.
+          setTournaments(prev => {
+              if (!Array.isArray(prev)) return [toSave];
+              const exists = prev.some(t => t.id === toSave.id);
+              if (exists) {
+                  return prev.map(t => t.id === toSave.id ? toSave : t);
+              }
+              return [toSave, ...prev];
+          });
       } catch (e) {
           console.warn("Could not save to localStorage due to size limit. Attempting to bypass local cache...");
-          // Fallback if local storage quota exceeded: Try to save just to Firestore directly!
           if (toSave.id) {
             import('../../firebase').then(({ db, doc, setDoc }) => {
                setDoc(doc(db, "tournaments", toSave.id), toSave).then(() => {
@@ -2026,6 +2084,14 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                             title="Принудительно сохранить сетку турнира в локальную базу и облако"
                           >
                             <Save className="w-4 h-4" /> СОХРАНИТЬ
+                          </button>
+
+                           <button 
+                            onClick={() => setShowDownloadModal(true)} 
+                            className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg active:scale-95"
+                            title="Скачать данные турнира (JSON/PDF)"
+                          >
+                            <Download className="w-4 h-4" /> СКАЧАТЬ
                           </button>
 
                            <button 
@@ -3313,11 +3379,12 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
                   initialName={templateForCreation ? templateForCreation.name : ""}
                   initialLogoUrl={templateForCreation ? templateForCreation.logoUrl : ""}
                   initialPrizePool={templateForCreation ? templateForCreation.prizePool : (activeGame === 'so2' ? '1,500,000 ₽' : '$100,000')}
-                  initialSettings={templateForCreation ? templateForCreation.settings : undefined}
+                  initialSettings={templateForCreation ? templateForCreation.settings : (isQuickGrid ? { mode: 'single_stage', numStages: 1, stages: [{ id: 'stage_1', name: 'Сетка', type: 'playoff', teams: [] }] } as any : undefined)}
               />
           </div>
       );
   }
+
 
   const currentUniverseTournaments = Array.isArray(tournaments) ? tournaments.filter(t => {
     const tGame = t.game || t.settings?.game || 'cs2';
@@ -3325,251 +3392,415 @@ export default function TournamentManager({ user, tournamentId, onBack }: { user
     return tGame !== 'so2';
   }) : [];
 
-  const filteredTournaments = Array.isArray(currentUniverseTournaments) ? currentUniverseTournaments.filter(t => {
+  const filteredTournaments = currentUniverseTournaments.filter(t => {
+    const matchesSearch = (t.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    
     if (activeTabList === 'templates') return (t as any).isTemplate === true;
-    if ((t as any).isTemplate === true) return false; // Hide templates from active/completed
+    if ((t as any).isTemplate === true) return false;
     if (activeTabList === 'completed') return (t.completed || (t as any).status === 'completed');
     return (!t.completed && (t as any).status !== 'completed');
-  }) : [];
+  });
 
   return (
-    <div className="w-full">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center flex-wrap gap-3">
-            <h2 className="text-3xl font-black flex items-center gap-3 text-white">
-                <Trophy className={`w-8 h-8 ${activeGame === 'so2' ? 'text-orange-500' : 'text-[#ff8f00]'}`} /> 
-                Турнирный Хаб
-            </h2>
-            <div className="flex items-center bg-black/60 p-1 rounded-2xl border border-white/10 shadow-inner">
+    <div className="w-full h-full min-h-screen bg-[#050508] text-white">
+      <div className="max-w-[1800px] mx-auto px-4 py-8 sm:px-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div>
+            <div className="flex items-center flex-wrap gap-4">
+              <h2 className="text-4xl font-black flex items-center gap-3 text-white tracking-tight uppercase">
+                  <Trophy className={`w-10 h-10 ${activeGame === 'so2' ? 'text-orange-500' : 'text-[#ff8f00]'} drop-shadow-[0_0_15px_rgba(255,143,0,0.3)]`} /> 
+                  Турниры
+              </h2>
+              <div className="flex items-center bg-zinc-900/80 p-1 rounded-2xl border border-white/5 shadow-2xl backdrop-blur-md">
+                <button 
+                  onClick={() => setActiveGame('cs2')}
+                  className={`px-6 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all cursor-pointer ${
+                    activeGame === 'cs2'
+                      ? 'bg-[#ff8f00] text-black shadow-[0_0_20px_rgba(255,143,0,0.4)]'
+                      : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <span>CS2</span>
+                </button>
+                <button 
+                  onClick={() => setActiveGame('so2')}
+                  className={`px-6 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all cursor-pointer ${
+                    activeGame === 'so2'
+                      ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-[0_0_20px_rgba(249,115,22,0.4)]'
+                      : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <span>SO2</span>
+                </button>
+              </div>
+            </div>
+            <p className="text-zinc-500 text-sm mt-3 font-medium max-w-lg">
+              {activeGame === 'so2' 
+                ? 'Профессиональные лиги и открытые чемпионаты по Standoff 2. Управляйте сетками и следите за результатами.' 
+                : 'Главный хаб турниров Counter-Strike 2. Создавайте свои события или выбирайте из существующих шаблонов.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex bg-zinc-900/80 p-1.5 rounded-2xl border border-white/5 backdrop-blur-xl shadow-2xl overflow-x-auto max-w-full">
               <button 
-                onClick={() => setActiveGame('cs2')}
-                className={`px-3 py-1 rounded-xl text-xs font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeGame === 'cs2'
-                    ? 'bg-[#ff8f00] text-black shadow-[0_0_12px_rgba(255,143,0,0.35)]'
-                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                onClick={() => setActiveTabList('active')}
+                className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  activeTabList === 'active' 
+                    ? 'bg-zinc-800 text-white border border-white/10 shadow-lg' 
+                    : 'text-zinc-500 hover:text-white'
                 }`}
-                title="Переключить на турниры Counter-Strike 2"
               >
-                <span>CS2</span>
+                🏆 Активные ({currentUniverseTournaments.filter(t => !t.completed && (t as any).status !== 'completed' && !(t as any).isTemplate).length})
               </button>
               <button 
-                onClick={() => setActiveGame('so2')}
-                className={`px-3 py-1 rounded-xl text-xs font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeGame === 'so2'
-                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-[0_0_12px_rgba(249,115,22,0.35)]'
-                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                onClick={() => setActiveTabList('completed')}
+                className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  activeTabList === 'completed' 
+                    ? 'bg-zinc-800 text-white border border-white/10 shadow-lg' 
+                    : 'text-zinc-500 hover:text-white'
                 }`}
-                title="Переключить на турниры Standoff 2"
               >
-                <span>SO2</span>
+                📜 История ({currentUniverseTournaments.filter(t => (t.completed || (t as any).status === 'completed') && !(t as any).isTemplate).length})
+              </button>
+              <button 
+                onClick={() => setActiveTabList('templates')}
+                className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  activeTabList === 'templates' 
+                    ? 'bg-zinc-800 text-white border border-white/10 shadow-lg' 
+                    : 'text-zinc-500 hover:text-white'
+                }`}
+              >
+                📑 Шаблоны ({currentUniverseTournaments.filter(t => (t as any).isTemplate === true).length})
               </button>
             </div>
+
+            <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => { setIsQuickGrid(true); setIsCreating(true); }} 
+                  className="bg-zinc-800 text-white px-6 py-3.5 rounded-2xl font-black uppercase tracking-wider flex items-center gap-3 hover:bg-zinc-700 transition-all border border-white/5 cursor-pointer text-xs"
+                >
+                    <Layout className="w-5 h-5 text-blue-400" /> БЕЗ СТАДИЙ
+                </button>
+
+                <button 
+                  onClick={() => { setIsQuickGrid(false); setIsCreating(true); }} 
+                  className="bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black uppercase tracking-wider flex items-center gap-3 hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 transform hover:scale-105 active:scale-95 cursor-pointer text-xs"
+                >
+                    <Plus className="w-5 h-5" /> Создать турнир
+                </button>
+            </div>
           </div>
-          <p className="text-white/50 text-sm mt-1">
-            {activeGame === 'so2' 
-              ? 'Чемпионаты, кубки и официальные турниры по Standoff 2 (SO2)' 
-              : 'Текущие чемпионаты и исторический архив турниров CS2'}
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex bg-black/60 p-1.5 rounded-2xl border border-white/10 backdrop-blur-md overflow-x-auto max-w-full">
-            <button 
-              onClick={() => setActiveTabList('active')}
-              className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTabList === 'active' 
-                  ? 'bg-[#ff8f00] text-black shadow-[0_0_15px_rgba(255,143,0,0.3)]' 
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              🏆 Активные ({currentUniverseTournaments.filter(t => !t.completed && (t as any).status !== 'completed' && !(t as any).isTemplate).length})
-            </button>
-            <button 
-              onClick={() => setActiveTabList('completed')}
-              className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTabList === 'completed' 
-                  ? 'bg-[#ff8f00] text-black shadow-[0_0_15px_rgba(255,143,0,0.3)]' 
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              📜 История ({currentUniverseTournaments.filter(t => (t.completed || (t as any).status === 'completed') && !(t as any).isTemplate).length})
-            </button>
-            <button 
-              onClick={() => setActiveTabList('templates')}
-              className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeTabList === 'templates' 
-                  ? 'bg-[#ff8f00] text-black shadow-[0_0_15px_rgba(255,143,0,0.3)]' 
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              📑 Шаблоны ({Array.isArray(currentUniverseTournaments) ? currentUniverseTournaments.filter(t => (t as any).isTemplate === true).length : 0})
-            </button>
-          </div>
-
-          <button 
-            onClick={() => setIsCreating(true)} 
-            className="bg-[#ff8f00] text-black px-5 py-2.5 rounded-xl font-black uppercase tracking-wider flex items-center gap-2 hover:bg-[#ffa733] transition-colors shadow-[0_0_15px_rgba(255,143,0,0.3)] cursor-pointer text-xs"
-          >
-              <Plus className="w-4 h-4" /> Создать турнир
-          </button>
+        {/* Search Bar - Modern Beta Style */}
+        <div className="mb-8 relative group max-w-2xl animate-in fade-in slide-in-from-top-2 duration-600">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 group-focus-within:text-blue-500 transition-colors" />
+          <input 
+            type="text"
+            placeholder="Поиск по названию турнира..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-zinc-900/50 border border-zinc-800 rounded-2xl pl-14 pr-6 py-4 text-white outline-none focus:border-blue-500/50 transition-all font-bold placeholder:text-zinc-600"
+          />
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredTournaments.map(t => {
-              const rawTBg = t.settings?.bgImage || getTournamentBgImage(t.id);
-              const isMapCardBg = rawTBg && (String(rawTBg).includes('/maps/') || String(rawTBg).startsWith('/maps/'));
-              const cardBgImg = (!isMapCardBg && rawTBg && rawTBg !== 'null' && rawTBg !== 'undefined' && String(rawTBg).trim() !== '') ? rawTBg : null;
-              const defaultCardTheme = 'cyber_grid';
-              let cardThemeKey = t.settings?.bgTheme;
-              if (!cardThemeKey || cardThemeKey.startsWith('cs2_') || cardThemeKey.startsWith('so2_')) {
-                cardThemeKey = 'cyber_grid';
-              }
-              const cardTheme = getCleanTournamentTheme(cardThemeKey);
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            {filteredTournaments.map(t => {
+                const rawTBg = t.settings?.bgImage || getTournamentBgImage(t.id);
+                const isMapCardBg = rawTBg && (String(rawTBg).includes('/maps/') || String(rawTBg).startsWith('/maps/'));
+                const cardBgImg = (!isMapCardBg && rawTBg && rawTBg !== 'null' && rawTBg !== 'undefined' && String(rawTBg).trim() !== '') ? rawTBg : null;
+                const cardThemeKey = t.settings?.bgTheme || 'cyber_grid';
+                const cardTheme = getCleanTournamentTheme(cardThemeKey);
 
-              return (
-              <div 
-                key={t.id} 
-                onMouseEnter={() => concentrateOnTournament(t, userId)}
-                onClick={() => {
-                  if (activeTabList === 'templates') {
-                    setTemplateForCreation(t);
-                    setIsCreating(true);
-                  } else {
-                    concentrateOnTournament(t, userId);
-                    setActiveTournament(t);
-                  }
-                }} 
-                className="bg-[#12121a] p-6 rounded-2xl border border-white/5 shadow-xl hover:border-[#ff8f00]/50 transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between min-h-[220px]"
-              >
-                  {/* Background Layer Preview */}
-                  {cardBgImg ? (
-                      <div 
-                        className="absolute inset-0 bg-cover bg-center opacity-20 group-hover:opacity-35 transition-opacity pointer-events-none" 
-                        style={{ backgroundImage: `url(${cardBgImg})` }} 
-                      />
-                  ) : (
-                      <div 
-                        className={`absolute inset-0 opacity-20 group-hover:opacity-35 transition-opacity pointer-events-none ${cardTheme.className}`} 
-                        style={cardTheme.style} 
-                      />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#12121a] via-[#12121a]/80 to-transparent pointer-events-none" />
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-[#ff8f00]/5 rounded-full blur-2xl group-hover:bg-[#ff8f00]/15 transition-all pointer-events-none" />
-
-                  <div>
-                    <div className="flex justify-between items-start mb-4 gap-3">
-                        <div className="flex items-center gap-3">
-                          {t.logoUrl ? (
-                            <img 
-                              src={t.logoUrl} 
-                              alt={t.name} 
-                              className="w-12 h-12 object-contain rounded-xl border border-white/10 bg-black/60 p-1 shadow-md"
-                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-xl bg-[#18192a] border border-white/10 flex items-center justify-center text-[#ff8f00] font-black text-xl shadow-md flex-shrink-0">
-                                ?
-                            </div>
-                          )}
-                          <div>
-                            <h3 className="font-black text-xl text-white group-hover:text-[#ff8f00] transition-colors line-clamp-1">{t.name || 'Без названия'}</h3>
-                            <span className="text-[#ff8f00] text-xs font-black">💰 Призовой: {t.prizePool || '$100,000'}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 z-10 relative">
-                          {activeTabList === 'templates' ? (
-                            <button 
-                              onClick={(e) => {
-                                  e.stopPropagation();
-                                  setTemplateForCreation(t);
-                                  setIsCreating(true);
-                              }}
-                              className="text-white/20 hover:text-[#ff8f00] transition-colors p-1"
-                              title="Создать турнир по этому шаблону"
-                            >
-                                <Play className="w-5 h-5" />
-                            </button>
-                          ) : (
-                            <button 
-                              onClick={(e) => handleSaveAsTemplate(e, t)}
-                              className="text-white/20 hover:text-emerald-400 transition-colors p-1"
-                              title="Сделать шаблоном"
-                            >
-                                <Bookmark className="w-5 h-5" />
-                            </button>
-                          )}
-                          <button 
-                            onClick={(e) => handleDelete(e, t.id)} 
-                            className="text-white/20 hover:text-red-500 transition-colors p-1"
-                            title={activeTabList === 'templates' ? "Удалить шаблон" : "Удалить турнир"}
-                          >
-                              <Trash2 className="w-5 h-5" />
-                          </button>
-                        </div>
-                    </div>
-
-                    {activeTabList !== 'templates' && (t.completed || (t as any).status === 'completed' || t.winnerName) && (
-                      <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 flex items-center gap-2">
-                        <span className="text-amber-400 text-lg">👑</span>
-                        <div>
-                          <div className="text-[10px] font-black text-amber-400/80 uppercase tracking-wider">Победитель</div>
-                          <div className="text-sm font-black text-white">{t.winnerName || 'Определяется'}</div>
-                        </div>
-                      </div>
+                return (
+                <div 
+                  key={t.id} 
+                  onClick={() => {
+                    if (activeTabList === 'templates') {
+                      setTemplateForCreation(t);
+                      setIsCreating(true);
+                    } else {
+                      concentrateOnTournament(t, userId);
+                      setActiveTournament(t);
+                    }
+                  }} 
+                  className="group bg-zinc-900/80 border border-zinc-800 rounded-[2.5rem] p-8 hover:border-blue-500/50 hover:bg-zinc-800 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[280px] shadow-2xl hover:shadow-blue-500/10"
+                >
+                    {/* Background Decoration */}
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[100px] group-hover:bg-blue-500/10 transition-all pointer-events-none" />
+                    
+                    {cardBgImg && (
+                        <div 
+                          className="absolute inset-0 bg-cover bg-center opacity-[0.03] group-hover:opacity-[0.08] transition-opacity pointer-events-none" 
+                          style={{ backgroundImage: `url(${cardBgImg})` }} 
+                        />
                     )}
 
-                    <div className="text-white/50 text-xs flex flex-col gap-1.5">
-                        <div className="flex justify-between border-b border-white/5 pb-1">
-                          <span>Формат:</span>
-                          <span className="text-white font-bold">{t.settings?.stage1Type === 'swiss' ? 'Швейцарская система' : t.settings?.stage1Type === 'groups' ? 'Групповой этап' : 'Плей-офф'}</span>
-                        </div>
-                        {activeTabList !== 'templates' && (
-                          <div className="flex justify-between border-b border-white/5 pb-1">
-                            <span>Команд:</span>
-                            <span className="text-white font-bold">{t.teams?.length || 0}</span>
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-6 gap-4">
+                          <div className="flex items-center gap-5">
+                            {t.logoUrl ? (
+                              <div className="w-20 h-20 rounded-2xl bg-zinc-950 border border-white/5 p-2 shadow-2xl group-hover:scale-110 transition-transform overflow-hidden flex items-center justify-center">
+                                <img 
+                                  src={t.logoUrl} 
+                                  alt={t.name} 
+                                  className="w-full h-full object-contain"
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-20 h-20 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-700 font-black text-3xl shadow-inner flex-shrink-0 group-hover:scale-110 transition-transform">
+                                  <Trophy className="w-10 h-10" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <h3 className="font-black text-2xl text-white group-hover:text-blue-400 transition-colors line-clamp-1 uppercase tracking-tighter">{t.name || 'Турнир'}</h3>
+                              <div className="flex items-center gap-3 mt-2">
+                                 <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider ${activeGame === 'so2' ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-400'}`}>
+                                    {t.game === 'so2' ? 'Standoff 2' : 'CS2'}
+                                 </span>
+                                 <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">💰 {t.prizePool || '$100,000'}</span>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        <div className="flex justify-between">
-                          <span>Статус:</span>
-                          <span className={`font-black ${activeTabList === 'templates' ? 'text-gray-400' : (t.completed || (t as any).status === 'completed' ? 'text-amber-400' : 'text-emerald-400')}`}>
-                            {activeTabList === 'templates' ? '📑 Шаблон' : (t.completed || (t as any).status === 'completed' ? '🏁 Завершен (В истории)' : '🔴 Активен')}
-                          </span>
+
+                          <div className="flex flex-col gap-2 relative z-20">
+                            {activeTabList === 'templates' ? (
+                              <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTemplateForCreation(t);
+                                    setIsCreating(true);
+                                }}
+                                className="w-10 h-10 flex items-center justify-center bg-zinc-800 hover:bg-[#ff8f00] text-zinc-500 hover:text-black rounded-xl transition-all shadow-xl"
+                                title="Использовать шаблон"
+                              >
+                                  <Play className="w-5 h-5 fill-current" />
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={(e) => handleSaveAsTemplate(e, t)}
+                                className="w-10 h-10 flex items-center justify-center bg-zinc-800 hover:bg-emerald-600 text-zinc-500 hover:text-white rounded-xl transition-all shadow-xl"
+                                title="В шаблон"
+                              >
+                                  <Bookmark className="w-5 h-5" />
+                              </button>
+                            )}
+                            <button 
+                              onClick={(e) => handleDelete(e, t.id)} 
+                              className="w-10 h-10 flex items-center justify-center bg-zinc-800 hover:bg-red-600 text-zinc-500 hover:text-white rounded-xl transition-all shadow-xl"
+                            >
+                                <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                      </div>
+
+                      {activeTabList !== 'templates' && (t.completed || (t as any).status === 'completed' || t.winnerName) && (
+                        <div className="mb-6 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl p-4 flex items-center gap-4">
+                          <div className="w-10 h-10 bg-yellow-500 rounded-xl flex items-center justify-center text-xl shadow-lg">👑</div>
+                          <div>
+                            <div className="text-[10px] font-black text-yellow-500 uppercase tracking-widest">Победитель</div>
+                            <div className="text-lg font-black text-white uppercase tracking-tight truncate max-w-[150px]">{t.winnerName || 'ТБД'}</div>
+                          </div>
                         </div>
+                      )}
+
+                      {(t.settings?.stages?.length || 1) > 1 && (
+                        <div className="grid grid-cols-2 gap-4 pt-6 border-t border-white/5">
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Стадий</span>
+                              <span className="text-xs font-bold text-zinc-300">
+                                {(t.settings?.stages?.length || 1)} Этапов
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Статус</span>
+                              <span className={`text-xs font-black uppercase flex items-center gap-1.5 ${activeTabList === 'templates' ? 'text-zinc-600' : (t.completed || (t as any).status === 'completed' ? 'text-yellow-500' : 'text-emerald-500')}`}>
+                                 {activeTabList === 'templates' ? 'Шаблон' : (t.completed || (t as any).status === 'completed' ? 'Завершен' : 'В эфире')}
+                                 {!t.completed && (t as any).status !== 'completed' && activeTabList !== 'templates' && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                              </span>
+                            </div>
+                        </div>
+                      )}
+
+                      {(t.settings?.stages?.length || 1) <= 1 && (
+                        <div className="pt-6 border-t border-white/5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Статус</span>
+                                <span className={`text-xs font-black uppercase flex items-center gap-1.5 ${activeTabList === 'templates' ? 'text-zinc-600' : (t.completed || (t as any).status === 'completed' ? 'text-yellow-500' : 'text-emerald-500')}`}>
+                                  {activeTabList === 'templates' ? 'Шаблон' : (t.completed || (t as any).status === 'completed' ? 'Завершен' : 'Активен')}
+                                  {!t.completed && (t as any).status !== 'completed' && activeTabList !== 'templates' && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Формат</span>
+                                <span className="text-[10px] font-bold text-white/50 uppercase tracking-tight">
+                                  {t.settings?.mode === 'swiss' ? 'Швейцарка' : (t.settings?.eliminationType === 'double' ? 'Double Elim' : 'Single Elim')}
+                                </span>
+                              </div>
+                            </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
 
-                  <div className="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-[#ff8f00] group-hover:translate-x-1 transition-transform">
-                    <span>{activeTabList === 'templates' ? 'Использовать шаблон →' : 'Открыть интерактивную сетку →'}</span>
-                  </div>
-              </div>
-            );
-          })}
+                    <div className="mt-8 flex items-center justify-between group-hover:translate-x-2 transition-transform">
+                      <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">
+                        {activeTabList === 'templates' ? 'Начать по шаблону' : 'Открыть турнир'}
+                      </span>
+                      <ChevronDown className="w-5 h-5 text-zinc-700 -rotate-90 group-hover:text-blue-500 transition-colors" />
+                    </div>
+                </div>
+              );
+            })}
 
-          {filteredTournaments.length === 0 && (
-              <div className="col-span-full py-16 text-center text-white/40 border-2 border-dashed border-white/10 rounded-2xl bg-[#12121a]/50">
-                  <Trophy className="w-12 h-12 text-white/20 mx-auto mb-3" />
-                  <p className="font-bold text-lg text-white/60 mb-1">
-                    {activeTabList === 'completed' 
-                      ? 'В истории пока нет завершенных турниров' 
-                      : activeTabList === 'templates' 
-                        ? 'У вас пока нет сохраненных шаблонов' 
-                        : 'У вас нет активных турниров'}
-                  </p>
-                  <p className="text-xs text-white/40 max-w-md mx-auto">
-                    {activeTabList === 'completed' 
-                      ? 'Завершите активный турнир, чтобы он сохранился в истории результатов и наград.' 
-                      : activeTabList === 'templates' 
-                        ? 'Нажмите на кнопку с закладкой на любой карточке активного или завершенного турнира, чтобы сохранить его настройки как шаблон.'
-                        : 'Создайте свой первый турнир прямо сейчас!'}
-                  </p>
-              </div>
-          )}
+            {filteredTournaments.length === 0 && (
+                <div className="col-span-full py-32 text-center border-2 border-dashed border-zinc-800 rounded-[3rem] bg-zinc-900/20">
+                    <Trophy className="w-16 h-16 text-zinc-800 mx-auto mb-6" />
+                    <h3 className="font-black text-2xl text-white mb-2 uppercase tracking-tighter">Ничего не найдено</h3>
+                    <p className="text-zinc-600 font-medium mb-10">Попробуйте изменить поисковый запрос или фильтры.</p>
+                    <button 
+                      onClick={() => { setSearchQuery(''); setActiveTabList('active'); }}
+                      className="bg-zinc-800 hover:bg-zinc-700 text-white font-black px-10 py-4 rounded-2xl transition-all uppercase text-xs tracking-widest border border-white/5"
+                    >
+                      Сбросить поиск
+                    </button>
+                </div>
+            )}
+        </div>
       </div>
 
-      {/* Official Standoff 2 Media Library Modal */}
+      {/* Download Modal - JSON / PDF */}
+      {showDownloadModal && activeTournament && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-[#12121a] border border-white/10 p-8 rounded-[2.5rem] max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="bg-blue-600/10 w-16 h-16 rounded-2xl flex items-center justify-center text-blue-500 mb-6 mx-auto">
+                 <Download className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter text-center">Выгрузка данных</h3>
+              <p className="text-white/40 mb-8 font-medium text-center text-xs">Выберите формат для сохранения турнира "{activeTournament.name}"</p>
+              
+              <div className="space-y-3">
+                 <button 
+                    onClick={() => {
+                        const dataStr = JSON.stringify(activeTournament, null, 2);
+                        const blob = new Blob([dataStr], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `${(activeTournament.name || 'tournament').replace(/\s+/g, '_')}_data.json`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        setShowDownloadModal(false);
+                    }}
+                    className="w-full flex items-center justify-between p-4 bg-zinc-900 border border-white/5 hover:border-blue-500/50 hover:bg-zinc-800 rounded-2xl transition-all group"
+                 >
+                    <div className="flex items-center gap-4">
+                       <Database className="w-5 h-5 text-emerald-400" />
+                       <div className="text-left">
+                          <div className="text-sm font-black text-white">JSON ФАЙЛ</div>
+                          <div className="text-[10px] font-bold text-white/30 uppercase">Для статистики и Rankoff</div>
+                       </div>
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-white/20 -rotate-90 group-hover:text-blue-500 transition-colors" />
+                 </button>
+
+                 <button 
+                    onClick={async () => {
+                        if (!stageRef.current) return;
+                        try {
+                           const { exportElementToDataUrl } = await import('../../lib/exportImage');
+                           const dataUrl = await exportElementToDataUrl(stageRef.current, { 
+                               backgroundColor: '#050508',
+                               quality: 1.0,
+                               pixelRatio: 2.0
+                           });
+                           
+                           if (dataUrl) {
+                               const { jsPDF } = await import('jspdf');
+                               const pdf = new jsPDF('l', 'px', [stageRef.current.scrollWidth * 0.75, stageRef.current.scrollHeight * 0.75]);
+                               const width = pdf.internal.pageSize.getWidth();
+                               const height = pdf.internal.pageSize.getHeight();
+                               pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
+                               pdf.save(`${(activeTournament.name || 'tournament').replace(/\s+/g, '_')}_bracket.pdf`);
+                           }
+                           setShowDownloadModal(false);
+                        } catch (err) {
+                           console.error("PDF Export error:", err);
+                           alert("Ошибка при создании PDF");
+                        }
+                    }}
+                    className="w-full flex items-center justify-between p-4 bg-zinc-900 border border-white/5 hover:border-red-500/50 hover:bg-zinc-800 rounded-2xl transition-all group"
+                 >
+                    <div className="flex items-center gap-4">
+                       <ImageIcon className="w-5 h-5 text-red-400" />
+                       <div className="text-left">
+                          <div className="text-sm font-black text-white">PDF / ФОТО</div>
+                          <div className="text-[10px] font-bold text-white/30 uppercase">Визуальная сетка турнира</div>
+                       </div>
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-white/20 -rotate-90 group-hover:text-red-500 transition-colors" />
+                 </button>
+
+                 <button 
+                    onClick={async () => {
+                        // Download JSON
+                        const dataStr = JSON.stringify(activeTournament, null, 2);
+                        const blob = new Blob([dataStr], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `${(activeTournament.name || 'tournament').replace(/\s+/g, '_')}_data.json`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+
+                        // Download PDF
+                        if (stageRef.current) {
+                           try {
+                              const { exportElementToDataUrl } = await import('../../lib/exportImage');
+                              const dataUrl = await exportElementToDataUrl(stageRef.current, { 
+                                  backgroundColor: '#050508',
+                                  quality: 1.0,
+                                  pixelRatio: 2.0
+                              });
+                              
+                              if (dataUrl) {
+                                  const { jsPDF } = await import('jspdf');
+                                  const pdf = new jsPDF('l', 'px', [stageRef.current.scrollWidth * 0.75, stageRef.current.scrollHeight * 0.75]);
+                                  const width = pdf.internal.pageSize.getWidth();
+                                  const height = pdf.internal.pageSize.getHeight();
+                                  pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
+                                  pdf.save(`${(activeTournament.name || 'tournament').replace(/\s+/g, '_')}_bracket.pdf`);
+                              }
+                           } catch (err) {}
+                        }
+                        setShowDownloadModal(false);
+                    }}
+                    className="w-full flex items-center justify-between p-4 bg-blue-600 hover:bg-blue-500 rounded-2xl transition-all group"
+                 >
+                    <div className="flex items-center gap-4 text-white">
+                       <Layers className="w-5 h-5" />
+                       <div className="text-left">
+                          <div className="text-sm font-black">СКАЧАТЬ ОБА</div>
+                          <div className="text-[10px] font-bold opacity-50 uppercase">JSON + PDF</div>
+                       </div>
+                    </div>
+                    <Check className="w-4 h-4 opacity-40" />
+                 </button>
+              </div>
+
+              <button 
+                onClick={() => setShowDownloadModal(false)}
+                className="w-full mt-6 bg-white/5 hover:bg-white/10 text-white font-black py-4 rounded-2xl transition-all uppercase text-[10px] tracking-widest border border-white/5"
+              >
+                ОТМЕНА
+              </button>
+           </div>
+        </div>
+      )}
+
       <So2MediaLibraryModal
         isOpen={showSo2Folder}
         onClose={() => setShowSo2Folder(false)}

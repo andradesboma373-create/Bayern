@@ -15,7 +15,7 @@ import SeriesStitcherModal from './SeriesStitcherModal';
 import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass, formatSwing, shuffleArray } from '../lib/utils';
 import { updateBetaTournamentMatchResult, loadTournaments, saveTournament, getCanonicalRoomId, deserializeTournamentFromFirestore, normalizeTournament } from './setka_tourn/storage';
 import { useGameUniverse } from '../lib/gameUniverse';
-import { Trophy, Sparkles, Layers, ChevronRight, Check } from 'lucide-react';
+import { Trophy, Sparkles, Layers, ChevronRight, Check, Download, ChevronDown, Image as ImageIcon, Database, X } from 'lucide-react';
 
 interface SimulatorPlayer {
   nickname: string;
@@ -583,12 +583,24 @@ export default function Simulator({ user }: { user: any }) {
     }
   }, [user, roomId, filterTournamentsByGame]);
 
+  const downloadJson = () => {
+    if (!result) return;
+    const dataStr = JSON.stringify(result, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = `match_${result.team1Name}_vs_${result.team2Name}_${Date.now()}.json`;
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    linkElement.remove();
+  };
+
   const downloadPhoto = async () => {
     if (!result || !resultContainerRef.current) return;
     setIsDownloading(true);
     try {
       // Allow React to re-render DOM with isDownloading state before capture
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 150));
 
       const { toPng } = await import('html-to-image');
       const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -632,6 +644,35 @@ export default function Simulator({ user }: { user: any }) {
       console.error('Ошибка создания изображения:', e?.message || e);
       alert('Error creating image: ' + (e?.message || e));
     }
+  };
+
+  const downloadPdf = async () => {
+    if (!result || !resultContainerRef.current) return;
+    setIsDownloading(true);
+    try {
+        const { exportElementToDataUrl } = await import('../lib/exportImage');
+        const dataUrl = await exportElementToDataUrl(resultContainerRef.current, {
+            backgroundColor: '#0a0a0f',
+            pixelRatio: 2.0
+        });
+
+        if (dataUrl) {
+            const { jsPDF } = await import('jspdf');
+            const pdf = new jsPDF('l', 'px', [resultContainerRef.current.scrollWidth * 0.75, resultContainerRef.current.scrollHeight * 0.75]);
+            const width = pdf.internal.pageSize.getWidth();
+            const height = pdf.internal.pageSize.getHeight();
+            pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
+            pdf.save(`match_${result.team1Name}_vs_${result.team2Name}_report.pdf`);
+        }
+    } catch (err) {
+        console.error("PDF Export error:", err);
+    }
+    setIsDownloading(false);
+  };
+
+  const downloadBoth = async () => {
+    downloadJson();
+    await downloadPdf();
   };
 
   const handleSimulate = async () => {
@@ -1074,32 +1115,50 @@ export default function Simulator({ user }: { user: any }) {
                 <Check className="w-4 h-4" /> СОХРАНИТЬ МАТЧ В БАЗЕ
               </button>
             )}
-            <button onClick={downloadPhoto} className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 cursor-pointer">
-              <span>📷</span> СКАЧАТЬ ФОТО
-            </button>
-            <button onClick={() => { setResult(null); setView('setup'); }} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-sm transition-colors cursor-pointer">
-              НАЗАД К НАСТРОЙКАМ
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="relative group/download">
+                <button className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 cursor-pointer">
+                  <Download className="w-4 h-4" /> СКАЧАТЬ <ChevronDown className="w-3 h-3 opacity-50" />
+                </button>
+                <div className="absolute top-full right-0 mt-1 w-48 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
+                  <button onClick={downloadPhoto} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors">
+                    <ImageIcon className="w-4 h-4 text-blue-400" /> ФОТО (.PNG)
+                  </button>
+                  <button onClick={downloadJson} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5">
+                    <Database className="w-4 h-4 text-emerald-400" /> ДАННЫЕ (.JSON)
+                  </button>
+                  <button onClick={downloadPdf} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5">
+                    <Layers className="w-4 h-4 text-purple-400" /> ОТЧЕТ (.PDF)
+                  </button>
+                  <button onClick={downloadBoth} className="w-full text-left px-4 py-3 text-xs font-black text-blue-400 hover:bg-blue-500/10 flex items-center gap-3 transition-colors border-t border-white/10">
+                    <Check className="w-4 h-4" /> СКАЧАТЬ ОБА
+                  </button>
+                </div>
+              </div>
+              <button onClick={() => { setResult(null); setView('setup'); }} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-sm transition-colors cursor-pointer flex items-center gap-2">
+                <X className="w-4 h-4 opacity-50" /> НАЗАД
+              </button>
+            </div>
           </div>
         </div>
 
         <div ref={resultContainerRef} className="flex flex-col gap-6 bg-[#0a0a0f] p-6 rounded-3xl border border-white/5">
-          <div className="bg-gradient-to-br from-[#12121a] to-[#1a1a24] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden"
+          <div className="bg-[#12121a] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden"
                style={bgSourceMap ? {
-                 backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.85), rgba(26,26,36,0.95)), url('/maps/${activeBgMapName}')`,
+                 backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('/maps/${activeBgMapName}')`,
                  backgroundSize: 'cover',
                  backgroundPosition: 'center'
                } : {}}>
-            <div className="absolute top-0 left-0 w-64 h-64 bg-[#ff8f00]/10 blur-[80px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
-            <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2"></div>
+            <div className="absolute top-0 left-0 w-64 h-64 bg-[#ff8f00]/2 blur-[100px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
+            <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-500/2 blur-[100px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2"></div>
             
             <div className="flex items-center justify-center gap-6 mb-4 relative z-10">
               <TeamLogo game={game === "cs2" ? "cs2" : "so2"} teamName={result.team1Name} sizeClassName="w-16 h-16 text-2xl" />
               <div>
                 <h2 className="text-3xl font-black tracking-widest text-white uppercase">{result.team1Name} vs {result.team2Name}</h2>
-                {!isOverall && currentSelectedMap && (
-                  <p className="text-sm font-bold text-[#ff8f00] tracking-wider uppercase mt-1">
-                    {currentSelectedMap?.mapName || `Карта ${currentMapIdx! + 1}`}
+                {(result.bo === 1 || !isOverall) && (currentSelectedMap || firstMapInSeries) && (
+                  <p className="text-sm font-bold text-[#ff8f00] tracking-wider uppercase mt-1 drop-shadow-md">
+                    {(currentSelectedMap?.mapName || firstMapInSeries?.mapName || 'de_inferno')}
                   </p>
                 )}
               </div>
@@ -1107,11 +1166,11 @@ export default function Simulator({ user }: { user: any }) {
             </div>
 
             <div className="text-6xl font-black tracking-widest mb-3 relative z-10 drop-shadow-xl">
-              <span className={displayedScore1 > displayedScore2 ? 'text-[#ff8f00] drop-shadow-[0_0_15px_rgba(255,143,0,0.5)]' : 'text-white/50'}>
+              <span className={displayedScore1 > displayedScore2 ? 'text-[#ff8f00] drop-shadow-[0_0_10px_rgba(255,143,0,0.3)]' : 'text-white/50'}>
                 {displayedScore1}
               </span>
               <span className="mx-6 text-white/20 text-4xl">:</span>
-              <span className={displayedScore2 > displayedScore1 ? 'text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'text-white/50'}>
+              <span className={displayedScore2 > displayedScore1 ? 'text-blue-500 drop-shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'text-white/50'}>
                 {displayedScore2}
               </span>
             </div>
@@ -1173,7 +1232,7 @@ export default function Simulator({ user }: { user: any }) {
 
             {Array.isArray(result.maps) && result.maps.length > 0 && (
               <div className="mt-6 flex flex-col items-center gap-3 relative z-10 w-full">
-                {result.bo !== 1 && (
+                {result.bo !== 1 ? (
                   !isDownloading ? (
                     <button 
                       onClick={() => setSelectedResultTab('overall')}
@@ -1186,6 +1245,10 @@ export default function Simulator({ user }: { user: any }) {
                       СЫГРАННЫЕ КАРТЫ СЕРИИ
                     </div>
                   )
+                ) : (
+                  <div className="text-[11px] font-black uppercase tracking-widest text-[#ff8f00] bg-[#ff8f00]/10 border border-[#ff8f00]/30 px-5 py-2 rounded-full mb-1">
+                    СЫГРАННАЯ КАРТА
+                  </div>
                 )}
 
                 <div className="flex flex-nowrap justify-center gap-3 overflow-x-auto pb-2 custom-scrollbar max-w-full">

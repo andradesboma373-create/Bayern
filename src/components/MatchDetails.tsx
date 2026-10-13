@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Download, Trophy, Check } from 'lucide-react';
+import { X, Download, Trophy, Check, ChevronDown, Database, Image as ImageIcon, Layers } from 'lucide-react';
 import TeamLogo from './TeamLogo';
 import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { RatingSystem } from '../match-logic/systems/RatingSystem';
@@ -115,12 +115,24 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
   const t2Score = match?.team2Score ?? match?.score2 ?? 0;
   const mapsList: any[] = Array.isArray(match?.maps) ? match.maps : [];
 
+  const downloadJson = () => {
+    if (!match) return;
+    const dataStr = JSON.stringify(match, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = `match_${t1Name}_vs_${t2Name}_${Date.now()}.json`;
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    linkElement.remove();
+  };
+
   const downloadPhoto = async () => {
     if (!resultContainerRef.current) return;
     setIsDownloading(true);
     try {
       // Allow DOM to settle with isDownloading state before capture
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 150));
 
       const { toPng } = await import('html-to-image');
       const transparentPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -163,11 +175,43 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
     }
   };
 
+  const downloadPdf = async () => {
+    if (!resultContainerRef.current) return;
+    setIsDownloading(true);
+    try {
+        const { exportElementToDataUrl } = await import('../lib/exportImage');
+        const dataUrl = await exportElementToDataUrl(resultContainerRef.current, {
+            backgroundColor: '#0a0a0f',
+            pixelRatio: 2.0
+        });
+
+        if (dataUrl) {
+            const { jsPDF } = await import('jspdf');
+            const pdf = new jsPDF('l', 'px', [resultContainerRef.current.scrollWidth * 0.75, resultContainerRef.current.scrollHeight * 0.75]);
+            const width = pdf.internal.pageSize.getWidth();
+            const height = pdf.internal.pageSize.getHeight();
+            pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
+            pdf.save(`match_${t1Name}_vs_${t2Name}_report.pdf`);
+        }
+    } catch (err) {
+        console.error("PDF Export error:", err);
+    } finally {
+        setIsDownloading(false);
+    }
+  };
+
+  const downloadBoth = async () => {
+    downloadJson();
+    await downloadPdf();
+  };
+
   const isBO1 = match?.bo === 1 || match?.bo === '1' || match?.format === 'BO1' || mapsList.length === 1;
   const [selectedResultTab, setSelectedResultTab] = useState<'overall' | number>('overall');
 
   const selectedMapObj = (selectedResultTab !== 'overall' && mapsList[selectedResultTab as number]) ? mapsList[selectedResultTab as number] : null;
-  const activeMapName = selectedMapObj ? (selectedMapObj.mapName || selectedMapObj.name || 'de_inferno') : (isBO1 && mapsList[0] ? (mapsList[0].mapName || mapsList[0].name || 'de_inferno') : '');
+  const activeMapName = selectedMapObj 
+    ? (selectedMapObj.mapName || selectedMapObj.name || 'de_inferno') 
+    : (mapsList.length > 0 ? (mapsList[0].mapName || mapsList[0].name || 'de_inferno') : '');
   const cleanActiveMapKey = activeMapName ? activeMapName.toLowerCase().replace(/^de_/i, '').replace(/[\s_-]+/g, '') : '';
 
   const displayT1Score = selectedMapObj ? (selectedMapObj.team1Score ?? selectedMapObj.score1 ?? 0) : (isBO1 && mapsList[0] ? (mapsList[0].team1Score ?? mapsList[0].score1 ?? t1Score) : t1Score);
@@ -178,72 +222,94 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
       <div ref={resultContainerRef} className={`bg-[#0a0a0f] border border-white/10 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col ${isDownloading ? 'overflow-visible' : 'max-h-[90vh] overflow-hidden'}`}>
         <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40 sticky top-0 z-10">
           <h2 className="text-xl font-black text-white uppercase tracking-widest">ДЕТАЛИ МАТЧА</h2>
-          {!isDownloading && (
-            <div className="flex items-center gap-2">
-              {match?.tournamentId && (
-                <button 
-                  onClick={async () => {
-                     try {
-                        const { updateBetaTournamentMatchResult, getCanonicalRoomId } = await import('./setka_tourn/storage');
-                        const userId = match.userId || 'guest';
-                        const roomId = getCanonicalRoomId(userId);
-                        updateBetaTournamentMatchResult(
-                          roomId,
-                          match.tournamentId,
-                          t1Name,
-                          t2Name,
-                          t1Score,
-                          t2Score
-                        );
-                        alert("Результат успешно сохранен в базу турнира!");
-                        onClose();
-                        navigate(`/tournaments-beta/${match.tournamentId}`);
-                     } catch (e) {
-                        console.error(e);
-                        alert("Ошибка при сохранении");
-                     }
-                  }}
-                  className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors cursor-pointer"
-                  title="Сохранить результат в базу турнира"
-                >
-                  <Check className="w-4 h-4" />
-                  <span className="text-sm hidden sm:inline">Сохранить</span>
+            {!isDownloading && (
+              <div className="flex items-center gap-2">
+                {match?.tournamentId && (
+                  <button 
+                    onClick={async () => {
+                       try {
+                          const { updateBetaTournamentMatchResult, getCanonicalRoomId } = await import('./setka_tourn/storage');
+                          const userId = match.userId || 'guest';
+                          const roomId = getCanonicalRoomId(userId);
+                          updateBetaTournamentMatchResult(
+                            roomId,
+                            match.tournamentId,
+                            t1Name,
+                            t2Name,
+                            t1Score,
+                            t2Score
+                          );
+                          alert("Результат успешно сохранен в базу турнира!");
+                          onClose();
+                          navigate(`/tournaments-beta/${match.tournamentId}`);
+                       } catch (e) {
+                          console.error(e);
+                          alert("Ошибка при сохранении");
+                       }
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors cursor-pointer"
+                    title="Сохранить результат в базу турнира"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span className="text-sm hidden sm:inline">Сохранить</span>
+                  </button>
+                )}
+                <div className="relative group/download">
+                  <button className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors cursor-pointer">
+                    <Download className="w-4 h-4" />
+                    <span className="text-sm hidden sm:inline">Скачать</span>
+                    <ChevronDown className="w-3 h-3 opacity-50" />
+                  </button>
+                  <div className="absolute top-full right-0 mt-1 w-48 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
+                    <button onClick={downloadPhoto} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors">
+                      <ImageIcon className="w-4 h-4 text-blue-400" /> ФОТО (.PNG)
+                    </button>
+                    <button onClick={downloadJson} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5">
+                      <Database className="w-4 h-4 text-emerald-400" /> ДАННЫЕ (.JSON)
+                    </button>
+                    <button onClick={downloadPdf} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5">
+                      <Layers className="w-4 h-4 text-purple-400" /> ОТЧЕТ (.PDF)
+                    </button>
+                    <button onClick={downloadBoth} className="w-full text-left px-4 py-3 text-xs font-black text-blue-400 hover:bg-blue-500/10 flex items-center gap-3 transition-colors border-t border-white/10">
+                      <Check className="w-4 h-4" /> СКАЧАТЬ ОБА
+                    </button>
+                  </div>
+                </div>
+                <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer">
+                  <X className="w-5 h-5" />
                 </button>
-              )}
-              <button onClick={downloadPhoto} className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors cursor-pointer" title="Скачать как изображение">
-                <Download className="w-4 h-4" />
-                <span className="text-sm hidden sm:inline">Скачать</span>
-              </button>
-              <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          )}
+              </div>
+            )}
         </div>
         
         <div className={`p-6 ${isDownloading ? 'overflow-visible' : 'overflow-y-auto'}`}>
           <div 
-            className="bg-gradient-to-br from-[#12121a] to-[#1a1a24] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden mb-6"
+            className="bg-[#12121a] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden mb-6"
             style={cleanActiveMapKey ? {
-              backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.85), rgba(26,26,36,0.95)), url('/maps/${cleanActiveMapKey}')`,
+              backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('/maps/${cleanActiveMapKey}')`,
               backgroundSize: 'cover',
               backgroundPosition: 'center'
             } : {}}
           >
-            <div className="absolute top-0 left-0 w-64 h-64 bg-[#ff8f00]/10 blur-[80px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
-            <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2"></div>
+            <div className="absolute top-0 left-0 w-64 h-64 bg-[#ff8f00]/2 blur-[100px] rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
+            <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-500/2 blur-[100px] rounded-full pointer-events-none translate-x-1/2 translate-y-1/2"></div>
             <div className="flex items-center justify-center gap-6 mb-4 relative z-10">
               <TeamLogo teamName={t1Name} sizeClassName="w-16 h-16 text-2xl" />
-              <h2 className="text-3xl font-black tracking-widest text-white uppercase">{t1Name} vs {t2Name}</h2>
+              <div>
+                <h2 className="text-3xl font-black tracking-widest text-white uppercase">{t1Name} vs {t2Name}</h2>
+                <p className="text-sm font-bold text-[#ff8f00] tracking-wider uppercase mt-1 drop-shadow-md">
+                  {activeMapName || 'de_inferno'}
+                </p>
+              </div>
               <TeamLogo teamName={t2Name} sizeClassName="w-16 h-16 text-2xl" />
             </div>
             
             <div className="text-6xl font-black tracking-widest mb-6 relative z-10 drop-shadow-xl">
-              <span className={displayT1Score > displayT2Score ? 'text-[#ff8f00] drop-shadow-[0_0_15px_rgba(255,143,0,0.5)]' : 'text-white/50'}>
+              <span className={displayT1Score > displayT2Score ? 'text-[#ff8f00] drop-shadow-[0_0_10px_rgba(255,143,0,0.3)]' : 'text-white/50'}>
                 {displayT1Score}
               </span>
               <span className="mx-6 text-white/20 text-4xl">:</span>
-              <span className={displayT2Score > displayT1Score ? 'text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'text-white/50'}>
+              <span className={displayT2Score > displayT1Score ? 'text-blue-500 drop-shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'text-white/50'}>
                 {displayT2Score}
               </span>
             </div>

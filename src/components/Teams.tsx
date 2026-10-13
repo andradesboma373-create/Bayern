@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TeamAutocompleteInput } from './TeamAutocompleteInput';
 import { db, doc, updateDoc, setDoc, deleteDoc, writeBatch } from '../firebase';
 import { Users, Plus, Trash2, Edit2, Download, Trophy, ChevronLeft, ChevronRight, Check, ShieldAlert, FileDown, FileUp, AlertTriangle, Crown, DollarSign } from 'lucide-react';
+import { saveFileAs } from '../lib/fileSystem';
 import PlayerAvatar from './PlayerAvatar';
 import TeamLogo from './TeamLogo';
 import TeamProfileModal from './TeamProfileModal';
@@ -60,11 +61,8 @@ export default function Teams({ user }: { user: any }) {
   }, [hasUnsavedChanges]);
 
   const handleExportAllTeamsJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(teams, null, 2));
-    const dlAnchorElem = document.createElement('a');
-    dlAnchorElem.setAttribute("href", dataStr);
-    dlAnchorElem.setAttribute("download", `teams_backup_${user?.name || 'export'}.json`);
-    dlAnchorElem.click();
+    const json = JSON.stringify(teams, null, 2);
+    saveFileAs(json, `teams_backup_${user?.name || 'export'}.json`);
   };
 
   const handleImportTeamsJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {

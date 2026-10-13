@@ -1,4 +1,5 @@
 import { toPng, toJpeg } from 'html-to-image';
+import { saveImageAs } from './fileSystem';
 
 export interface ExportImageOptions {
   backgroundColor?: string;
@@ -229,4 +230,23 @@ export async function downloadElementAsImage(
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+/**
+ * Renders and triggers a "Save As" dialog for the generated image.
+ */
+export async function saveElementAsImage(
+  element: HTMLElement,
+  filename: string,
+  options: ExportImageOptions = {}
+): Promise<void> {
+  const dataUrl = await exportElementToDataUrl(element, options);
+  
+  const ext = dataUrl.startsWith('data:image/jpeg') ? '.jpg' : '.png';
+  let cleanFilename = filename.trim();
+  if (!cleanFilename.endsWith('.png') && !cleanFilename.endsWith('.jpg')) {
+    cleanFilename += ext;
+  }
+
+  await saveImageAs(dataUrl, cleanFilename);
 }
