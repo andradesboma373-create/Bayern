@@ -127,11 +127,11 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
     user?.role === 'superadmin' ||
     (user?.channelName || '').toLowerCase().includes('bamep');
 
-  if (!isSuperAdmin) {
-    return <AccessDenied sectionName="Аналитика и Управление Комнатами" roomName={user?.name || user?.username} />;
-  }
-
   const fetchData = async () => {
+    if (!isSuperAdmin) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -427,6 +427,10 @@ export default function AdminAnalytics({ user }: AdminAnalyticsProps) {
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2500);
   };
+
+  if (!isSuperAdmin) {
+    return <AccessDenied sectionName="Аналитика и Управление Комнатами" roomName={user?.name || user?.username} />;
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto flex flex-col gap-6 animate-fade-in">

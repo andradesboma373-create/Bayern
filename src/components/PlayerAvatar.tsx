@@ -26,20 +26,9 @@ export function PlayerAvatar({
     setCandidateIdx(0);
   }, [cleanName, game, avatarUrl]);
 
-  if (!cleanName) {
-    return (
-      <div 
-        className={`${sizeClassName} flex items-center justify-center shrink-0 select-none bg-[#1e1f32] text-[#ff8f00] font-black rounded-full border border-white/10 ${className}`} 
-        style={style}
-      >
-        <span className="text-[0.8em]">?</span>
-      </div>
-    );
-  }
-
   // Check direct prop or saved avatar in localStorage
   let effectiveAvatar = avatarUrl;
-  if (!effectiveAvatar && typeof window !== 'undefined') {
+  if (!effectiveAvatar && typeof window !== 'undefined' && cleanName) {
     try {
       const saved = localStorage.getItem(`player_avatar_${cleanName.toLowerCase()}`);
       if (saved && saved !== 'null' && saved !== 'undefined') {
@@ -54,6 +43,7 @@ export function PlayerAvatar({
   const isSo2 = game === 'so2' || game === 's2';
 
   const candidates = useMemo(() => {
+    if (!cleanName) return [];
     if (effectiveAvatar && !isAiGenerated) {
       return [effectiveAvatar];
     }
@@ -79,7 +69,18 @@ export function PlayerAvatar({
       `/avatars/cs2/${normalizedNick}.jpg`,
       `/avatars/${normalizedNick}.jpg`
     ];
-  }, [effectiveAvatar, isAiGenerated, isSo2, normalizedNick]);
+  }, [cleanName, effectiveAvatar, isAiGenerated, isSo2, normalizedNick]);
+
+  if (!cleanName) {
+    return (
+      <div 
+        className={`${sizeClassName} flex items-center justify-center shrink-0 select-none bg-[#1e1f32] text-[#ff8f00] font-black rounded-full border border-white/10 ${className}`} 
+        style={style}
+      >
+        <span className="text-[0.8em]">?</span>
+      </div>
+    );
+  }
 
   const currentSrc = candidates[candidateIdx];
   const isOutOfCandidates = !currentSrc || candidateIdx >= candidates.length;

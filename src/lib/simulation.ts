@@ -40,19 +40,19 @@ export const ROLE_SUBCLASSES: Record<string, RoleSubclass[]> = {
             desc: 'Коллит меньше, но аим и фраги в матчах как у рифлера', 
             icon: '💥', 
             synergyBonus: 1, 
-            killMultBonus: 0.19, // Компенсирует штраф капитана 0.86 -> 1.05 (уровень рифлера!)
-            impactBonus: 0.10,
-            assistMultBonus: -0.05 
+            killMultBonus: 0.07, // Достигает уровня рифлера (1.05)
+            impactBonus: 0.08,
+            assistMultBonus: 0.00 
         },
         { 
             id: 'caller_igl', 
             name: 'Коллер капитан', 
             desc: 'Больше коллов для победы команды, но меньше личного аима и фрагов', 
             icon: '📋', 
-            synergyBonus: 14, // Высокая синергия и тактическая мощь команды
-            assistMultBonus: 0.30, 
-            killMultBonus: -0.10, // Меньше личного аима
-            impactBonus: -0.04 
+            synergyBonus: 16, // Высокая синергия и тактическая мощь команды
+            assistMultBonus: 0.35, 
+            killMultBonus: -0.06, 
+            impactBonus: -0.02 
         }
     ],
     support: [
@@ -105,8 +105,8 @@ export const DEFAULT_ROLES_S2 = [
     { id: 'sniper', name: 'Снайпер', killMultiplier: 1.15, skillMultiplier: 1.08, impact: 1.15, deathMultiplier: 0.85, assistMultiplier: 1.00 },
     { id: 'lurker', name: 'Люркер', killMultiplier: 1.06, skillMultiplier: 1.04, impact: 1.10, deathMultiplier: 0.88, assistMultiplier: 1.00 },
     { id: 'opener', name: 'Entry', killMultiplier: 1.10, skillMultiplier: 1.06, impact: 1.25, deathMultiplier: 1.10, assistMultiplier: 1.05 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 0.88, skillMultiplier: 0.95, impact: 0.85, deathMultiplier: 1.00, assistMultiplier: 1.25 },
-    { id: 'captain', name: 'Капитан', killMultiplier: 0.86, skillMultiplier: 0.98, impact: 0.90, deathMultiplier: 1.02, assistMultiplier: 1.00 }
+    { id: 'support', name: 'Саппорт', killMultiplier: 0.94, skillMultiplier: 0.98, impact: 0.92, deathMultiplier: 0.99, assistMultiplier: 1.25 },
+    { id: 'captain', name: 'Капитан', killMultiplier: 0.98, skillMultiplier: 1.00, impact: 0.98, deathMultiplier: 0.98, assistMultiplier: 1.15 }
 ];
 
 export const DEFAULT_ROLES_CS2 = [
@@ -114,8 +114,8 @@ export const DEFAULT_ROLES_CS2 = [
     { id: 'sniper', name: 'AWPer', killMultiplier: 1.10, skillMultiplier: 1.05, impact: 1.12, deathMultiplier: 0.84, assistMultiplier: 0.80 },
     { id: 'lurker', name: 'Люркер', killMultiplier: 1.05, skillMultiplier: 1.03, impact: 1.08, deathMultiplier: 0.86, assistMultiplier: 0.90 },
     { id: 'opener', name: 'Entry', killMultiplier: 1.08, skillMultiplier: 1.05, impact: 1.20, deathMultiplier: 1.08, assistMultiplier: 1.00 },
-    { id: 'support', name: 'Саппорт', killMultiplier: 0.88, skillMultiplier: 0.95, impact: 0.85, deathMultiplier: 1.00, assistMultiplier: 1.25 },
-    { id: 'captain', name: 'IGL', killMultiplier: 0.86, skillMultiplier: 0.98, impact: 0.90, deathMultiplier: 1.02, assistMultiplier: 1.00 }
+    { id: 'support', name: 'Саппорт', killMultiplier: 0.94, skillMultiplier: 0.98, impact: 0.92, deathMultiplier: 0.99, assistMultiplier: 1.25 },
+    { id: 'captain', name: 'IGL', killMultiplier: 0.98, skillMultiplier: 1.00, impact: 0.98, deathMultiplier: 0.98, assistMultiplier: 1.15 }
 ];
 
 export const MAP_POOL_CS2 = [
@@ -1092,6 +1092,51 @@ export function simulateMatchSeries(
         });
 
         if (results.team1Score >= winsNeeded || results.team2Score >= winsNeeded) break;
+    }
+
+    // Series-Level Kill Margin Consistency:
+    // If the series winner won equal or more rounds overall across all maps in the series (e.g. 11:13 13:11 10:13),
+    // they must logically have equal or more total kills than the losing team.
+    const totalT1Rounds = results.maps.reduce((acc, m) => acc + (m.team1Score || 0), 0);
+    const totalT2Rounds = results.maps.reduce((acc, m) => acc + (m.team2Score || 0), 0);
+    if (results.team1Score !== results.team2Score) {
+        const seriesWinner = results.team1Score > results.team2Score ? 1 : 2;
+        const winSeriesStats = seriesWinner === 1 ? results.team1Stats : results.team2Stats;
+        const loseSeriesStats = seriesWinner === 1 ? results.team2Stats : results.team1Stats;
+        const winRounds = seriesWinner === 1 ? totalT1Rounds : totalT2Rounds;
+        const loseRounds = seriesWinner === 1 ? totalT2Rounds : totalT1Rounds;
+
+        if (winRounds >= loseRounds) {
+            let winTotK = winSeriesStats.reduce((acc, p) => acc + (p.kills || 0), 0);
+            let loseTotK = loseSeriesStats.reduce((acc, p) => acc + (p.kills || 0), 0);
+            const roundLead = winRounds - loseRounds;
+            const minSeriesLead = Math.max(2, Math.round(roundLead * 1.2));
+            if (winTotK < loseTotK + minSeriesLead) {
+                const shift = Math.ceil((loseTotK + minSeriesLead - winTotK) / 2);
+                for (let i = 0; i < shift; i++) {
+                    const sortedWin = [...winSeriesStats].sort((a, b) => (b.kills - a.kills) || (b.rating - a.rating));
+                    const winP = sortedWin[i % sortedWin.length];
+                    winP.kills++;
+                    winP.damage += 95;
+
+                    const sortedLoseDeaths = [...loseSeriesStats].sort((a, b) => (b.deaths - a.deaths) || (a.rating - b.rating));
+                    const loseP = sortedLoseDeaths[i % sortedLoseDeaths.length];
+                    loseP.deaths++;
+
+                    const loseWithKills = [...loseSeriesStats].filter(p => p.kills >= 3).sort((a, b) => (a.rating - b.rating) || (a.kills - b.kills));
+                    if (loseWithKills.length > 0) {
+                        const remP = loseWithKills[0];
+                        remP.kills--;
+                        remP.damage = Math.max(0, remP.damage - 90);
+
+                        const winWithDeaths = [...winSeriesStats].filter(p => p.deaths >= 2).sort((a, b) => (b.rating - a.rating));
+                        if (winWithDeaths.length > 0) {
+                            winWithDeaths[0].deaths--;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     finalizeStats(results.team1Stats);

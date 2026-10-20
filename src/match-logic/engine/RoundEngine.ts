@@ -164,7 +164,7 @@ export class RoundEngine {
       
       const spawns = MapSystem.getSpawns(p.side);
       const spawnIdx = Object.values(state.players).filter(x => x && x.teamId === p.teamId).indexOf(p);
-      p.currentNodeId = spawns[Math.max(0, spawnIdx) % spawns.length];
+      p.currentNodeId = spawns[Math.max(0, spawnIdx + (state.round % spawns.length)) % spawns.length];
       const spawnNode = MapSystem.getNode(p.currentNodeId);
       p.position = { x: spawnNode ? spawnNode.x : 0, y: spawnNode ? spawnNode.y : 0 };
     }
@@ -307,7 +307,8 @@ export class RoundEngine {
     }
 
     const hasBothAlive = tAlive > 0 && ctAlive > 0;
-    state.phase = (reason !== 'ELIMINATION' && hasBothAlive) ? 'POST_ROUND_COMBAT' : 'ROUND_END';
+    const allowPostRoundCombat = (reason === 'EXPLOSION' || reason === 'DEFUSE') && hasBothAlive;
+    state.phase = allowPostRoundCombat ? 'POST_ROUND_COMBAT' : 'ROUND_END';
     (state as any).postRoundTickStart = state.tick;
     
     let winnerId = '';

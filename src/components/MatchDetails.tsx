@@ -6,11 +6,11 @@ import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { RatingSystem } from '../match-logic/systems/RatingSystem';
 import { getKdColorClass, getSwingColorClass, formatSwing } from '../lib/utils';
 
-function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: string, colorClass: string, borderClass: string, stats?: any[] }) {
+function StatsTable({ teamName, colorClass, stats, totalRounds }: { teamName: string, colorClass: string, borderClass?: string, stats?: any[], totalRounds?: number }) {
   if (!stats || !Array.isArray(stats) || stats.length === 0) {
     return (
-      <div>
-        <h3 className={`${colorClass} font-black uppercase tracking-wider mb-4 pb-2 border-b ${borderClass}`}>{teamName}</h3>
+      <div className="bg-[#14141d] border border-white/5 rounded-2xl p-5">
+        <h3 className={`${colorClass} font-black uppercase tracking-wider mb-4 pb-2 border-b border-white/10`}>{teamName}</h3>
         <p className="text-white/40 text-xs italic py-4">Нет доступной статистики по игрокам</p>
       </div>
     );
@@ -21,7 +21,7 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
         let hltv = p?.hltvRating;
         if (!hltv && p?.rating && Number(p.rating) < 10) hltv = p.rating;
         if (!hltv) {
-            const breakdown = RatingSystem.calculatePlayerRating(p, p?.totalRounds);
+            const breakdown = RatingSystem.calculatePlayerRating(p, p?.totalRounds || totalRounds || 1);
             hltv = breakdown.rating.toFixed(2);
         }
         return parseFloat(hltv || '0');
@@ -37,21 +37,26 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
   });
 
   return (
-    <div>
-      <h3 className={`${colorClass} font-black uppercase tracking-wider mb-4 pb-2 border-b ${borderClass}`}>{teamName}</h3>
+    <div className="bg-[#14141d] border border-white/5 rounded-2xl p-4 shadow-xl">
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
+        <TeamLogo teamName={teamName.replace(/\s*\(Всего\)/, '')} sizeClassName="w-6 h-6 text-xs" />
+        <h3 className={`${colorClass} font-black uppercase tracking-wider text-sm`}>{teamName}</h3>
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm border-collapse min-w-[300px]">
+        <table className="w-full text-left text-sm border-collapse min-w-[560px]">
           <thead>
-            <tr className="text-white/30 uppercase tracking-wider text-[10px] border-b border-white/5">
-              <th className="py-2 font-medium">Игрок</th>
-              <th className="py-2 text-center font-medium">K-A-D</th>
-              <th className="py-2 text-center font-medium">+/-</th>
-              <th className="py-2 text-center font-medium" title="Average Damage per Round">ADR</th>
-              {RATING_CONFIG.USE_KAST && <th className="py-2 text-center font-medium" title="Percentage of rounds with Kill, Assist, Survived or Traded">KAST</th>}
-              {RATING_CONFIG.USE_SWING && <th className="py-2 text-center font-medium" title="Round Swing (Win Probability Impact)">Swing</th>}
-              <th className="py-2 text-center font-medium" title="Impact Rating">Impact</th>
-              <th className="py-2 text-center font-medium">K/D</th>
-              <th className="py-2 text-right font-medium">Rating</th>
+            <tr className="text-white/40 uppercase tracking-wider text-[11px] font-semibold border-b border-white/10">
+              <th className="py-2.5 px-3 text-left">ИГРОК</th>
+              <th className="py-2.5 px-2 text-center font-bold">K</th>
+              <th className="py-2.5 px-2 text-center font-bold">A</th>
+              <th className="py-2.5 px-2 text-center font-bold">D</th>
+              <th className="py-2.5 px-2 text-center font-bold">DIFF</th>
+              <th className="py-2.5 px-2 text-center font-bold">KD</th>
+              <th className="py-2.5 px-2 text-center font-bold">KPR</th>
+              <th className="py-2.5 px-2 text-center font-bold">DPR</th>
+              <th className="py-2.5 px-2 text-center font-bold">ADR</th>
+              <th className="py-2.5 px-2 text-center font-bold">IMP</th>
+              <th className="py-2.5 px-3 text-right font-bold">RATING</th>
             </tr>
           </thead>
           <tbody>
@@ -61,39 +66,46 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
               const assists = p?.assists ?? 0;
               const deaths = p?.deaths ?? 0;
               const diff = kills - deaths;
-              const fkDiff = (p?.fk || 0) - (p?.fd || 0);
-              const adrVal = p?.adr != null && !isNaN(Number(p.adr)) ? Number(p.adr).toFixed(1) : '-';
+              const rounds = Math.max(1, p?.totalRounds || totalRounds || 1);
+              const breakdown = RatingSystem.calculatePlayerRating(p, rounds);
+              
+              const kd = p?.kd ? Number(p.kd).toFixed(2) : (deaths > 0 ? (kills / deaths).toFixed(2) : kills.toFixed(2));
+              const kpr = p?.kpr ? Number(p.kpr).toFixed(2) : (kills / rounds).toFixed(2);
+              const dpr = p?.dpr ? Number(p.dpr).toFixed(2) : (deaths / rounds).toFixed(2);
+              const adr = p?.adr ? Math.round(Number(p.adr)) : Math.round((p?.damage || (kills * 100 + assists * 35)) / rounds);
+              const imp = p?.impact ? Number(p.impact).toFixed(2) : breakdown.impact.toFixed(2);
               
               let hltv = p?.hltvRating;
-              if (!hltv && p?.rating && Number(p.rating) < 10) {
-                 hltv = p.rating;
-              }
-              const kd = p?.kd || (deaths > 0 ? (kills / deaths).toFixed(2) : kills.toFixed(2));
-              
-              if (!hltv) {
-                  const breakdown = RatingSystem.calculatePlayerRating(p, p?.totalRounds);
-                  hltv = breakdown.rating.toFixed(2);
-              }
+              if (!hltv && p?.rating && Number(p.rating) < 10) hltv = Number(p.rating).toFixed(2);
+              if (!hltv) hltv = breakdown.rating.toFixed(2);
+              const ratingNum = parseFloat(hltv || '1.00');
+
+              const isTopFragger = idx === 0;
 
               return (
-                <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="py-2 font-bold text-white/90">{nickname}</td>
-                  <td className="py-2 text-center text-white/70 font-mono text-xs">{kills}-{assists}-{deaths}</td>
-                  <td className={`py-2 text-center font-mono text-xs ${diff > 0 ? 'text-green-400' : diff < 0 ? 'text-red-400' : 'text-white/50'}`}>
+                <tr 
+                  key={idx} 
+                  className={`border-b border-white/5 transition-colors hover:bg-white/[0.03] ${isTopFragger ? 'bg-amber-500/[0.04]' : ''}`}
+                >
+                  <td className={`py-2.5 px-3 font-bold text-sm ${isTopFragger ? 'text-[#ffb300] border-l-2 border-[#ffb300]' : 'text-white'}`}>
+                    {nickname}
+                  </td>
+                  <td className="py-2.5 px-2 text-center font-black text-white text-sm">{kills}</td>
+                  <td className="py-2.5 px-2 text-center text-white/70 font-medium text-xs">{assists}</td>
+                  <td className="py-2.5 px-2 text-center text-white/70 font-medium text-xs">{deaths}</td>
+                  <td className={`py-2.5 px-2 text-center font-bold text-xs ${diff > 0 ? 'text-[#4ade80]' : diff < 0 ? 'text-[#f87171]' : 'text-white/50'}`}>
                     {diff > 0 ? `+${diff}` : diff}
                   </td>
-                  <td className="py-2 text-center text-white/50 font-mono text-xs">{adrVal}</td>
-                  {RATING_CONFIG.USE_KAST && <td className="py-2 text-center text-white/50 font-mono text-xs">{p?.kast || '-'}</td>}
-                  {RATING_CONFIG.USE_SWING && (
-                    <td className="py-2 text-center font-mono text-xs">
-                      <span className={`px-1.5 py-0.5 rounded ${getSwingColorClass(p?.roundSwingNum ?? p?.roundSwing)}`}>
-                        {formatSwing(p?.roundSwingNum ?? p?.roundSwing)}
-                      </span>
-                    </td>
-                  )}
-                  <td className="py-2 text-center text-white/50 font-mono text-xs">{p?.impact || '-'}</td>
-                  <td className={`py-2 text-center font-mono text-xs ${getKdColorClass(kd)}`}>{kd}</td>
-                  <td className="py-2 text-right font-bold text-yellow-500/80 font-mono text-sm">{hltv}</td>
+                  <td className={`py-2.5 px-2 text-center font-bold text-xs ${Number(kd) >= 1.0 ? 'text-[#4ade80]' : 'text-[#f87171]'}`}>
+                    {kd}
+                  </td>
+                  <td className="py-2.5 px-2 text-center text-white/70 font-mono text-xs">{kpr}</td>
+                  <td className="py-2.5 px-2 text-center text-white/70 font-mono text-xs">{dpr}</td>
+                  <td className="py-2.5 px-2 text-center text-white/90 font-mono text-xs font-semibold">{adr}</td>
+                  <td className="py-2.5 px-2 text-center text-white/90 font-mono text-xs font-semibold">{imp}</td>
+                  <td className={`py-2.5 px-3 text-right font-black text-sm font-mono ${ratingNum >= 1.15 ? 'text-[#4ade80]' : ratingNum >= 1.00 ? 'text-[#facc15]' : 'text-[#f87171]'}`}>
+                    {ratingNum.toFixed(2)}
+                  </td>
                 </tr>
               );
             })}
@@ -417,8 +429,8 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
             {selectedResultTab === 'overall' ? (
               <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                  <StatsTable teamName={`${t1Name} (Всего)`} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={match?.team1Stats} />
-                  <StatsTable teamName={`${t2Name} (Всего)`} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={match?.team2Stats} />
+                  <StatsTable teamName={`${t1Name} (Всего)`} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={match?.team1Stats} totalRounds={mapsList.length > 0 ? mapsList.reduce((acc, m) => acc + (m.team1Score ?? m.score1 ?? 0) + (m.team2Score ?? m.score2 ?? 0), 0) || (displayT1Score + displayT2Score) : (displayT1Score + displayT2Score) || 24} />
+                  <StatsTable teamName={`${t2Name} (Всего)`} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={match?.team2Stats} totalRounds={mapsList.length > 0 ? mapsList.reduce((acc, m) => acc + (m.team1Score ?? m.score1 ?? 0) + (m.team2Score ?? m.score2 ?? 0), 0) || (displayT1Score + displayT2Score) : (displayT1Score + displayT2Score) || 24} />
                 </div>
               </div>
             ) : selectedMapObj ? (
@@ -435,11 +447,15 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
                   </div>
                 </div>
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                  <StatsTable teamName={t1Name} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={selectedMapObj.team1Stats} />
-                  <StatsTable teamName={t2Name} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={selectedMapObj.team2Stats} />
+                  <StatsTable teamName={t1Name} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={selectedMapObj.team1Stats} totalRounds={((selectedMapObj.team1Score ?? selectedMapObj.score1 ?? 0) + (selectedMapObj.team2Score ?? selectedMapObj.score2 ?? 0)) || (displayT1Score + displayT2Score) || 24} />
+                  <StatsTable teamName={t2Name} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={selectedMapObj.team2Stats} totalRounds={((selectedMapObj.team1Score ?? selectedMapObj.score1 ?? 0) + (selectedMapObj.team2Score ?? selectedMapObj.score2 ?? 0)) || (displayT1Score + displayT2Score) || 24} />
                 </div>
               </div>
             ) : null}
+          </div>
+
+          <div className="text-center py-4 text-xs font-bold tracking-widest text-white/30 uppercase">
+            ASSEZMS • ASSEZ
           </div>
 
           {/* Bottom Action Bar */}

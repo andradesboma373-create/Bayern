@@ -391,44 +391,27 @@ export class RatingSystem {
     // Approximate guard: sanity check for extreme outliers (+/- 4.0%)
     avgRoundSwing = Math.max(-4.0, Math.min(4.0, avgRoundSwing));
 
-    // Authentic HLTV 2.0 Impact Rating:
-    // Baselines: KPR 0.679, APR 0.14
-    // Formula: 2.13 * KPR + 0.12 * APR - 0.41 + Clutches + Multi-kills + Openings
-    const rawImpact =
-      2.13 * kpr +
-      0.15 * apr - 0.41 +
-      multiKillFactor * 0.16 +
-      clutchFactor * 0.15 +
-      openingFactor * 0.20;
+    // Authentic HLTV 2.0 Impact Rating matching official esports & ASSEZMS:
+    // Base: 2.13 * KPR + 0.42 * APR - 0.34 + situational multi-kills/clutches
+    const baseImpact = 2.13 * kpr + 0.42 * apr - 0.34;
+    const situationalImpact = multiKillFactor * 0.12 + clutchFactor * 0.10 + openingFactor * 0.15;
+    const rawImpact = Math.max(0.20, baseImpact + situationalImpact);
     const finalImpact = Math.max(0.20, Math.min(2.30, Number(rawImpact.toFixed(2))));
 
-    // Authentic HLTV 2.0 Rating formula:
-    // 5 normalized components centered around 1.00:
-    // 1. KPR: (kpr / 0.679) -> weight 0.40 (frags drive rating)
-    // 2. Survival: ((1 - dpr) / 0.321) -> weight 0.15 (staying alive is valuable, but doesn't replace frags)
-    // 3. Impact: (finalImpact / 1.00) -> weight 0.22 (clutches, multi-kills, openings)
-    // 4. ADR: (adr / 75.0) -> weight 0.15 (damage output)
-    // 5. KAST: ((kast / 100) / 0.70) -> weight 0.08 (support factor)
-    const ratingKpr = kpr / 0.679;
-    const rawSurvival = Math.max(0, (1 - dpr)) / 0.321;
-    // Survival dampening: staying alive passively cannot carry a rating without kills
-    const ratingSurvival = Math.min(1.40, rawSurvival);
-    const ratingImpact = finalImpact / 1.00;
-    const ratingAdr = adr / 75.0;
-    const ratingKast = (kast / 100) / 0.70;
-
+    // Official HLTV 2.0 Rating formula:
+    // Rating = 0.0073 * KAST + 0.3591 * KPR - 0.5329 * DPR + 0.2372 * Impact + 0.0032 * ADR + 0.1587
     let computedRating =
-      0.40 * ratingKpr +
-      0.15 * ratingSurvival +
-      0.22 * ratingImpact +
-      0.15 * ratingAdr +
-      0.08 * ratingKast;
+      0.0073 * kast +
+      0.3591 * kpr -
+      0.5329 * dpr +
+      0.2372 * finalImpact +
+      0.0032 * adr +
+      0.1587;
 
-    // Apply round swing modifier (impactful but balanced)
+    // Apply round swing modifier if enabled
     if (RATING_CONFIG.USE_SWING && avgRoundSwing) {
-      // Use centralized coefficient for swing impact
-      const swingCoefficient = RATING_CONFIG.RATING_WEIGHTS?.SWING_COEFFICIENT || 0.75;
-      const swingContribution = (avgRoundSwing / 100) * swingCoefficient;
+      const swingCoefficient = RATING_CONFIG.RATING_WEIGHTS?.SWING_COEFFICIENT || 0.50;
+      const swingContribution = (avgRoundSwing / 100) * swingCoefficient * 0.25;
       computedRating += swingContribution;
     }
 

@@ -333,13 +333,13 @@ export class MatchEngine {
           speedBonus = 0.00;
       } else if (isCaptain) {
           // Captain / IGL focuses on calling strats; mechanical skill is preserved close to team level
-          aim = skillVal * 0.96;
-          reaction = skillVal * 0.97;
-          aggression = 0.90;
-          impact = 0.95;
-          iq = skillVal * 1.08;
+          aim = skillVal * 1.00;
+          reaction = skillVal * 1.00;
+          aggression = 0.96;
+          impact = 0.98;
+          iq = skillVal * 1.06;
           movement = skillVal * 0.99;
-          utility = skillVal * 1.02;
+          utility = skillVal * 1.04;
           focus = 1.00;
           speedBonus = 0.00;
       } else {
@@ -418,16 +418,21 @@ export class MatchEngine {
         const sub = pData.subclass || 'classic_igl';
         if (sub === 'fragging_igl' || sub === 'shooter') {
           // Капитан-стрелок: коллит меньше, но аим и фраги на уровне рифлера
-          aim = Math.round(aim * 1.18);
-          reaction = Math.round(reaction * 1.10);
+          aim = Math.round(skillVal * 1.05);
+          reaction = Math.round(skillVal * 1.03);
+          aggression = 1.02;
           callsVal = 45;
         } else if (sub === 'caller_igl' || sub === 'tactician_igl' || sub === 'caller') {
           // Коллер капитан: больше коллов для победы команды, но меньше личного аима
-          aim = Math.round(aim * 0.90);
-          iq = Math.round(iq * 1.15);
-          callsVal = 92;
+          aim = Math.round(skillVal * 0.96);
+          iq = Math.round(skillVal * 1.15);
+          utility = Math.round(utility * 1.12);
+          aggression = 0.92;
+          callsVal = 95;
         } else {
           // Капитан обычный (базовый)
+          aim = Math.round(skillVal * 1.00);
+          iq = Math.round(skillVal * 1.06);
           callsVal = 70;
         }
       }
@@ -621,6 +626,46 @@ export class MatchEngine {
       }
     }).filter(Boolean);
     
+    // Realistic Map Kill Margin Enforcement:
+    // In competitive CS2 / Standoff 2, the team that wins more rounds on a map has a positive kill margin.
+    if (t1.score !== t2.score) {
+      const mapWinner = t1.score > t2.score ? 1 : 2;
+      const winStats = mapWinner === 1 ? t1Stats : t2Stats;
+      const loseStats = mapWinner === 1 ? t2Stats : t1Stats;
+      
+      const scoreDiff = Math.abs(t1.score - t2.score);
+      const minExpectedLead = Math.max(2, Math.round(scoreDiff * 1.3));
+      
+      let winK = winStats.reduce((sum, p) => sum + (p?.kills || 0), 0);
+      let loseK = loseStats.reduce((sum, p) => sum + (p?.kills || 0), 0);
+      
+      if (winK < loseK + minExpectedLead) {
+        const shift = Math.ceil((loseK + minExpectedLead - winK) / 2);
+        for (let i = 0; i < shift; i++) {
+          const sortedWinners = [...winStats].sort((a, b) => (b.kills - a.kills) || (b.rating - a.rating));
+          const luckyWinner = sortedWinners[i % sortedWinners.length];
+          luckyWinner.kills++;
+          luckyWinner.damage += 90 + Math.floor(CombatSystem.random() * 20);
+          
+          const sortedLosersDeaths = [...loseStats].sort((a, b) => (b.deaths - a.deaths) || (a.rating - b.rating));
+          const unluckyLoser = sortedLosersDeaths[i % sortedLosersDeaths.length];
+          unluckyLoser.deaths++;
+          
+          const loserWithKills = [...loseStats].filter(p => p.kills >= 2).sort((a, b) => (a.rating - b.rating) || (a.kills - b.kills));
+          if (loserWithKills.length > 0) {
+            const removedLoser = loserWithKills[0];
+            removedLoser.kills--;
+            removedLoser.damage = Math.max(0, removedLoser.damage - 85);
+            
+            const winnerWithDeaths = [...winStats].filter(p => p.deaths >= 1).sort((a, b) => (b.rating - a.rating));
+            if (winnerWithDeaths.length > 0) {
+              winnerWithDeaths[0].deaths--;
+            }
+          }
+        }
+      }
+    }
+
     return {
       mapName: state.mapId,
       name: state.mapId,

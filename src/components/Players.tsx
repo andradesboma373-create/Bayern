@@ -20,7 +20,7 @@ export default function Players({ user }: { user: any }) {
   const [activeTab, setActiveTab] = useState<'regular' | 'academy'>('regular');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newPlayer, setNewPlayer] = useState({ nickname: '', role: 'rifler', rating: 100, valRating: 0, isAcademy: false, avatarUrl: '' });
+  const [newPlayer, setNewPlayer] = useState<{ nickname: string; role: string; subclass?: string; rating: number; valRating: number; isAcademy: boolean; avatarUrl: string }>({ nickname: '', role: 'rifler', subclass: 'classic_igl', rating: 100, valRating: 0, isAcademy: false, avatarUrl: '' });
   const [confirmDeletePlayer, setConfirmDeletePlayer] = useState<any | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
 
@@ -310,6 +310,7 @@ export default function Players({ user }: { user: any }) {
       discipline: game,
       nickname: newPlayer.nickname.trim(),
       role: newPlayer.role,
+      subclass: newPlayer.role === 'captain' ? (newPlayer.subclass || 'classic_igl') : undefined,
       rating: newPlayer.rating,
       valRating: newPlayer.valRating || 0,
       isAcademy: !!newPlayer.isAcademy,
@@ -525,6 +526,7 @@ export default function Players({ user }: { user: any }) {
               setNewPlayer({
                 nickname: '',
                 role: 'rifler',
+                subclass: 'classic_igl',
                 rating: 100,
                 valRating: 0,
                 isAcademy: activeTab === 'academy',
@@ -604,6 +606,20 @@ export default function Players({ user }: { user: any }) {
               <option value="captain">IGL / Капитан</option>
             </select>
           </div>
+          {newPlayer.role === 'captain' && (
+            <div className="w-56">
+              <label className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 block">Стиль капитана</label>
+              <select
+                value={newPlayer.subclass || 'classic_igl'}
+                onChange={e => setNewPlayer({...newPlayer, subclass: e.target.value})}
+                className="w-full bg-black/50 border border-amber-500/30 rounded-xl px-4 py-3 text-amber-400 font-bold focus:outline-none focus:border-amber-400 appearance-none text-xs"
+              >
+                <option value="classic_igl">🧠 Обычный (база)</option>
+                <option value="fragging_igl">💥 Стрелок (аим как рифлер)</option>
+                <option value="caller_igl">📋 Коллер (больше коллов)</option>
+              </select>
+            </div>
+          )}
           <div className="w-32">
             <label className="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Рейтинг</label>
             <input 

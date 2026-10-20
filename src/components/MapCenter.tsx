@@ -16,13 +16,13 @@ export default function MapCenter({ user }: { user: any }) {
     user?.role === 'superadmin' ||
     (user?.channelName || '').toLowerCase().includes('bamep');
 
-  if (!isBamepAdmin) {
-    return <AccessDenied sectionName="Карты и Тактики" roomName={user?.name || user?.username} />;
-  }
-
   const currentPool = game === 'cs2' ? MAP_POOL_CS2 : MAP_POOL_S2;
 
   useEffect(() => {
+    if (!isBamepAdmin || !user) {
+      setLoading(false);
+      return;
+    }
     const loadMatches = () => {
       setLoading(true);
       const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
@@ -39,9 +39,10 @@ export default function MapCenter({ user }: { user: any }) {
     loadMatches();
     window.addEventListener('db-user-updated', loadMatches);
     return () => window.removeEventListener('db-user-updated', loadMatches);
-  }, [user, game]);
+  }, [user, game, isBamepAdmin]);
 
   const mapStats = useMemo(() => {
+    if (!isBamepAdmin) return {};
     const stats: Record<string, { tWins: number, ctWins: number, totalRounds: number, matches: number, teamPerformance: Record<string, { wins: number, played: number }> }> = {};
     
     currentPool.forEach(m => {
@@ -80,7 +81,11 @@ export default function MapCenter({ user }: { user: any }) {
     });
 
     return stats;
-  }, [matches, currentPool]);
+  }, [matches, currentPool, isBamepAdmin]);
+
+  if (!isBamepAdmin) {
+    return <AccessDenied sectionName="Карты и Тактики" roomName={user?.name || user?.username} />;
+  }
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">

@@ -295,9 +295,9 @@ export class CombatSystem {
     if (shooter.grenades && shooter.grenades.includes('he') && !target.damageTaken.has(shooter.id)) {
         shooter.grenades = shooter.grenades.filter(g => g !== 'he');
         const utilityMult = Math.max(0.8, (shooter.utility || 100) / 100);
-        const nadeHitChance = Math.min(0.28, 0.20 * utilityMult);
+        const nadeHitChance = Math.min(0.38, 0.28 * utilityMult);
         if (this.random() < nadeHitChance) {
-            const nadeDamage = Math.floor((10 + this.random() * 14) * utilityMult);
+            const nadeDamage = Math.floor((30 + this.random() * 26) * utilityMult);
             const actualNade = Math.min(target.hp - 1, nadeDamage);
             if (actualNade > 0) {
                 target.hp -= actualNade;
@@ -324,10 +324,10 @@ export class CombatSystem {
 
     if (roll < finalHitChance) {
       shooter.statistics.hits++;
-      let baseHsChance = Math.min(0.50, Math.max(0.12, 0.24 + (aimRatio - 1.0) * 0.35));
-      if (isLuckyShot) baseHsChance = Math.max(baseHsChance, 0.55);
+      let baseHsChance = Math.min(0.40, Math.max(0.12, 0.22 + (aimRatio - 1.0) * 0.25));
+      if (isLuckyShot) baseHsChance = Math.max(baseHsChance, 0.50);
       if (shooter.perk?.hsMultiplier) {
-        baseHsChance = Math.min(0.65, baseHsChance * shooter.perk.hsMultiplier);
+        baseHsChance = Math.min(0.55, baseHsChance * shooter.perk.hsMultiplier);
       }
       const isHeadshot = this.random() < baseHsChance;
       
@@ -511,17 +511,16 @@ export class CombatSystem {
             }
         }
         
-        // Assist distribution: requires genuine heavy damage (at least 50 HP)
+        // Assist distribution: requires genuine damage (at least 38 HP or flash assist)
         let assistSwing = 0;
         let assistCredited = false;
         if (target.damageTaken) {
-            const minAssistDamage = RATING_CONFIG.ASSIST_MIN_DAMAGE || 50;
+            const minAssistDamage = RATING_CONFIG.ASSIST_MIN_DAMAGE || 38;
             for (const [assisterId, dmg] of target.damageTaken.entries()) {
                 if (assisterId !== shooter.id) {
                     const assister = state.players[assisterId];
                     if (assister && assister.teamId === shooter.teamId) {
-                        // Strict threshold: never drops below 48 HP to prevent chip-damage assists
-                        const threshold = Math.max(48, minAssistDamage);
+                        const threshold = minAssistDamage;
                         if (dmg >= threshold) {
                             assister.statistics.assists++;
                             (assister as any).roundAssists = ((assister as any).roundAssists || 0) + 1;
@@ -533,6 +532,19 @@ export class CombatSystem {
                             break; 
                         }
                     }
+                }
+            }
+        }
+
+        // Flash assist fallback: if target was heavily flashed by teammate within last 40 ticks
+        if (!assistCredited && (target as any).flashedById) {
+            const flasherId = (target as any).flashedById;
+            if (flasherId !== shooter.id) {
+                const flasher = state.players[flasherId];
+                if (flasher && flasher.teamId === shooter.teamId && (state.tick - ((target as any).flashedTick || 0) < 40)) {
+                    flasher.statistics.assists++;
+                    (flasher as any).roundAssists = ((flasher as any).roundAssists || 0) + 1;
+                    assistCredited = true;
                 }
             }
         }

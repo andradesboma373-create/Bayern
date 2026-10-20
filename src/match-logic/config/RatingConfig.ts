@@ -23,7 +23,7 @@ export const RATING_CONFIG = {
   },
 
   // Assist damage threshold: minimum damage dealt to an enemy to be credited as assist
-  ASSIST_MIN_DAMAGE: 50,
+  ASSIST_MIN_DAMAGE: 38,
   ASSIST_SWING_SHARE: 0.10,
   TRADE_SWING_BONUS: 1.35,
 
@@ -115,5 +115,5 @@ export const RATING_CONFIG = {
 
   // Smoothing coefficient for normalizing performance gaps within a team (0.0 to 1.0)
   // 1.0 = no normalization, 0.0 = all players have team average stats
-  STAT_NORMALIZATION_FACTOR: 0.74
+  STAT_NORMALIZATION_FACTOR: 0.65
 };

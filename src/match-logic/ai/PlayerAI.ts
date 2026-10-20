@@ -182,7 +182,76 @@ export class PlayerAI {
         }
         if (p.state === 'PLANTING') return;
     }
-    if (p.state === 'DEFUSING') return;
+    if (p.state === 'DEFUSING') {
+        for (const [enemyId, mem] of p.knownEnemies.entries()) {
+            if (mem.confidence > 0.8) {
+                const enemy = state.players[enemyId];
+                if (enemy && enemy.alive && MapSystem.hasLineOfSight(p.currentNodeId, enemy.currentNodeId)) {
+                    p.state = 'IDLE';
+                    state.bomb.state = 'PLANTED';
+                    state.bomb.defuserPlayerId = null;
+                    break;
+                }
+            }
+        }
+        if (p.state === 'DEFUSING') return;
+    }
+
+    // 1.1 Objective Handling (Planting, Defusing, Bomb Recovery)
+    // T-Side Bomb Planting on Site
+    if (p.side === 'T' && state.bomb.state === 'CARRIED' && state.bomb.carrierId === p.id) {
+        if (p.currentNodeId === 'a_site' || p.currentNodeId === 'b_site') {
+            const hasImmediateThreat = Array.from(p.knownEnemies.entries()).some(([eId, mem]) => {
+                const e = state.players[eId];
+                return e && e.alive && mem.confidence > 0.75 && e.currentNodeId === p.currentNodeId;
+            });
+            if (!hasImmediateThreat) {
+                p.state = 'PLANTING';
+                state.bomb.state = 'PLANTING';
+                state.bomb.timer = state.tick + 35; // 3.5 seconds
+                p.path = [];
+                p.targetNodeId = null;
+                p.targetEnemyId = null;
+                state.events.push({ type: 'BOMB_PLANTING', tick: state.tick, data: { nodeId: p.currentNodeId, planterId: p.id } });
+                return;
+            }
+        }
+    }
+
+    // CT-Side Bomb Defusing on Planted Bombsite
+    if (p.side === 'CT' && state.bomb.state === 'PLANTED' && p.currentNodeId === state.bomb.nodeId) {
+        const hasImmediateThreat = Array.from(p.knownEnemies.entries()).some(([eId, mem]) => {
+            const e = state.players[eId];
+            return e && e.alive && mem.confidence > 0.75 && e.currentNodeId === p.currentNodeId;
+        });
+        const anyoneDefusing = Object.values(state.players).some(pl => pl.state === 'DEFUSING' && pl.alive);
+        if (!hasImmediateThreat && !anyoneDefusing) {
+            p.state = 'DEFUSING';
+            state.bomb.state = 'DEFUSING';
+            state.bomb.defuserPlayerId = p.id;
+            state.bomb.defuseTimer = state.tick + (p.hasDefuseKit ? 50 : 100);
+            p.path = [];
+            p.targetNodeId = null;
+            p.targetEnemyId = null;
+            state.events.push({ type: 'BOMB_DEFUSING', tick: state.tick, data: { nodeId: p.currentNodeId, defuserId: p.id, hasKit: p.hasDefuseKit } });
+            return;
+        }
+    }
+
+    // Dropped Bomb Pickup
+    if (p.side === 'T' && state.bomb.state === 'DROPPED' && p.currentNodeId === state.bomb.nodeId) {
+        state.bomb.state = 'CARRIED';
+        state.bomb.carrierId = p.id;
+        state.bomb.nodeId = null;
+        state.events.push({ type: 'BOMB_PICKED_UP', tick: state.tick, data: { playerId: p.id } });
+    }
+
+    // Late Round Urgency: at tick > 600, Ts commit to site take instead of passive holding
+    if (p.side === 'T' && state.tick > 600 && state.bomb.state === 'CARRIED') {
+        if (team.strategy === 'DEFAULT' || team.strategy === 'MID_ROUND_HOLD') {
+            team.strategy = CombatSystem.random() > 0.5 ? 'EXECUTE_A' : 'EXECUTE_B';
+        }
+    }
 
     // 2. Target Selection
     let bestEnemyId: string | null = null;
@@ -501,7 +570,8 @@ export class PlayerAI {
           'short'         // B Short / Catwalk
         ];
         
-        let assignedSpot = isSniper ? 'window' : ctPositions[myIdx % ctPositions.length];
+        const roundShift = state.round || 0;
+        let assignedSpot = isSniper ? (roundShift % 3 === 0 ? 'a_site' : 'window') : ctPositions[(myIdx + roundShift) % ctPositions.length];
         
         if (p.currentNodeId === assignedSpot) {
             p.state = 'HOLDING';

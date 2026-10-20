@@ -106,7 +106,6 @@ export default function PlayerProfileModal({
   const [editRole, setEditRole] = useState(player.role || "rifler");
   const [editRating, setEditRating] = useState(player.rating || 100);
   const [editSubclass, setEditSubclass] = useState(player.subclass || "classic_igl");
-  const [editCalls, setEditCalls] = useState(player.calls || 0);
   const [editValRating, setEditValRating] = useState<number>(
     player.valRating || 0,
   );
@@ -672,7 +671,6 @@ export default function PlayerProfileModal({
       role: editRole,
       subclass: editRole.toLowerCase() === 'captain' || editRole.toLowerCase() === 'igl' ? editSubclass : undefined,
       rating: Number(editRating),
-      calls: Number(editCalls),
       valRating: newPts,
       avatarUrl: editAvatarUrl.trim(),
       socials: {
@@ -717,6 +715,7 @@ export default function PlayerProfileModal({
               ...tp,
               nickname: editNickname.trim(),
               role: editRole,
+              subclass: editRole.toLowerCase() === 'captain' || editRole.toLowerCase() === 'igl' ? editSubclass : undefined,
               rating: Number(editRating),
               valRating: newPts,
               country: editCountry,

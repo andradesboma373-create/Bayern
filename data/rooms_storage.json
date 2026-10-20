@@ -8,10 +8,10 @@
     "role": "superadmin",
     "createdAt": "2026-09-01T00:00:00.000Z",
     "isLocked": false,
-    "totalRequestsToday": 55,
+    "totalRequestsToday": 59,
     "readsToday": 0,
-    "writesToday": 0,
-    "lastActive": "2026-10-05T15:48:41.069Z"
+    "writesToday": 52,
+    "lastActive": "2026-10-20T20:28:12.267Z"
   },
   {
     "id": "room_zeixst",
