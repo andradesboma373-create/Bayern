@@ -118,7 +118,7 @@ export default function MapCenter({ user }: { user: any }) {
                 <div className="h-32 relative">
                   <div 
                     className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
-                    style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(18,18,26,1)), url('/maps/${map.id}')` }}
+                    style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(18,18,26,1)), url('/maps/${map.id.toLowerCase().replace(/[^a-z0-9]/g, "")}.webp')` }}
                   />
                   <div className="absolute inset-0 flex items-end p-6">
                     <div className="flex justify-between items-end w-full">

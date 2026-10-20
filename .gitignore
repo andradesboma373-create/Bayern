@@ -4,5 +4,10 @@ dist/
 coverage/
 .DS_Store
 *.log
+*.cpuprofile
+*.txt
+local_database_cache.json
+rooms_storage_backup.json
+.idea/
 .env*
 !.env.example

@@ -224,7 +224,7 @@ const VetoModal: React.FC<VetoModalProps> = ({
                   >
                     <div 
                       className={`absolute inset-0 bg-cover bg-center ${action?.type === 'BAN' ? 'grayscale opacity-30' : ''}`} 
-                      style={{ backgroundImage: `url('/maps/${m.id}')` }}
+                      style={{ backgroundImage: `url('/maps/${m.id.toLowerCase().replace(/[^a-z0-9]/g, "")}.webp')` }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-3">
                       <div className="text-center font-bold text-white text-sm mb-1">{m.name}</div>

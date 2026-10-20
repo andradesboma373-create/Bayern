@@ -291,7 +291,7 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
           <div 
             className="bg-[#12121a] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden mb-6"
             style={cleanActiveMapKey ? {
-              backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('/maps/${cleanActiveMapKey}')`,
+              backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('/maps/${cleanActiveMapKey.replace(/\.(webp|jpg|png)$/i, "")}.webp')`,
               backgroundSize: 'cover',
               backgroundPosition: 'center'
             } : {}}
@@ -394,7 +394,7 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
                       >
                         <div 
                           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('/maps/${cleanKey}')` }}
+                          style={{ backgroundImage: `url('/maps/${cleanKey.replace(/\.(webp|jpg|png)$/i, "")}.webp')` }}
                           title={mName}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/60 flex flex-col items-center justify-center p-1">

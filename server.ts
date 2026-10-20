@@ -4605,8 +4605,8 @@ const scanMapsDir = () => {
                 const files = fs.readdirSync(dir);
                 console.log(`[Maps] Found ${files.length} files in ${label} (${dir})`);
                 files.forEach(f => {
-                    if (f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png')) {
-                        const pure = f.replace(/\.(jpg|jpeg|png)$/i, '').toLowerCase();
+                    if (f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png') || f.toLowerCase().endsWith('.webp')) {
+                        const pure = f.replace(/\.(jpg|jpeg|png|webp)$/i, '').toLowerCase();
                         allAvailableMapFiles.add(pure);
                     }
                 });
@@ -4621,19 +4621,19 @@ const scanMapsDir = () => {
 
         if (fs.existsSync(cs2Dir)) {
           customMapsCS2 = fs.readdirSync(cs2Dir)
-            .filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png'))
-            .map(f => f.replace(/\.(jpg|jpeg|png)$/i, ''));
+            .filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png') || f.toLowerCase().endsWith('.webp'))
+            .map(f => f.replace(/\.(jpg|jpeg|png|webp)$/i, ''));
         }
         if (fs.existsSync(so2Dir)) {
           customMapsS2 = fs.readdirSync(so2Dir)
-            .filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png'))
-            .map(f => f.replace(/\.(jpg|jpeg|png)$/i, ''));
+            .filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png') || f.toLowerCase().endsWith('.webp'))
+            .map(f => f.replace(/\.(jpg|jpeg|png|webp)$/i, ''));
         }
         
         // Fallback for root maps dir (legacy)
         const rootFiles = fs.readdirSync(publicMapsDir)
-          .filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png'))
-          .map(f => f.replace(/\.(jpg|jpeg|png)$/i, ''));
+          .filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png') || f.toLowerCase().endsWith('.webp'))
+          .map(f => f.replace(/\.(jpg|jpeg|png|webp)$/i, ''));
         
         rootFiles.forEach(f => {
             const lowF = f.toLowerCase();

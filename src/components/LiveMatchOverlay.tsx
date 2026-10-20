@@ -9,11 +9,10 @@ interface LiveMatchOverlayProps {
 }
 
 const getMapBg = (mapName?: string, game?: string) => {
-    if (!mapName) return '/maps/cs2/mirage.jpg';
-    const clean = mapName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const isSo2 = game === 'so2' || ['breeze', 'dune', 'hanami', 'prison', 'province', 'rust', 'sandstone', 'sakura'].includes(clean);
-    const folder = isSo2 ? 'so2' : 'cs2';
-    return `/maps/${folder}/${clean}.jpg`;
+    if (!mapName) return '/maps/mirage.webp';
+    let clean = mapName.toLowerCase().replace(/^(de_|cs_)/i, '').replace(/[^a-z0-9]/g, '');
+    if (clean.includes('sakura')) clean = 'hanami';
+    return `/maps/${clean}.webp`;
 };
 
 export default function LiveMatchOverlay({ matchResult, game = 'cs2', onComplete }: LiveMatchOverlayProps) {

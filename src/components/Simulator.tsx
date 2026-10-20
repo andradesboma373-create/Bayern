@@ -1167,7 +1167,7 @@ export default function Simulator({ user }: { user: any }) {
         <div ref={resultContainerRef} className="flex flex-col gap-6 bg-[#0a0a0f] p-6 rounded-3xl border border-white/5">
           <div className="bg-[#12121a] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden"
                style={bgSourceMap ? {
-                 backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('/maps/${activeBgMapName}')`,
+                 backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('/maps/${activeBgMapName.replace(/\.(webp|jpg|png)$/i, "")}.webp')`,
                  backgroundSize: 'cover',
                  backgroundPosition: 'center'
                } : {}}>
@@ -1304,7 +1304,7 @@ export default function Simulator({ user }: { user: any }) {
                       >
                         <div 
                           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('/maps/${cleanKey}')` }}
+                          style={{ backgroundImage: `url('/maps/${cleanKey.replace(/\.(webp|jpg|png)$/i, "")}.webp')` }}
                           title={mTitle}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/60 flex flex-col items-center justify-center p-1">
@@ -1527,7 +1527,7 @@ export default function Simulator({ user }: { user: any }) {
                     }
                   }}
                   disabled={!canSelect && !isSelected}
-                  style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('/maps/${m.id}')`, backgroundSize: 'cover', backgroundPosition: 'center', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }} className={`relative aspect-[4/3] rounded-xl font-bold text-xs transition-all flex flex-col items-center justify-center gap-1 overflow-hidden group ${isSelected ? 'text-[#ff8f00] border-2 border-[#ff8f00] shadow-[0_0_15px_rgba(255,143,0,0.4)] scale-[1.03] z-10' : canSelect ? 'text-white/80 hover:text-white hover:border-white/30 border-2 border-white/10' : 'text-white/30 opacity-40 border-2 border-white/5 cursor-not-allowed'}`}
+                  style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('/maps/${m.id.toLowerCase().replace(/[^a-z0-9]/g, "")}.webp')`, backgroundSize: 'cover', backgroundPosition: 'center', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }} className={`relative aspect-[4/3] rounded-xl font-bold text-xs transition-all flex flex-col items-center justify-center gap-1 overflow-hidden group ${isSelected ? 'text-[#ff8f00] border-2 border-[#ff8f00] shadow-[0_0_15px_rgba(255,143,0,0.4)] scale-[1.03] z-10' : canSelect ? 'text-white/80 hover:text-white hover:border-white/30 border-2 border-white/10' : 'text-white/30 opacity-40 border-2 border-white/5 cursor-not-allowed'}`}
                 >
                   <span className="truncate w-full text-center">{m.name}</span>
                   <div className="flex gap-2 text-[10px] opacity-70">

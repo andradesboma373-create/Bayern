@@ -341,7 +341,7 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
                                 <div key={idx} className="bg-white/[0.03] border border-white/10 rounded-xl p-3 flex flex-col justify-between relative overflow-hidden">
                                     <div 
                                         className="absolute inset-0 bg-cover bg-center opacity-10 pointer-events-none"
-                                        style={{ backgroundImage: `url('/maps/${subfolder}/${mapImgName}.jpg')` }}
+                                        style={{ backgroundImage: `url('/maps/${mapImgName}.webp')` }}
                                     />
                                     <div className="text-xs font-black text-purple-300 uppercase tracking-wider mb-2 flex items-center justify-between relative z-10">
                                         <span>Карта {idx + 1}: {m.mapName || m.name}</span>
@@ -430,7 +430,7 @@ export default function MatchVetoModal({ user, team1, team2, game, bo, tournamen
                                     key={m.id}
                                     onClick={() => vetoStage <= steps.length && !isBanned && !isPicked && handleVetoAction(m.id)}
                                     style={{
-                                      backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('/maps/${m.name.toLowerCase()}')`,
+                                      backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('/maps/${m.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.webp')`,
                                       backgroundSize: 'cover',
                                       backgroundPosition: 'center'
                                     }}
