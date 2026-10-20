@@ -69,6 +69,7 @@ export interface Player {
 
   // Base Characteristics
   rating: number;
+  subclass?: string; // Subclass (e.g. fragging_igl, caller_igl, classic_igl)
   calls?: number; // 0 to 100 tactical calls quality rating for Captains
   aim: number;
   iq: number;

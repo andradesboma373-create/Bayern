@@ -23,6 +23,7 @@ interface SimulatorPlayer {
   role: string;
   rating: number;
   isNewPlayer?: boolean;
+  subclass?: string;
   calls?: number;
 }
 
@@ -31,7 +32,7 @@ const DEFAULT_TEAM_T: SimulatorPlayer[] = [
   { nickname: 'Player 2', role: 'sniper', rating: 144, isNewPlayer: false },
   { nickname: 'Player 3', role: 'opener', rating: 135, isNewPlayer: false },
   { nickname: 'Player 4', role: 'support', rating: 124, isNewPlayer: false },
-  { nickname: 'Player 5', role: 'captain', rating: 118, isNewPlayer: false, calls: 70 },
+  { nickname: 'Player 5', role: 'captain', rating: 118, isNewPlayer: false, subclass: 'classic_igl' },
 ];
 
 const DEFAULT_TEAM_CT: SimulatorPlayer[] = [
@@ -39,7 +40,7 @@ const DEFAULT_TEAM_CT: SimulatorPlayer[] = [
   { nickname: 'Player 2', role: 'sniper', rating: 142, isNewPlayer: false },
   { nickname: 'Player 3', role: 'opener', rating: 134, isNewPlayer: false },
   { nickname: 'Player 4', role: 'support', rating: 122, isNewPlayer: false },
-  { nickname: 'Player 5', role: 'captain', rating: 116, isNewPlayer: false, calls: 70 },
+  { nickname: 'Player 5', role: 'captain', rating: 116, isNewPlayer: false, subclass: 'classic_igl' },
 ];
 
 const FORMS = [
@@ -1960,20 +1961,16 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
                 </select>
 
                 {p.role === 'captain' && (
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={p.calls ?? 70}
-                    onChange={(e) => {
-                      let val = parseInt(e.target.value) || 0;
-                      if (val < 0) val = 0;
-                      if (val > 100) val = 100;
-                      onChange(i, 'calls', val);
-                    }}
-                    className="w-16 bg-zinc-950 border border-white/10 rounded-lg px-2 py-1 outline-none text-amber-400 text-xs font-bold text-center"
-                    title="CALLS (качество коллов 0-100)"
-                  />
+                  <select
+                    value={p.subclass || 'classic_igl'}
+                    onChange={(e) => onChange(i, 'subclass', e.target.value)}
+                    className="bg-zinc-950 border border-amber-500/30 rounded-lg px-2 py-1 outline-none text-amber-400 text-xs font-semibold cursor-pointer text-center hover:border-amber-500/60 transition-colors"
+                    title="Подкатегория капитана (Стрелок / Коллер / Обычный)"
+                  >
+                    <option value="classic_igl">🧠 Обычный</option>
+                    <option value="fragging_igl">💥 Стрелок</option>
+                    <option value="caller_igl">📋 Коллер</option>
+                  </select>
                 )}
 
                 <input 

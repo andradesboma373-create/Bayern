@@ -25,10 +25,35 @@ export const ROLE_SUBCLASSES: Record<string, RoleSubclass[]> = {
         { id: 'secondary_awp', name: 'Второстепенный снайпер', desc: 'Гибридный игрок, играющий с рифлами на экономе', icon: '🔄', killMultBonus: 0.03, assistMultBonus: 0.12 }
     ],
     captain: [
-        { id: 'classic_igl', name: 'Капитан', desc: 'Повышает дисциплину и синергию состава (+6 к синергии)', icon: '🧠', synergyBonus: 6, assistMultBonus: 0.15 },
-        { id: 'fragging_igl', name: 'Стреляющий капитан', desc: 'Периодически подключается к фраггингу (+5% к убийствам)', icon: '💥', killMultBonus: 0.05, impactBonus: 0.04 },
-        { id: 'sniper_igl', name: 'Капитан снайпер', desc: 'Управляет картой с AWP в руках', icon: '🎯', killMultBonus: 0.06, impactBonus: 0.08 },
-        { id: 'tactician_igl', name: 'Капитан-тактик', desc: 'Организует четкие размены и грамотные закупки', icon: '📋', assistMultBonus: 0.25, synergyBonus: 4 }
+        { 
+            id: 'classic_igl', 
+            name: 'Капитан обычный', 
+            desc: 'Базовый капитан: сбалансированная стрельба и стандартные коллы', 
+            icon: '🧠', 
+            synergyBonus: 6, 
+            assistMultBonus: 0.10,
+            killMultBonus: 0 
+        },
+        { 
+            id: 'fragging_igl', 
+            name: 'Капитан-стрелок', 
+            desc: 'Коллит меньше, но аим и фраги в матчах как у рифлера', 
+            icon: '💥', 
+            synergyBonus: 1, 
+            killMultBonus: 0.19, // Компенсирует штраф капитана 0.86 -> 1.05 (уровень рифлера!)
+            impactBonus: 0.10,
+            assistMultBonus: -0.05 
+        },
+        { 
+            id: 'caller_igl', 
+            name: 'Коллер капитан', 
+            desc: 'Больше коллов для победы команды, но меньше личного аима и фрагов', 
+            icon: '📋', 
+            synergyBonus: 14, // Высокая синергия и тактическая мощь команды
+            assistMultBonus: 0.30, 
+            killMultBonus: -0.10, // Меньше личного аима
+            impactBonus: -0.04 
+        }
     ],
     support: [
         { id: 'anchor', name: 'Опорник', desc: 'Железное удержание позиций в обороне за CT', icon: '🔒', defenseBonus: 0.20, deathMultBonus: -0.06, killMultBonus: 0.01 },
@@ -62,7 +87,17 @@ export function getSubclassesForRole(roleId: string): RoleSubclass[] {
 export function getSubclassObj(roleId: string, subclassId?: string): RoleSubclass | null {
     if (!subclassId || subclassId === 'none' || subclassId === 'default') return null;
     const list = getSubclassesForRole(roleId);
-    return list.find(s => s.id === subclassId) || null;
+    let found = list.find(s => s.id === subclassId);
+    if (!found) {
+        if (subclassId === 'tactician_igl' || subclassId === 'caller' || subclassId === 'caller_igl') {
+            found = list.find(s => s.id === 'caller_igl');
+        } else if (subclassId === 'shooter' || subclassId === 'fragging_igl' || subclassId === 'sniper_igl') {
+            found = list.find(s => s.id === 'fragging_igl');
+        } else if (subclassId === 'classic' || subclassId === 'classic_igl' || subclassId === 'base') {
+            found = list.find(s => s.id === 'classic_igl');
+        }
+    }
+    return found || null;
 }
 
 export const DEFAULT_ROLES_S2 = [

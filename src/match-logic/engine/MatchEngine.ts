@@ -409,9 +409,28 @@ export class MatchEngine {
         aggression *= 1.20; // Играет больше на себя, лезет в ненужные дуэли
       }
       
-      const callsVal = pData.calls !== undefined && pData.calls !== null
+      let callsVal = pData.calls !== undefined && pData.calls !== null
         ? Math.max(0, Math.min(100, Math.round(Number(pData.calls))))
         : (isCaptain ? CALLS_CONFIG.DEFAULT_CALLS : undefined);
+
+      // Handle captain subclasses (Капитан-стрелок vs Коллер vs Обычный)
+      if (isCaptain) {
+        const sub = pData.subclass || 'classic_igl';
+        if (sub === 'fragging_igl' || sub === 'shooter') {
+          // Капитан-стрелок: коллит меньше, но аим и фраги на уровне рифлера
+          aim = Math.round(aim * 1.18);
+          reaction = Math.round(reaction * 1.10);
+          callsVal = 45;
+        } else if (sub === 'caller_igl' || sub === 'tactician_igl' || sub === 'caller') {
+          // Коллер капитан: больше коллов для победы команды, но меньше личного аима
+          aim = Math.round(aim * 0.90);
+          iq = Math.round(iq * 1.15);
+          callsVal = 92;
+        } else {
+          // Капитан обычный (базовый)
+          callsVal = 70;
+        }
+      }
 
       const p: Player = {
         id: pId,
@@ -423,6 +442,7 @@ export class MatchEngine {
         isAdaptedRole,
         isNewPlayer,
         rating,
+        subclass: pData.subclass || (isCaptain ? 'classic_igl' : undefined),
         calls: callsVal,
         aim: Math.max(40, aim),
         iq: Math.max(40, iq),

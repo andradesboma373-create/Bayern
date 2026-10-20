@@ -1563,7 +1563,7 @@ export default function AiNegotiator({ user }: { user: any }) {
                       <option value="cash_only">--- Только деньги ---</option>
                       {userPlayers.map((p: any) => (
                         <option key={p.id} value={p.id}>
-                          {p.nickname} ({p.role || 'Rifler'}) — Рейтинг: {Number(p.rating || 100).toFixed(0)} {p.role?.toLowerCase() === 'captain' || p.role?.toLowerCase() === 'igl' ? `• CALLS: ${Number(p.calls || 0)}` : ''}
+                          {p.nickname} ({p.role || 'Rifler'}) — Рейтинг: {Number(p.rating || 100).toFixed(0)} {p.role?.toLowerCase() === 'captain' || p.role?.toLowerCase() === 'igl' ? (p.subclass === 'fragging_igl' ? '• Стрелок' : p.subclass === 'caller_igl' ? '• Коллер' : '• Обычный') : ''}
                         </option>
                       ))}
                     </select>

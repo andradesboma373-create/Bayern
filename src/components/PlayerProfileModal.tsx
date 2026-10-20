@@ -105,6 +105,7 @@ export default function PlayerProfileModal({
   const [editAge, setEditAge] = useState(player.age || 21);
   const [editRole, setEditRole] = useState(player.role || "rifler");
   const [editRating, setEditRating] = useState(player.rating || 100);
+  const [editSubclass, setEditSubclass] = useState(player.subclass || "classic_igl");
   const [editCalls, setEditCalls] = useState(player.calls || 0);
   const [editValRating, setEditValRating] = useState<number>(
     player.valRating || 0,
@@ -669,6 +670,7 @@ export default function PlayerProfileModal({
       country: editCountry,
       age: Number(editAge),
       role: editRole,
+      subclass: editRole.toLowerCase() === 'captain' || editRole.toLowerCase() === 'igl' ? editSubclass : undefined,
       rating: Number(editRating),
       calls: Number(editCalls),
       valRating: newPts,
@@ -1516,17 +1518,17 @@ export default function PlayerProfileModal({
                 {editRole.toLowerCase() === 'captain' && (
                   <div>
                     <label className="text-xs font-bold text-white/50 uppercase block mb-1">
-                      Рейтинг CALLS (0-100)
+                      Подкатегория капитана
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={editCalls}
-                      onChange={(e) => setEditCalls(Number(e.target.value) || 0)}
-                      className="w-full bg-black/50 border border-amber-500/30 rounded-xl px-4 py-2.5 text-amber-300 font-mono text-sm font-bold focus:border-amber-400 focus:outline-none"
-                      title="Качество тактических коллов (только для капитанов)"
-                    />
+                    <select
+                      value={editSubclass}
+                      onChange={(e) => setEditSubclass(e.target.value)}
+                      className="w-full bg-black/50 border border-amber-500/30 rounded-xl px-4 py-2.5 text-amber-300 font-bold text-sm focus:border-amber-400 focus:outline-none cursor-pointer"
+                    >
+                      <option value="classic_igl">🧠 Капитан обычный (база: баланс стрельбы и тактики)</option>
+                      <option value="fragging_igl">💥 Капитан-стрелок (коллит меньше, но аим как у рифлера)</option>
+                      <option value="caller_igl">📋 Коллер капитан (больше коллов для команды, меньше аима)</option>
+                    </select>
                   </div>
                 )}
 
