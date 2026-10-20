@@ -219,11 +219,11 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div ref={resultContainerRef} className={`bg-[#0a0a0f] border border-white/10 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col ${isDownloading ? 'overflow-visible' : 'max-h-[90vh] overflow-hidden'}`}>
-        <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40 sticky top-0 z-10">
-          <h2 className="text-xl font-black text-white uppercase tracking-widest">ДЕТАЛИ МАТЧА</h2>
+      <div ref={resultContainerRef} className={`bg-[#0a0a0f] border border-white/10 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh]`}>
+        <div className="p-4 border-b border-white/10 flex flex-wrap items-center justify-between gap-3 bg-black/40 sticky top-0 z-10 shrink-0">
+          <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-widest">ДЕТАЛИ МАТЧА</h2>
             {!isDownloading && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {match?.tournamentId && (
                   <button 
                     onClick={async () => {
@@ -247,42 +247,47 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
                           alert("Ошибка при сохранении");
                        }
                     }}
-                    className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors cursor-pointer"
+                    className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs sm:text-sm"
                     title="Сохранить результат в базу турнира"
                   >
                     <Check className="w-4 h-4" />
-                    <span className="text-sm hidden sm:inline">Сохранить</span>
+                    <span>Сохранить</span>
                   </button>
                 )}
                 <div className="relative group/download">
-                  <button className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors cursor-pointer">
+                  <button className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs sm:text-sm shadow-md">
                     <Download className="w-4 h-4" />
-                    <span className="text-sm hidden sm:inline">Скачать</span>
-                    <ChevronDown className="w-3 h-3 opacity-50" />
+                    <span>Скачать</span>
+                    <ChevronDown className="w-3 h-3 opacity-60" />
                   </button>
-                  <div className="absolute top-full right-0 mt-1 w-48 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
-                    <button onClick={downloadPhoto} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors">
+                  <div className="absolute top-full right-0 mt-1.5 w-48 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
+                    <button onClick={downloadPhoto} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer">
                       <ImageIcon className="w-4 h-4 text-blue-400" /> ФОТО (.PNG)
                     </button>
-                    <button onClick={downloadJson} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5">
+                    <button onClick={downloadJson} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5 cursor-pointer">
                       <Database className="w-4 h-4 text-emerald-400" /> ДАННЫЕ (.JSON)
                     </button>
-                    <button onClick={downloadPdf} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5">
+                    <button onClick={downloadPdf} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5 cursor-pointer">
                       <Layers className="w-4 h-4 text-purple-400" /> ОТЧЕТ (.PDF)
                     </button>
-                    <button onClick={downloadBoth} className="w-full text-left px-4 py-3 text-xs font-black text-blue-400 hover:bg-blue-500/10 flex items-center gap-3 transition-colors border-t border-white/10">
+                    <button onClick={downloadBoth} className="w-full text-left px-4 py-3 text-xs font-black text-blue-400 hover:bg-blue-500/10 flex items-center gap-3 transition-colors border-t border-white/10 cursor-pointer">
                       <Check className="w-4 h-4" /> СКАЧАТЬ ОБА
                     </button>
                   </div>
                 </div>
-                <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer">
-                  <X className="w-5 h-5" />
+                <button 
+                  onClick={onClose} 
+                  className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer border border-white/10 text-xs sm:text-sm font-bold"
+                  title="Закрыть окно"
+                >
+                  <X className="w-4 h-4 text-white/70" />
+                  <span>НАЗАД</span>
                 </button>
               </div>
             )}
         </div>
         
-        <div className={`p-6 ${isDownloading ? 'overflow-visible' : 'overflow-y-auto'}`}>
+        <div className="flex-1 overflow-y-auto p-6">
           <div 
             className="bg-[#12121a] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden mb-6"
             style={cleanActiveMapKey ? {
@@ -435,6 +440,37 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
                 </div>
               </div>
             ) : null}
+          </div>
+
+          {/* Bottom Action Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl mt-6">
+            <button
+              onClick={onClose}
+              className="px-5 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border border-white/10"
+            >
+              <X className="w-4 h-4 text-white/70" /> НАЗАД К СПИСКУ МАТЧЕЙ
+            </button>
+            <div className="relative group/downloadbottom">
+              <button className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all cursor-pointer text-xs sm:text-sm shadow-md">
+                <Download className="w-4 h-4" />
+                <span>СКАЧАТЬ (.PNG, .JSON, .PDF)</span>
+                <ChevronDown className="w-3 h-3 opacity-60" />
+              </button>
+              <div className="absolute bottom-full right-0 mb-1.5 w-48 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover/downloadbottom:opacity-100 group-hover/downloadbottom:visible transition-all z-50">
+                <button onClick={downloadPhoto} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer">
+                  <ImageIcon className="w-4 h-4 text-blue-400" /> ФОТО (.PNG)
+                </button>
+                <button onClick={downloadJson} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5 cursor-pointer">
+                  <Database className="w-4 h-4 text-emerald-400" /> ДАННЫЕ (.JSON)
+                </button>
+                <button onClick={downloadPdf} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5 cursor-pointer">
+                  <Layers className="w-4 h-4 text-purple-400" /> ОТЧЕТ (.PDF)
+                </button>
+                <button onClick={downloadBoth} className="w-full text-left px-4 py-3 text-xs font-black text-blue-400 hover:bg-blue-500/10 flex items-center gap-3 transition-colors border-t border-white/10 cursor-pointer">
+                  <Check className="w-4 h-4" /> СКАЧАТЬ ОБА
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

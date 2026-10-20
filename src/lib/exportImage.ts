@@ -71,9 +71,15 @@ export async function exportElementToDataUrl(
     // Give the DOM a brief moment to reflow dimensions completely
     await new Promise(resolve => setTimeout(resolve, 200));
 
-    // Calculate full content bounds accurately
+    // Calculate full content bounds accurately and determine safe pixel ratio
     const targetWidth = Math.max(element.scrollWidth, element.offsetWidth, 1200);
     const targetHeight = Math.max(element.scrollHeight, element.offsetHeight, 600);
+    const maxDimension = Math.max(targetWidth, targetHeight);
+    
+    // Prevent browser canvas memory overflow (e.g. limit dimension to 4096px)
+    const safeMaxRatio = Math.max(1.0, Math.min(2.0, Math.floor(4096 / maxDimension * 10) / 10));
+    const requestedRatio = options.pixelRatio || 2.0;
+    const effectiveRatio = Math.min(requestedRatio, safeMaxRatio);
 
     // 3. Pre-sanitize images: replace errored or invisible images with transparent placeholders
     const images = Array.from(element.querySelectorAll<HTMLImageElement>('img'));
@@ -117,43 +123,43 @@ export async function exportElementToDataUrl(
     // MULTI-TIER PROGRESSIVE FALLBACK EXECUTION
     // ==========================================
 
-    // TIER 1: Ultra HD / Crisp PNG (pixelRatio 3.0 or custom, 100% quality)
+    // TIER 1: Ultra HD / Crisp PNG (safe effective ratio, 100% quality)
     try {
-      options.onProgress?.('Рендеринг изображения (Ultra HD 4K)...');
+      options.onProgress?.('Рендеринг изображения...');
       return await toPng(element, {
         ...baseConfig,
-        quality: options.quality || 1.0,
-        pixelRatio: options.pixelRatio || 3.0,
+        quality: options.quality || 0.95,
+        pixelRatio: effectiveRatio,
         cacheBust: false
       });
     } catch (tier1Err) {
-      console.warn('Export Tier 1 (Ultra HD PNG) failed, attempting Tier 2 (Full HD PNG)...', tier1Err);
+      console.warn('Export Tier 1 failed, attempting Tier 2 (Standard PNG)...', tier1Err);
     }
 
-    // TIER 2: Full HD PNG (pixelRatio 2.2)
+    // TIER 2: Standard PNG (pixelRatio 1.5 or 1.0)
     try {
-      options.onProgress?.('Рендеринг (Full HD Crisp)...');
+      options.onProgress?.('Оптимизация изображения...');
       return await toPng(element, {
         ...baseConfig,
-        quality: 1.0,
-        pixelRatio: 2.2,
+        quality: 0.95,
+        pixelRatio: Math.min(1.5, effectiveRatio),
         cacheBust: false
       });
     } catch (tier2Err) {
-      console.warn('Export Tier 2 (Full HD PNG) failed, attempting Tier 3 (JPEG HD)...', tier2Err);
+      console.warn('Export Tier 2 failed, attempting Tier 3 (JPEG HD)...', tier2Err);
     }
 
-    // TIER 3: High quality JPEG format (pixelRatio 2, 95% quality)
+    // TIER 3: High quality JPEG format (pixelRatio 1.2, 90% quality)
     try {
-      options.onProgress?.('Рендеринг (JPEG HD)...');
+      options.onProgress?.('Рендеринг (JPEG)...');
       return await toJpeg(element, {
         ...baseConfig,
-        quality: 0.95,
-        pixelRatio: 2,
+        quality: 0.9,
+        pixelRatio: 1.2,
         cacheBust: false
       });
     } catch (tier3Err) {
-      console.warn('Export Tier 3 (JPEG) failed, attempting Tier 4 (Vector DOM only)...', tier3Err);
+      console.warn('Export Tier 3 (JPEG) failed, attempting Tier 4 (Safe Vector fallback)...', tier3Err);
     }
 
     // TIER 4: Safe Vector-only fallback (ignores external cross-origin images that fail CORS)
@@ -178,7 +184,7 @@ export async function exportElementToDataUrl(
       });
     } catch (tier4Err) {
       console.error('All 4 export tiers failed:', tier4Err);
-      throw new Error('Не удалось сформировать изображение. Попробуйте отключить сторонние расширения браузера.');
+      throw new Error('Не удалось сформировать изображение. Попробуйте обновить страницу.');
     }
   } finally {
     // 4. Restore original layout and image sources cleanly
@@ -224,12 +230,7 @@ export async function downloadElementAsImage(
     cleanFilename += ext;
   }
 
-  const link = document.createElement('a');
-  link.download = cleanFilename;
-  link.href = dataUrl;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  await saveImageAs(dataUrl, cleanFilename);
 }
 
 /**

@@ -100,6 +100,7 @@ export function TeamAutocompleteInput({
                 setShowDropdown(false);
               }}
             >
+              <TeamLogo teamName={teamName} size="xs" className="w-5 h-5" />
               {teamName}
             </div>
           ))}

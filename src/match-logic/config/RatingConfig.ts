@@ -40,9 +40,9 @@ export const RATING_CONFIG = {
     },
     MULTI_KILL: {
       k2: 0.012,
-      k3: 0.025,
-      k4: 0.04,
-      k5: 0.07
+      k3: 0.024,
+      k4: 0.038,
+      k5: 0.06
     }
   },
 
@@ -101,15 +101,19 @@ export const RATING_CONFIG = {
   },
 
   // Base Rating formulation parameters (normalized to ~1.00 baseline)
-  RATING_WEIGHTS: {
-    KPR_COEFFICIENT: 0.30,        // Slightly increased KPR weight
-    DPR_PENALTY: 0.38,           // Slightly increased death penalty
-    ADR_COEFFICIENT: 0.0022,
-    KAST_COEFFICIENT: 0.0045,
-    SWING_COEFFICIENT: 0.75,       // Significantly reduced swing weight for rating
+    RATING_WEIGHTS: {
+    KPR_COEFFICIENT: 0.30,        // Balanced fragging impact
+    DPR_PENALTY: 0.35,           
+    ADR_COEFFICIENT: 0.0025,      // Increased to reward damage impact
+    KAST_COEFFICIENT: 0.005,      // Increased for support value
+    SWING_COEFFICIENT: 0.70,       // Reduced to stabilize rating swings
     MULTI_KILL_COEFFICIENT: 0.04,  
-    CLUTCH_COEFFICIENT: 0.07,      
-    OPENING_COEFFICIENT: 0.05,     
-    BASE_OFFSET: 0.35              
-  }
+    CLUTCH_COEFFICIENT: 0.06,      
+    OPENING_COEFFICIENT: 0.04,     
+    BASE_OFFSET: 0.38              
+  },
+
+  // Smoothing coefficient for normalizing performance gaps within a team (0.0 to 1.0)
+  // 1.0 = no normalization, 0.0 = all players have team average stats
+  STAT_NORMALIZATION_FACTOR: 0.74
 };

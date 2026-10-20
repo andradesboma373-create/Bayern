@@ -388,8 +388,8 @@ export class RatingSystem {
 
     const finalSwingNum = Number(totalSwing) || 0;
     let avgRoundSwing = (finalSwingNum / totalRounds) * 100; // in percent
-    // Enforce limits: maximum +8.0%, minimum -8.0% as specified
-    avgRoundSwing = Math.max(-8.0, Math.min(8.0, avgRoundSwing));
+    // Approximate guard: sanity check for extreme outliers (+/- 4.0%)
+    avgRoundSwing = Math.max(-4.0, Math.min(4.0, avgRoundSwing));
 
     // Authentic HLTV 2.0 Impact Rating:
     // Baselines: KPR 0.679, APR 0.14
@@ -424,21 +424,17 @@ export class RatingSystem {
       0.15 * ratingAdr +
       0.08 * ratingKast;
 
-    // Apply subtle round swing modifier (capped at +/- 0.04)
+    // Apply round swing modifier (impactful but balanced)
     if (RATING_CONFIG.USE_SWING && avgRoundSwing) {
-      const swingContribution = Math.max(-0.04, Math.min(0.04, (avgRoundSwing / 100) * 0.05));
+      // Use centralized coefficient for swing impact
+      const swingCoefficient = RATING_CONFIG.RATING_WEIGHTS?.SWING_COEFFICIENT || 0.75;
+      const swingContribution = (avgRoundSwing / 100) * swingCoefficient;
       computedRating += swingContribution;
     }
 
-    // Competitive Balance Guard (Anti-0.8 KD Top Tab):
-    // In professional Counter-Strike (HLTV 2.0), a player with negative K/D (< 0.85) and low KPR (< 0.55)
-    // cannot hold a 1.00+ rating or take 1st tab over the team's primary fraggers
-    if (clutchFactor < 0.15) {
-      if (kd < 0.85 && kpr < 0.55) {
-        computedRating = Math.min(0.92, computedRating);
-      } else if (kd < 0.92 && kpr < 0.60) {
-        computedRating = Math.min(0.98, computedRating);
-      }
+    // Relaxed guard: only cap if player is truly absent from the game (extreme case)
+    if (kd < 0.5 && kpr < 0.3) {
+      computedRating = Math.min(0.65, computedRating);
     }
 
     // Realistic bounds: professional matches stay between 0.30 and 2.30

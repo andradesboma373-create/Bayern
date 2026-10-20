@@ -23,6 +23,7 @@ import {
   Medal,
 } from "lucide-react";
 import { toPng } from "html-to-image";
+import { optimizeImageForUpload } from "../lib/imageOptimizer";
 import { safeLocalStorageSet, formatSwing, getSwingColorClass } from "../lib/utils";
 import { calculateConsistencyFromMatchHistory } from "../lib/simulation";
 import { RatingSystem } from "../match-logic/systems/RatingSystem";
@@ -59,6 +60,7 @@ interface PlayerProfileModalProps {
       instagram?: string;
       faceit?: string;
     };
+    calls?: number;
   };
   user: any;
   onClose: () => void;
@@ -103,6 +105,7 @@ export default function PlayerProfileModal({
   const [editAge, setEditAge] = useState(player.age || 21);
   const [editRole, setEditRole] = useState(player.role || "rifler");
   const [editRating, setEditRating] = useState(player.rating || 100);
+  const [editCalls, setEditCalls] = useState(player.calls || 0);
   const [editValRating, setEditValRating] = useState<number>(
     player.valRating || 0,
   );
@@ -667,6 +670,7 @@ export default function PlayerProfileModal({
       age: Number(editAge),
       role: editRole,
       rating: Number(editRating),
+      calls: Number(editCalls),
       valRating: newPts,
       avatarUrl: editAvatarUrl.trim(),
       socials: {
@@ -1509,6 +1513,23 @@ export default function PlayerProfileModal({
                   />
                 </div>
 
+                {editRole.toLowerCase() === 'captain' && (
+                  <div>
+                    <label className="text-xs font-bold text-white/50 uppercase block mb-1">
+                      Рейтинг CALLS (0-100)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={editCalls}
+                      onChange={(e) => setEditCalls(Number(e.target.value) || 0)}
+                      className="w-full bg-black/50 border border-amber-500/30 rounded-xl px-4 py-2.5 text-amber-300 font-mono text-sm font-bold focus:border-amber-400 focus:outline-none"
+                      title="Качество тактических коллов (только для капитанов)"
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="text-xs font-bold text-white/50 uppercase block mb-1">
                     Фото / Аватарка игрока
@@ -1524,23 +1545,12 @@ export default function PlayerProfileModal({
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const formData = new FormData();
-                          formData.append('file', file);
                           try {
-                            const res = await fetch('/api/upload?type=avatar', { method: 'POST', body: formData });
-                            if (res.ok) {
-                              const d = await res.json();
-                              if (d && d.url) {
-                                setEditAvatarUrl(d.url);
-                                return;
-                              }
-                            }
-                          } catch (err) {}
-                          const reader = new FileReader();
-                          reader.onload = (evt) => {
-                            if (evt.target?.result) setEditAvatarUrl(evt.target.result as string);
-                          };
-                          reader.readAsDataURL(file);
+                            const dataUrl = await optimizeImageForUpload(file, 'avatar');
+                            if (dataUrl) setEditAvatarUrl(dataUrl);
+                          } catch (err) {
+                            console.error(err);
+                          }
                         }}
                       />
                     </label>

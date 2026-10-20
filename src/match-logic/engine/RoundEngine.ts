@@ -543,16 +543,16 @@ export class RoundEngine {
         p.statistics.k1 = (p.statistics.k1 || 0) + 1;
       } else if (rKills === 2) {
         p.statistics.k2 = (p.statistics.k2 || 0) + 1;
-        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k2 || 0.02);
+        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k2 || 0.012);
       } else if (rKills === 3) {
         p.statistics.k3 = (p.statistics.k3 || 0) + 1;
-        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k3 || 0.04);
+        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k3 || 0.024);
       } else if (rKills === 4) {
         p.statistics.k4 = (p.statistics.k4 || 0) + 1;
-        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k4 || 0.06);
+        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k4 || 0.038);
       } else if (rKills >= 5) {
         p.statistics.k5 = (p.statistics.k5 || 0) + 1;
-        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k5 || 0.08);
+        p.statistics.roundSwing = (p.statistics.roundSwing || 0) + (RATING_CONFIG.EVENT_SWING?.MULTI_KILL.k5 || 0.06);
       }
 
       // KAST: Strict HLTV CS2 standards (Kill, Assist on killed enemy, Survived a won round, or Traded within window)
@@ -565,9 +565,8 @@ export class RoundEngine {
         p.statistics.kastRounds = (p.statistics.kastRounds || 0) + 1;
       } else {
         // Zero-contribution round: died without kill, assist, survival or trade in a lost round
-        // Player negatively impacted team's chances in this round
         if (!p.alive && p.teamId !== winnerId) {
-          p.statistics.roundSwing = (p.statistics.roundSwing || 0) - 0.025;
+          p.statistics.roundSwing = (p.statistics.roundSwing || 0) - 0.015;
         }
       }
     }

@@ -1,16 +1,21 @@
-=== Server Log Started at 2026-10-09T08:48:40.569Z ===
-[2026-10-09T08:48:40.589Z] [INFO] Successfully loaded local database cache from disk.
-[2026-10-09T08:48:40.597Z] [INFO] [Maps] Scanning maps directory...
-[2026-10-09T08:48:40.598Z] [INFO] [Maps] Found 2 files in root (/app/applet/public/maps)
-[2026-10-09T08:48:40.598Z] [INFO] [Maps] Found 7 files in cs2 (/app/applet/public/maps/cs2)
-[2026-10-09T08:48:40.598Z] [INFO] [Maps] Found 7 files in so2 (/app/applet/public/maps/so2)
-[2026-10-09T08:48:40.599Z] [INFO] [Maps] Total unique map files detected: 14
-[2026-10-09T08:48:40.600Z] [INFO] Restoring custom maps from LocalDB...
-[2026-10-09T08:48:40.607Z] [INFO] Custom maps restored.
-[2026-10-09T08:48:40.608Z] [INFO] Loaded 0 Telegram bots from LocalDB.
-[2026-10-09T08:48:40.912Z] [INFO] Server running on http://0.0.0.0:3000
-[2026-10-09T08:48:55.112Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-09T08:49:25.104Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-09T08:49:55.103Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-09T08:50:25.098Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
-[2026-10-09T08:50:55.102Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+=== Server Log Started at 2026-10-19T21:24:13.045Z ===
+[2026-10-19T21:24:13.110Z] [INFO] Successfully loaded local database cache from disk.
+[2026-10-19T21:24:13.120Z] [INFO] [Maps] Scanning maps directory...
+[2026-10-19T21:24:13.120Z] [INFO] [Maps] Found 2 files in root (/app/applet/public/maps)
+[2026-10-19T21:24:13.120Z] [INFO] [Maps] Found 7 files in cs2 (/app/applet/public/maps/cs2)
+[2026-10-19T21:24:13.121Z] [INFO] [Maps] Found 7 files in so2 (/app/applet/public/maps/so2)
+[2026-10-19T21:24:13.121Z] [INFO] [Maps] Total unique map files detected: 14
+[2026-10-19T21:24:13.123Z] [INFO] Restoring custom maps from LocalDB...
+[2026-10-19T21:24:13.127Z] [INFO] Custom maps restored.
+[2026-10-19T21:24:13.127Z] [INFO] Loaded 0 Telegram bots from LocalDB.
+[2026-10-19T21:24:13.382Z] [INFO] Server running on http://0.0.0.0:3000
+[2026-10-19T21:24:18.044Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-19T21:24:48.052Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-19T21:25:18.054Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-19T21:25:48.066Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-19T21:26:18.039Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-19T21:26:48.041Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-19T21:27:18.036Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-19T21:27:48.054Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-19T21:27:58.163Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)
+[2026-10-19T21:28:18.035Z] [INFO] Serving backup-data request for user: channel_bamep_cs2 (canonical room: channel_bamep_cs2, aliases: channel_bamep_cs2, bamep, room_bamep, channel_bamep_cs2@matchsimulator.com, bamep@matchsimulator.com, zeixst, room_zeixst, zeixst@matchsimulator.com)

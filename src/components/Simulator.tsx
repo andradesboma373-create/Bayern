@@ -15,13 +15,15 @@ import SeriesStitcherModal from './SeriesStitcherModal';
 import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass, formatSwing, shuffleArray } from '../lib/utils';
 import { updateBetaTournamentMatchResult, loadTournaments, saveTournament, getCanonicalRoomId, deserializeTournamentFromFirestore, normalizeTournament } from './setka_tourn/storage';
 import { useGameUniverse } from '../lib/gameUniverse';
-import { Trophy, Sparkles, Layers, ChevronRight, Check, Download, ChevronDown, Image as ImageIcon, Database, X } from 'lucide-react';
+import { Trophy, Sparkles, Layers, ChevronRight, Check, Download, ChevronDown, Image as ImageIcon, Database, X, User } from 'lucide-react';
+import LeadersModal from './setka_tourn/LeadersModal';
 
 interface SimulatorPlayer {
   nickname: string;
   role: string;
   rating: number;
   isNewPlayer?: boolean;
+  calls?: number;
 }
 
 const DEFAULT_TEAM_T: SimulatorPlayer[] = [
@@ -29,7 +31,7 @@ const DEFAULT_TEAM_T: SimulatorPlayer[] = [
   { nickname: 'Player 2', role: 'sniper', rating: 144, isNewPlayer: false },
   { nickname: 'Player 3', role: 'opener', rating: 135, isNewPlayer: false },
   { nickname: 'Player 4', role: 'support', rating: 124, isNewPlayer: false },
-  { nickname: 'Player 5', role: 'captain', rating: 118, isNewPlayer: false },
+  { nickname: 'Player 5', role: 'captain', rating: 118, isNewPlayer: false, calls: 70 },
 ];
 
 const DEFAULT_TEAM_CT: SimulatorPlayer[] = [
@@ -37,7 +39,7 @@ const DEFAULT_TEAM_CT: SimulatorPlayer[] = [
   { nickname: 'Player 2', role: 'sniper', rating: 142, isNewPlayer: false },
   { nickname: 'Player 3', role: 'opener', rating: 134, isNewPlayer: false },
   { nickname: 'Player 4', role: 'support', rating: 122, isNewPlayer: false },
-  { nickname: 'Player 5', role: 'captain', rating: 116, isNewPlayer: false },
+  { nickname: 'Player 5', role: 'captain', rating: 116, isNewPlayer: false, calls: 70 },
 ];
 
 const FORMS = [
@@ -47,6 +49,22 @@ const FORMS = [
   { label: 'Более менее', value: -2, color: 'text-yellow-500' },
   { label: 'Устали', value: -5, color: 'text-red-500' }
 ];
+
+export const MAP_EXP_TIERS = [
+  { value: 10, label: 'Бан', hint: 'Пермабан: не тренируют, избегают', badge: '🚫 Пермабан', bg: 'bg-red-500/10 border-red-500/30 text-red-400', active: 'bg-red-600 text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]' },
+  { value: 30, label: 'Слабая', hint: 'Слабая карта: редкие тренировки', badge: '⚠️ Слабая', bg: 'bg-amber-500/10 border-amber-500/30 text-amber-400', active: 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.4)]' },
+  { value: 50, label: 'Дефолт', hint: 'Базовый уровень подготовки', badge: '⚖️ Базовая', bg: 'bg-blue-500/10 border-blue-500/30 text-blue-400', active: 'bg-blue-600 text-white shadow-[0_0_10px_rgba(59,130,246,0.4)]' },
+  { value: 75, label: 'Сильная', hint: 'Уверенная карта: регулярная практика', badge: '🔥 Сильная', bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400', active: 'bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]' },
+  { value: 100, label: 'Коронная', hint: 'Сигнатурный пик: идеальное знание позиций', badge: '👑 Сигнатурка', bg: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400', active: 'bg-gradient-to-r from-yellow-500 to-amber-400 text-black font-black shadow-[0_0_15px_rgba(234,179,8,0.5)]' },
+];
+
+export function getClosestMapTier(val: number) {
+  if (val <= 20) return MAP_EXP_TIERS[0];
+  if (val <= 40) return MAP_EXP_TIERS[1];
+  if (val <= 62) return MAP_EXP_TIERS[2];
+  if (val <= 87) return MAP_EXP_TIERS[3];
+  return MAP_EXP_TIERS[4];
+}
 
 async function updatePlayerStats(db: any, userId: string, matchResult: any, isLocal: boolean = false, batch?: any) {
   if (!userId || userId === 'anonymous') return;
@@ -193,6 +211,7 @@ export default function Simulator({ user }: { user: any }) {
   const [s2MapPool, setS2MapPool] = useState(MAP_POOL_S2);
   const [tournamentMatchInfo, setTournamentMatchInfo] = useState<any>(null);
   const [tournamentReturnPath, setTournamentReturnPath] = useState<string>('');
+  const [showLeaders, setShowLeaders] = useState(false);
 
   const roomId = useMemo(() => user ? getCanonicalRoomId(user.channelId || user.uid, game) : 'guest', [user, game]);
 
@@ -1069,13 +1088,14 @@ export default function Simulator({ user }: { user: any }) {
 
     return (
       <div className="flex flex-col gap-6 w-full animate-fade-in">
-        <div className="flex items-center justify-between mb-4">
+        {/* Sticky Top Action Bar: Always visible on all screens */}
+        <div className="sticky top-0 z-30 bg-[#08080c]/95 backdrop-blur-md py-3 px-4 -mx-2 sm:-mx-4 rounded-2xl border border-white/10 flex flex-wrap items-center justify-between gap-3 shadow-xl">
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-black text-white tracking-widest uppercase">
+            <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase">
               {isOverall ? 'РЕЗУЛЬТАТЫ МАТЧА' : `КАРТА ${currentMapIdx! + 1}`}
             </h2>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {result?.tournamentId && !isDownloading && (
               <button 
                 onClick={async () => {
@@ -1110,35 +1130,37 @@ export default function Simulator({ user }: { user: any }) {
                       alert("Ошибка при сохранении");
                    }
                 }}
-                className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 cursor-pointer border border-emerald-500/30"
+                className="px-3.5 sm:px-4 py-2.5 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border border-emerald-500/40 shadow-sm"
               >
-                <Check className="w-4 h-4" /> СОХРАНИТЬ МАТЧ В БАЗЕ
+                <Check className="w-4 h-4" /> <span className="hidden sm:inline">СОХРАНИТЬ В БАЗЕ</span><span className="sm:hidden">СОХРАНИТЬ</span>
               </button>
             )}
-            <div className="flex items-center gap-2">
-              <div className="relative group/download">
-                <button className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 cursor-pointer">
-                  <Download className="w-4 h-4" /> СКАЧАТЬ <ChevronDown className="w-3 h-3 opacity-50" />
-                </button>
-                <div className="absolute top-full right-0 mt-1 w-48 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
-                  <button onClick={downloadPhoto} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors">
-                    <ImageIcon className="w-4 h-4 text-blue-400" /> ФОТО (.PNG)
-                  </button>
-                  <button onClick={downloadJson} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5">
-                    <Database className="w-4 h-4 text-emerald-400" /> ДАННЫЕ (.JSON)
-                  </button>
-                  <button onClick={downloadPdf} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5">
-                    <Layers className="w-4 h-4 text-purple-400" /> ОТЧЕТ (.PDF)
-                  </button>
-                  <button onClick={downloadBoth} className="w-full text-left px-4 py-3 text-xs font-black text-blue-400 hover:bg-blue-500/10 flex items-center gap-3 transition-colors border-t border-white/10">
-                    <Check className="w-4 h-4" /> СКАЧАТЬ ОБА
-                  </button>
-                </div>
-              </div>
-              <button onClick={() => { setResult(null); setView('setup'); }} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-sm transition-colors cursor-pointer flex items-center gap-2">
-                <X className="w-4 h-4 opacity-50" /> НАЗАД
+            <div className="relative group/download">
+              <button className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-blue-600/25">
+                <Download className="w-4 h-4" /> СКАЧАТЬ <ChevronDown className="w-3 h-3 opacity-60" />
               </button>
+              <div className="absolute top-full right-0 mt-1.5 w-52 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
+                <button onClick={downloadPhoto} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer">
+                  <ImageIcon className="w-4 h-4 text-blue-400" /> ФОТО (.PNG)
+                </button>
+                <button onClick={downloadJson} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5 cursor-pointer">
+                  <Database className="w-4 h-4 text-emerald-400" /> ДАННЫЕ (.JSON)
+                </button>
+                <button onClick={downloadPdf} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5 cursor-pointer">
+                  <Layers className="w-4 h-4 text-purple-400" /> ОТЧЕТ (.PDF)
+                </button>
+                <button onClick={downloadBoth} className="w-full text-left px-4 py-3 text-xs font-black text-blue-400 hover:bg-blue-500/10 flex items-center gap-3 transition-colors border-t border-white/10 cursor-pointer">
+                  <Check className="w-4 h-4" /> СКАЧАТЬ ОБА
+                </button>
+              </div>
             </div>
+            <button 
+              onClick={() => { setResult(null); setView('setup'); }} 
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-black text-xs sm:text-sm transition-all cursor-pointer flex items-center gap-2 border border-white/10 hover:border-white/20 shadow-md"
+              title="Вернуться назад к симулятору"
+            >
+              <X className="w-4 h-4 text-white/80" /> НАЗАД
+            </button>
           </div>
         </div>
 
@@ -1234,12 +1256,21 @@ export default function Simulator({ user }: { user: any }) {
               <div className="mt-6 flex flex-col items-center gap-3 relative z-10 w-full">
                 {result.bo !== 1 ? (
                   !isDownloading ? (
-                    <button 
-                      onClick={() => setSelectedResultTab('overall')}
-                      className={`w-full max-w-md px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center min-h-[48px] ${selectedResultTab === 'overall' ? 'bg-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                    >
-                      ОБЩАЯ СТАТИСТИКА СЕРИИ
-                    </button>
+                    <div className="flex gap-2 w-full max-w-md">
+                      <button 
+                        onClick={() => setSelectedResultTab('overall')}
+                        className={`flex-1 px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center min-h-[48px] ${selectedResultTab === 'overall' ? 'bg-white/20 text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                      >
+                        ОБЩАЯ СТАТИСТИКА СЕРИИ
+                      </button>
+                      <button
+                        onClick={() => setShowLeaders(true)}
+                        className="px-4 py-3 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white rounded-xl transition-all flex items-center justify-center min-h-[48px]"
+                        title="Лидеры матча"
+                      >
+                        <User className="w-5 h-5" />
+                      </button>
+                    </div>
                   ) : (
                     <div className="text-[11px] font-black uppercase tracking-widest text-[#ff8f00] bg-[#ff8f00]/10 border border-[#ff8f00]/30 px-5 py-2 rounded-full mb-1">
                       СЫГРАННЫЕ КАРТЫ СЕРИИ
@@ -1295,7 +1326,7 @@ export default function Simulator({ user }: { user: any }) {
           <div className="grid grid-cols-1 gap-6">
             {selectedResultTab === 'overall' ? (
               <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6">
-                <div className="grid grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                   <StatsTable teamName={`${result.team1Name} (Всего)`} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={result.team1Stats} />
                   <StatsTable teamName={`${result.team2Name} (Всего)`} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={result.team2Stats} />
                 </div>
@@ -1328,7 +1359,7 @@ export default function Simulator({ user }: { user: any }) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                       <StatsTable teamName={result.team1Name} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={activeMap.team1Stats} />
                       <StatsTable teamName={result.team2Name} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={activeMap.team2Stats} />
                     </div>
@@ -1338,6 +1369,53 @@ export default function Simulator({ user }: { user: any }) {
             )}
           </div>
         </div>
+
+        {/* BOTTOM ACTION BAR: Guaranteed visible at the end of player statistics */}
+        <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-[#12121a] border border-white/10 rounded-2xl shadow-2xl">
+          <button 
+            onClick={() => { setResult(null); setView('setup'); }} 
+            className="px-6 py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-black text-sm tracking-wide transition-all cursor-pointer flex items-center gap-2.5 border border-white/15 hover:border-white/30 shadow-lg"
+          >
+            <X className="w-5 h-5 text-white/70" /> НАЗАД К СИМУЛЯТОРУ
+          </button>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setShowLeaders(true)}
+              className="px-4 py-3.5 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white rounded-xl font-bold text-xs uppercase transition-all flex items-center gap-2 border border-white/5 cursor-pointer"
+            >
+              <User className="w-4 h-4 text-yellow-400" /> Лидеры матча
+            </button>
+
+            <div className="relative group/downloadbottom">
+              <button className="px-5 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-sm transition-all flex items-center gap-2.5 cursor-pointer shadow-lg shadow-blue-600/30">
+                <Download className="w-4 h-4" /> СКАЧАТЬ РЕЗУЛЬТАТ <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              </button>
+              <div className="absolute bottom-full right-0 mb-1.5 w-52 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover/downloadbottom:opacity-100 group-hover/downloadbottom:visible transition-all z-50">
+                <button onClick={downloadPhoto} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer">
+                  <ImageIcon className="w-4 h-4 text-blue-400" /> ФОТО (.PNG)
+                </button>
+                <button onClick={downloadJson} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5 cursor-pointer">
+                  <Database className="w-4 h-4 text-emerald-400" /> ДАННЫЕ (.JSON)
+                </button>
+                <button onClick={downloadPdf} className="w-full text-left px-4 py-3 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-3 transition-colors border-t border-white/5 cursor-pointer">
+                  <Layers className="w-4 h-4 text-purple-400" /> ОТЧЕТ (.PDF)
+                </button>
+                <button onClick={downloadBoth} className="w-full text-left px-4 py-3 text-xs font-black text-blue-400 hover:bg-blue-500/10 flex items-center gap-3 transition-colors border-t border-white/10 cursor-pointer">
+                  <Check className="w-4 h-4" /> СКАЧАТЬ ОБА
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {showLeaders && (
+          <LeadersModal 
+            user={user} 
+            match={result} 
+            onClose={() => setShowLeaders(false)} 
+          />
+        )}
       </div>
     );
   }
@@ -1881,6 +1959,23 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
                   <option value="captain">IGL</option>
                 </select>
 
+                {p.role === 'captain' && (
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={p.calls ?? 70}
+                    onChange={(e) => {
+                      let val = parseInt(e.target.value) || 0;
+                      if (val < 0) val = 0;
+                      if (val > 100) val = 100;
+                      onChange(i, 'calls', val);
+                    }}
+                    className="w-16 bg-zinc-950 border border-white/10 rounded-lg px-2 py-1 outline-none text-amber-400 text-xs font-bold text-center"
+                    title="CALLS (качество коллов 0-100)"
+                  />
+                )}
+
                 <input 
                   type="number" 
                   min="1"
@@ -1921,15 +2016,52 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
           </select>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
           <div className="flex justify-between items-center text-sm font-bold">
-            <span className="text-white/50 uppercase tracking-wider">Синергия команды</span>
-            <span className="text-white/90">{synergy}%</span>
+            <span className="text-white/50 uppercase tracking-wider">Сыгранность состава</span>
+            <span className={`text-xs font-black px-2.5 py-0.5 rounded-full border transition-all ${
+              synergy >= 90 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+              synergy >= 70 ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
+              synergy >= 45 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+              'bg-red-500/10 border-red-500/30 text-red-400'
+            }`}>
+              {synergy >= 90 ? '🔥 Сыгранный ростер' :
+               synergy >= 70 ? '⚖️ Рабочая химия' :
+               synergy >= 45 ? '⚠️ Задержки / Замены' :
+               '❌ Несыгранный микс'}
+            </span>
           </div>
+
+          <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+            {[
+              { val: 30, label: 'Микс' },
+              { val: 55, label: 'Замена' },
+              { val: 75, label: 'Стандарт' },
+              { val: 100, label: 'Основа' },
+            ].map(preset => {
+              const isActive = Math.abs(synergy - preset.val) <= 12;
+              return (
+                <button
+                  key={preset.val}
+                  type="button"
+                  onClick={() => onSynergyChange(preset.val)}
+                  className={`py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    isActive 
+                      ? 'bg-white/20 text-white border border-white/30 shadow-sm'
+                      : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/70 border border-transparent'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+
           <input 
             type="range" 
-            min="0" 
+            min="10" 
             max="100" 
+            step="5"
             value={synergy} 
             onChange={(e) => onSynergyChange(parseInt(e.target.value))}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer"
@@ -1938,30 +2070,54 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
         </div>
       </div>
 
-      {/* Map Experience */}
+      {/* Map Preparation Tiers (No raw percentages) */}
       {selectedMaps.length > 0 && (
-        <div className="flex flex-col gap-4 bg-white/5 rounded-xl p-4 border border-white/5">
-          <div className="text-sm font-bold text-white/50 uppercase tracking-wider mb-2">Наигранность карт</div>
-          {selectedMaps.map(mapName => {
-            const exp = mapExp[mapName] !== undefined ? mapExp[mapName] : 50;
-            return (
-              <div key={mapName} className="flex flex-col gap-2">
-                <div className="flex justify-between items-center text-xs font-bold">
-                  <span className="text-white/80">{mapName}</span>
-                  <span className="text-white/50">{exp}%</span>
+        <div className="flex flex-col gap-3 bg-white/5 rounded-xl p-4 border border-white/5">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-bold text-white/50 uppercase tracking-wider">Подготовка карт</span>
+            <span className="text-[10px] text-white/30 uppercase font-mono">5 уровней наигровки</span>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            {selectedMaps.map(mapName => {
+              const currentVal = mapExp[mapName] !== undefined ? mapExp[mapName] : 50;
+              const currentTier = getClosestMapTier(currentVal);
+
+              return (
+                <div key={mapName} className="flex flex-col gap-2 p-3 bg-black/30 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                      🗺️ {mapName}
+                    </span>
+                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${currentTier.bg}`}>
+                      {currentTier.badge}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-1 pt-0.5">
+                    {MAP_EXP_TIERS.map(t => {
+                      const isSelected = currentTier.value === t.value;
+                      return (
+                        <button
+                          key={t.value}
+                          type="button"
+                          onClick={() => onMapExpChange(mapName, t.value)}
+                          title={t.hint}
+                          className={`py-1.5 px-1 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all text-center cursor-pointer ${
+                            isSelected 
+                              ? t.active 
+                              : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/80 border border-transparent'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  value={exp} 
-                  onChange={(e) => onMapExpChange(mapName, parseInt(e.target.value))}
-                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
-                  style={{ background: `linear-gradient(to right, ${color} ${exp}%, rgba(255,255,255,0.1) ${exp}%)` }}
-                />
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -1969,7 +2125,16 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
 }
 
 
-function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: string, colorClass: string, borderClass: string, stats: any[] }) {
+function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: string, colorClass: string, borderClass: string, stats?: any[] }) {
+  if (!stats || !Array.isArray(stats) || stats.length === 0) {
+    return (
+      <div>
+        <h3 className={`${colorClass} font-black uppercase tracking-wider mb-4 pb-2 border-b ${borderClass}`}>{teamName}</h3>
+        <p className="text-white/40 text-xs italic py-4">Нет доступной статистики по игрокам</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h3 className={`${colorClass} font-black uppercase tracking-wider mb-4 pb-2 border-b ${borderClass}`}>{teamName}</h3>

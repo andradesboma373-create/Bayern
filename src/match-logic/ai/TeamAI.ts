@@ -14,18 +14,26 @@ export class TeamAI {
     if (alivePlayers.length === 0) return;
 
     if (state.tick === 51) {
+      const callsNorm = team.callsNorm || 0.5; // Use team's captain callsNorm
       if (team.side === 'T') {
         const r = CombatSystem.random();
+        // CALLS affects tactic execution: higher calls = more complex/execute strats
+        // lower calls = more default/simple strats
+        const callsExecuteBonus = Math.max(0, Math.min(0.3, (callsNorm - 0.5) * 0.6));
+        
         if (team.tactic === 'ECO') {
             team.strategy = r > 0.5 ? 'FAST_A' : 'FAST_B'; 
         } else {
-            if (r < 0.20) team.strategy = 'DEFAULT';
-            else if (r < 0.40) team.strategy = 'MID_ROUND_HOLD'; // 20% chance to hold and look for picks
-            else if (r < 0.55) team.strategy = 'EXECUTE_A';
-            else if (r < 0.70) team.strategy = 'EXECUTE_B';
-            else if (r < 0.82) team.strategy = 'MID_SPLIT_A';
-            else if (r < 0.90) team.strategy = 'MID_SPLIT_B';
-            else if (r < 0.95) team.strategy = 'FAST_A';
+            // Shift towards execute/split if calls is high
+            const rAdj = r - callsExecuteBonus;
+            
+            if (rAdj < 0.15) team.strategy = 'DEFAULT';
+            else if (rAdj < 0.30) team.strategy = 'MID_ROUND_HOLD';
+            else if (rAdj < 0.50) team.strategy = 'EXECUTE_A';
+            else if (rAdj < 0.70) team.strategy = 'EXECUTE_B';
+            else if (rAdj < 0.82) team.strategy = 'MID_SPLIT_A';
+            else if (rAdj < 0.90) team.strategy = 'MID_SPLIT_B';
+            else if (rAdj < 0.95) team.strategy = 'FAST_A';
             else team.strategy = 'FAST_B';
         }
       } else {

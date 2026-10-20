@@ -47,10 +47,10 @@ export function PlayerAvatar({
   // Ignore external generated avatars to avoid "AI photos"
   const isAiGenerated = effectiveAvatar && (effectiveAvatar.includes('dicebear.com') || effectiveAvatar.includes('ui-avatars.com'));
   
-  // Use explicitly provided URL or the backend resolver API
-  const src = (effectiveAvatar && !isAiGenerated && !hasError) 
+  const normalizedNick = cleanName.toLowerCase().replace(/[\s\-_.]/g, '');
+  const src = (effectiveAvatar && !isAiGenerated) 
     ? effectiveAvatar 
-    : `/api/avatar/${encodeURIComponent(cleanName)}?game=${game || 'cs2'}`;
+    : `/avatars/${normalizedNick}.webp`;
 
   if (hasError) {
     return (

@@ -9,6 +9,8 @@
     "createdAt": "2026-09-01T00:00:00.000Z",
     "isLocked": false,
     "totalRequestsToday": 55,
+    "readsToday": 0,
+    "writesToday": 0,
     "lastActive": "2026-10-05T15:48:41.069Z"
   },
   {
@@ -21,6 +23,8 @@
     "createdAt": "2026-09-01T00:00:00.000Z",
     "isLocked": false,
     "totalRequestsToday": 0,
+    "readsToday": 0,
+    "writesToday": 0,
     "lastActive": "2026-09-19T13:53:05.351Z"
   },
   {
@@ -33,6 +37,8 @@
     "createdAt": "2026-09-02T00:00:00.000Z",
     "isLocked": false,
     "totalRequestsToday": 0,
+    "readsToday": 0,
+    "writesToday": 0,
     "lastActive": "2026-09-19T13:53:05.351Z"
   },
   {
@@ -45,6 +51,8 @@
     "createdAt": "2026-09-19T00:00:00.000Z",
     "isLocked": false,
     "totalRequestsToday": 0,
+    "readsToday": 0,
+    "writesToday": 0,
     "lastActive": "2026-09-19T14:54:17.632Z"
   }
 ]

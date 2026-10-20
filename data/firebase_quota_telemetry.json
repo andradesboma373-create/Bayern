@@ -1,17 +1,17 @@
 {
-  "date": "2026-10-09",
-  "readsToday": 1776,
-  "writesToday": 71,
+  "date": "2026-10-19",
+  "readsToday": 4770,
+  "writesToday": 1383,
   "maxReads": 50000,
   "maxWrites": 20000,
-  "remainingReads": 48224,
-  "remainingWrites": 19929,
-  "percentReads": 3.55,
-  "percentWrites": 0.36,
-  "percentReadsFormatted": "3.55%",
-  "percentWritesFormatted": "0.36%",
-  "lastUpdated": "2026-10-09T08:54:05.033Z",
-  "lastSyncWithFirestore": null,
+  "remainingReads": 45230,
+  "remainingWrites": 18617,
+  "percentReads": 9.54,
+  "percentWrites": 6.92,
+  "percentReadsFormatted": "9.54%",
+  "percentWritesFormatted": "6.92%",
+  "lastUpdated": "2026-10-19T21:28:50.586Z",
+  "lastSyncWithFirestore": "2026-10-19T21:28:50.638Z",
   "firestoreConnected": true,
   "firestoreDatabaseId": "ai-studio-matchsimulator-cf882484-249e-4726-9c8b-046071d33a59",
   "projectId": "conductive-state-tf6jr",
@@ -25,39 +25,44 @@
   },
   "roomActivity": {
     "channel_bamep_cs2": {
-      "reads": 1746,
+      "lastActive": "2026-10-19T21:28:48.586Z",
       "writes": 0,
-      "lastActive": "2026-10-09T08:53:55.100Z"
+      "reads": 4026
     },
     "channel_airy": {
       "reads": 0,
-      "lastActive": "2026-10-08T14:45:43.414Z",
-      "writes": 0
+      "writes": 0,
+      "lastActive": "2026-10-19T05:45:10.166Z"
     },
     "channel_simu": {
-      "lastActive": "2026-10-08T12:34:15.242Z",
-      "reads": 0,
-      "writes": 0
-    },
-    "channel_bam": {
-      "lastActive": "2026-10-03T10:14:13.399Z",
-      "reads": 0,
-      "writes": 0
-    },
-    "guest": {
-      "reads": 0,
-      "lastActive": "2026-10-06T10:12:42.897Z",
-      "writes": 0
-    },
-    "channel_bamep_so2": {
       "reads": 0,
       "writes": 0,
-      "lastActive": "2026-10-08T15:05:37.027Z"
+      "lastActive": "2026-10-19T05:45:10.166Z"
+    },
+    "guest": {
+      "writes": 0,
+      "reads": 0,
+      "lastActive": "2026-10-06T10:12:42.897Z"
+    },
+    "channel_bam": {
+      "writes": 0,
+      "reads": 0,
+      "lastActive": "2026-10-03T10:14:13.399Z"
+    },
+    "channel_bamep_so2": {
+      "reads": 39,
+      "writes": 215,
+      "lastActive": "2026-10-19T20:12:14.115Z"
     },
     "room_bamep": {
-      "lastActive": "2026-10-09T08:07:49.475Z",
-      "writes": 40,
-      "reads": 0
+      "lastActive": "2026-10-19T21:21:20.071Z",
+      "reads": 0,
+      "writes": 538
+    },
+    "room_airy": {
+      "writes": 0,
+      "reads": 0,
+      "lastActive": "2026-10-10T09:15:25.191Z"
     }
   }
 }

@@ -8,6 +8,7 @@ import TeamLogo from './TeamLogo';
 import TeamProfileModal from './TeamProfileModal';
 import { safeLocalStorageSet } from '../lib/utils';
 import { getAutoMatchedVectorLogo } from '../lib/logoMatcher';
+import { optimizeImageForUpload } from '../lib/imageOptimizer';
 import { getCanonicalRoomId } from './setka_tourn/storage';
 import { filterItemsForRoom } from '../lib/roomIsolation';
 import { useGameUniverse } from '../lib/gameUniverse';
@@ -927,12 +928,9 @@ export default function Teams({ user }: { user: any }) {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const formData = new FormData();
-                      formData.append('file', file);
                       try {
-                        const res = await fetch('/api/upload', { method: 'POST', body: formData });
-                        const data = await res.json();
-                        if (data.url) setNewTeamLogo(data.url);
+                        const dataUrl = await optimizeImageForUpload(file, 'logo');
+                        if (dataUrl) setNewTeamLogo(dataUrl);
                       } catch (err) { console.error(err); }
                     }}
                   />

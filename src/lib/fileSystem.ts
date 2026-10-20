@@ -1,63 +1,73 @@
 /**
- * Modern "Save As" utility using the File System Access API with a standard download fallback.
+ * Basic file system utilities for the web app
  */
 
-export async function saveFileAs(
-  content: string | Blob,
-  suggestedName: string,
-  contentType: string = 'application/json'
-) {
-  const isBlob = content instanceof Blob;
-  const blob = isBlob ? content : new Blob([content], { type: contentType });
-
-  // Try File System Access API (Modern Chrome/Edge)
-  if ('showSaveFilePicker' in window) {
-    try {
-      const extension = suggestedName.split('.').pop() || 'json';
-      const description = contentType.includes('json') ? 'JSON File' : 
-                          contentType.includes('image') ? 'Image File' : 'File';
-
-      const handle = await (window as any).showSaveFilePicker({
-        suggestedName: suggestedName,
-        types: [{
-          description: description,
-          accept: { [contentType]: [`.${extension}`] }
-        }],
-      });
-      
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return true;
-    } catch (err: any) {
-      // User cancelled the picker or error occurred
-      if (err.name === 'AbortError') return false;
-      console.warn('File System Access API failed, falling back to regular download', err);
-    }
-  }
-
-  // Fallback to traditional <a> download
+/**
+ * Downloads a string content as a file
+ */
+export function saveFileAs(content: string, fileName: string, contentType: string = 'application/json') {
+  const blob = new Blob([content], { type: contentType });
   const url = URL.createObjectURL(blob);
-  const link = document.body.appendChild(document.createElement('a'));
-  link.download = suggestedName;
+  const link = document.createElement('a');
   link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
   link.click();
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-    document.body.removeChild(link);
-  }, 100);
-  return true;
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 /**
- * Specifically for images generated via dataURL (base64)
+ * Downloads a data URL as an image file safely via Blob URL
  */
-export async function saveImageAs(
-  dataUrl: string,
-  suggestedName: string
-) {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-  const contentType = blob.type || 'image/png';
-  return saveFileAs(blob, suggestedName, contentType);
+export function saveImageAs(dataUrl: string, fileName: string) {
+  try {
+    const parts = dataUrl.split(';base64,');
+    if (parts.length === 2) {
+      const contentType = parts[0].split(':')[1] || 'image/png';
+      const raw = window.atob(parts[1]);
+      const rawLength = raw.length;
+      const uInt8Array = new Uint8Array(rawLength);
+      for (let i = 0; i < rawLength; ++i) {
+        uInt8Array[i] = raw.charCodeAt(i);
+      }
+      const blob = new Blob([uInt8Array], { type: contentType });
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+      return;
+    }
+  } catch (err) {
+    console.warn('saveImageAs blob conversion error, fallback to direct dataUrl', err);
+  }
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/**
+ * Reads a JSON file from an input event
+ */
+export function readJsonFile(file: File): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target?.result as string);
+        resolve(json);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsText(file);
+  });
 }

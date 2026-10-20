@@ -12,6 +12,7 @@ import { getAutoMatchedVectorLogo } from '../../lib/logoMatcher';
 import { safeLocalStorageSet, shuffleArray } from '../../lib/utils';
 import { getCanonicalRoomId } from './storage';
 import { BG_THEMES } from './TournamentManager';
+import { BOX_STYLE_OPTIONS, CARD_COLOR_PRESETS } from './boxStyles';
 
 const PRESET_TOURNAMENT_LOGOS = [
   { id: 'blast', name: 'BLAST', url: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150&auto=format&fit=crop&q=80' },
@@ -121,6 +122,7 @@ export default function TournamentSettingsForm({
   const [matchFormat, setMatchFormat] = useState(initialSettings?.matchFormat || 'BO3');
   const [eliminationType, setEliminationType] = useState<'single' | 'double'>(initialSettings?.eliminationType || 'single');
   const [boxStyle, setBoxStyle] = useState<any>(initialSettings?.boxStyle || 'classic');
+  const [cardThemeColor, setCardThemeColor] = useState<string>(initialSettings?.cardThemeColor || '#ff8f00');
   const [bracketScale, setBracketScale] = useState<number>(initialSettings?.bracketScale || 100);
   
   // Group settings
@@ -406,6 +408,7 @@ export default function TournamentSettingsForm({
       swissLossesToEliminate,
       swissLogosOnly,
       boxStyle,
+      cardThemeColor,
       bracketScale,
       bgTheme: bgImage ? 'custom' : bgTheme,
       bgImage,
@@ -1093,7 +1096,7 @@ export default function TournamentSettingsForm({
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="w-8 h-8 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
                               {team.logoUrl ? (
-                                <img src={team.logoUrl} alt="" className="w-full h-full object-contain p-1" />
+                                <img src={team.logoUrl} alt={team.name} className="w-full h-full object-contain p-1" />
                               ) : (
                                 <Trophy className="w-4 h-4 text-white/30" />
                               )}
@@ -1337,29 +1340,55 @@ export default function TournamentSettingsForm({
               </div>
 
               <div className="space-y-4">
-                <h5 className="text-xs font-black uppercase text-white/60 tracking-wider">
-                  Стиль оформления карточек сетки
+                <h5 className="text-xs font-black uppercase text-white/60 tracking-wider flex items-center justify-between">
+                  <span>Стиль оформления карточек матчей («квадратиков»)</span>
+                  <span className="text-[#ff8f00] font-mono text-[10px]">{BOX_STYLE_OPTIONS.find(o => o.id === boxStyle)?.label || boxStyle}</span>
                 </h5>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'classic', label: 'Классический' },
-                    { id: 'minimalist', label: 'Минимализм' },
-                    { id: 'cyber', label: 'Кибер' },
-                    { id: 'retro', label: 'Ретро' }
-                  ].map((st) => (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {BOX_STYLE_OPTIONS.map((st) => (
                     <button
                       key={st.id}
                       type="button"
                       onClick={() => setBoxStyle(st.id)}
-                      className={`p-2.5 rounded-xl text-xs font-black uppercase transition-all cursor-pointer ${
+                      className={`p-3 rounded-2xl text-left border transition-all cursor-pointer flex items-center gap-2.5 ${
                         boxStyle === st.id
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-black/40 border border-white/5 text-white/60 hover:text-white'
+                          ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-white shadow-lg shadow-[#ff8f00]/15'
+                          : 'bg-black/40 border-white/5 text-white/70 hover:border-white/20 hover:text-white'
                       }`}
                     >
-                      {st.label}
+                      <span className="text-xl shrink-0">{st.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-xs font-black uppercase truncate ${boxStyle === st.id ? 'text-[#ff8f00]' : 'text-white'}`}>
+                          {st.label}
+                        </div>
+                        <div className="text-[9px] text-white/40 truncate">
+                          {st.desc}
+                        </div>
+                      </div>
                     </button>
                   ))}
+                </div>
+
+                {/* Accent Color for Cards */}
+                <div className="pt-2">
+                  <div className="text-[11px] font-bold text-white/60 uppercase mb-2">Цвет акцента и победителя:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {CARD_COLOR_PRESETS.map((col) => (
+                      <button
+                        key={col.id}
+                        type="button"
+                        onClick={() => setCardThemeColor(col.id)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          cardThemeColor === col.id
+                            ? 'border-white bg-white/10 text-white shadow'
+                            : 'border-white/5 bg-black/40 text-white/50 hover:text-white hover:border-white/20'
+                        }`}
+                      >
+                        <span className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ backgroundColor: col.id }} />
+                        <span>{col.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

@@ -6,6 +6,7 @@ import * as htmlToImage from 'html-to-image';
 import TeamLogo from './TeamLogo';
 import PlayerAvatar from './PlayerAvatar';
 import { safeLocalStorageSet } from '../lib/utils';
+import { optimizeImageForUpload } from '../lib/imageOptimizer';
 
 export default function News({ user }: { user: any }) {
   const [news, setNews] = useState<any[]>([]);
@@ -538,13 +539,10 @@ export default function News({ user }: { user: any }) {
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const formData = new FormData();
-                            formData.append('file', file);
                             try {
-                              const res = await fetch('/api/upload', { method: 'POST', body: formData });
-                              const data = await res.json();
-                              if (data.url) setNewImage(data.url);
-                            } catch(e) {}
+                              const dataUrl = await optimizeImageForUpload(file, 'news');
+                              if (dataUrl) setNewImage(dataUrl);
+                            } catch(err) { console.error(err); }
                           }
                         }} 
                       />

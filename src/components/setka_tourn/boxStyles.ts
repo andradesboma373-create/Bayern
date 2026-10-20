@@ -124,10 +124,21 @@ export const BOX_STYLES: Record<string, BoxStyleConfig> = {
   }
 };
 
-// Aliases
-BOX_STYLES.classic = BOX_STYLES.dark;
-BOX_STYLES.brutalist = BOX_STYLES.dark;
-BOX_STYLES.light = BOX_STYLES.dark;
+export const BOX_STYLE_OPTIONS: { id: BoxStyle; label: string; desc: string; icon: string }[] = [
+  { id: 'glass', label: 'Матовое стекло', desc: 'Полупрозрачный стеклянный блюр с белой каймой', icon: '🧊' },
+  { id: 'dark', label: 'Тёмный', desc: 'Строгий тёмный премиум стиль', icon: '🌑' },
+  { id: 'cyber', label: 'Киберпанк', desc: 'Неоновый циан со свечением', icon: '⚡' },
+  { id: 'neon', label: 'Неон', desc: 'Ультрафиолетовый фиолетовый неон', icon: '🟣' },
+  { id: 'gold', label: 'Золотой', desc: 'Роскошное золото турнирных чемпионов', icon: '👑' },
+  { id: 'classic', label: 'Классический', desc: 'Традиционный турнирный стиль', icon: '🏆' },
+  { id: 'minimalist', label: 'Минимализм', desc: 'Тонкий чистый контур без лишнего', icon: '▫️' },
+  { id: 'brutalist', label: 'Брутализм', desc: 'Контрастные чёткие белые рамки', icon: '⬛' },
+  { id: 'retro', label: 'Ретро', desc: 'Терминальный пиксельный зелёный стиль', icon: '🕹️' },
+  { id: 'light', label: 'Светлый', desc: 'Светлый контрастный стиль', icon: '☀️' },
+];
+
+// Fallback for classic
+BOX_STYLES.classic = BOX_STYLES.classic || BOX_STYLES.dark;
 
 export function getBoxStyle(
   styleName: BoxStyle | string | undefined,

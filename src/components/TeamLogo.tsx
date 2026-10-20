@@ -43,31 +43,31 @@ export function TeamLogo({
   const [error, setError] = React.useState(false);
 
   if (!cleanName || error) {
+    const letter = (cleanName ? cleanName.trim().charAt(0) : '?').toUpperCase();
     return (
       <div 
         className={`${defaultSizeClass} flex items-center justify-center shrink-0 rounded-lg bg-white/5 border border-white/10 ${className}`}
         style={style}
+        title={teamName}
       >
-        <span className="text-white/40 font-black text-[10px]">?</span>
+        <span className="text-white/50 font-black text-[11px] uppercase">{letter}</span>
       </div>
     );
   }
 
+  // Prioritize user-provided custom logoUrl (e.g. Data URL or custom link)
   let src = logoUrl;
   
-  // Prioritize official auto-matched logos from /public/logos/ if no external URL or if name matches official map
-  const officialLogo = getAutoMatchedVectorLogo(cleanName);
-  if (officialLogo) {
-    src = officialLogo;
+  // If no custom logo provided, try auto-matched official vector logo from /logos/
+  if (!src) {
+    const officialLogo = getAutoMatchedVectorLogo(cleanName);
+    if (officialLogo) {
+      src = officialLogo;
+    }
   }
   
   if (!src) {
-    src = `/api/logo/${encodeURIComponent(cleanName)}?game=${game || 'cs2'}`;
-  }
-  
-  if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
-    // Route external URLs through server proxy with CORS headers so canvas export won't be tainted
-    src = `/api/proxy-image?url=${encodeURIComponent(src)}`;
+    src = `/logos/${encodeURIComponent(cleanName.toLowerCase())}.svg`;
   }
 
   return (

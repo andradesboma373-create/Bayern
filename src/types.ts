@@ -3,6 +3,7 @@ export interface Player {
   nickname: string;
   role: string;
   rating: number;
+  calls?: number; // 0 to 100 tactical calls quality rating for Captains
 }
 
 export interface MatchResult {

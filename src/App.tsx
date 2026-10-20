@@ -1,7 +1,7 @@
 import { loadTournaments, compactTournamentForStorage, cleanupTournamentStorageQuota, getCanonicalRoomId } from './components/setka_tourn/storage';
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity, Folder, Flame, Image } from 'lucide-react';
+import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity, Folder, Flame, Image, Bot, Menu } from 'lucide-react';
 import { auth, logout, db } from './firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from './firebase';
 import { collection, query, where, getDocs, onSnapshot } from './firebase';
@@ -25,8 +25,21 @@ import TournamentsBeta from './components/TournamentsBeta';
 import AdminAnalytics from './components/AdminAnalytics';
 import ChannelLogin from './components/ChannelLogin';
 import AccessDenied from './components/AccessDenied';
+import AiNegotiator from './components/AiNegotiator';
 
-function NavPanel({ user, onLogout, onShowLogin }: { user: any, onLogout: () => void, onShowLogin: () => void }) {
+function NavPanel({ 
+  user, 
+  onLogout, 
+  onShowLogin, 
+  onCloseMobile, 
+  isMobileDrawer 
+}: { 
+  user: any; 
+  onLogout: () => void; 
+  onShowLogin: () => void; 
+  onCloseMobile?: () => void; 
+  isMobileDrawer?: boolean; 
+}) {
   const location = useLocation();
   const [game, setGame] = useGameUniverse();
   
@@ -44,33 +57,55 @@ function NavPanel({ user, onLogout, onShowLogin }: { user: any, onLogout: () => 
   ];
 
   const adminItems = isBamepAdmin ? [
-    { icon: Database, label: 'Карты', path: '/map-center' },
     { icon: Activity, label: 'Аналитика', path: '/analytics' },
   ] : [];
 
   const secondaryItems = [
     { icon: Users, label: 'Команды', path: '/teams' },
     { icon: User, label: 'Игроки', path: '/players' },
+    { icon: Bot, label: 'Нейросеть', path: '/ai-negotiator', color: 'text-purple-400' },
     { icon: Settings, label: 'Настройки', path: '/settings' },
   ];
 
+  const handleLinkClick = () => {
+    if (onCloseMobile) {
+      onCloseMobile();
+    }
+  };
+
+  const panelClasses = isMobileDrawer
+    ? "w-full h-full flex flex-col justify-between py-5 px-3 overflow-y-auto custom-scrollbar"
+    : "hidden lg:flex w-64 h-screen bg-[#0a0a0f] border-r border-white/5 flex-col py-6 z-40 shrink-0";
+
   return (
-    <div className="w-64 h-screen bg-[#0a0a0f] border-r border-white/5 flex flex-col py-6 z-50 shrink-0">
-      {/* Logo */}
-      <div className="px-6 mb-10 flex items-center gap-3">
-        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/>
-          </svg>
+    <div className={panelClasses}>
+      {/* Header / Logo */}
+      <div className="px-3 mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/>
+            </svg>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-black uppercase tracking-tighter leading-none">Match</span>
+            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest leading-none">Simulator</span>
+          </div>
         </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-black uppercase tracking-tighter leading-none">Match</span>
-          <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest leading-none">Simulator</span>
-        </div>
+
+        {isMobileDrawer && (
+          <button 
+            onClick={onCloseMobile}
+            className="p-2 text-white/50 hover:text-white rounded-lg bg-white/5 border border-white/10"
+            title="Закрыть меню"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
-      {/* Main Nav */}
-      <div className="flex-1 flex flex-col gap-1 w-full px-3 overflow-y-auto custom-scrollbar no-scrollbar">
+      {/* Main Nav Links */}
+      <div className="flex-1 flex flex-col gap-1 w-full overflow-y-auto custom-scrollbar no-scrollbar">
         <div className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] px-4 mb-2">Основное</div>
         {navItems.map((item, idx) => {
           const isActive = location.pathname === item.path;
@@ -78,6 +113,7 @@ function NavPanel({ user, onLogout, onShowLogin }: { user: any, onLogout: () => 
             <Link 
               key={idx} 
               to={item.path} 
+              onClick={handleLinkClick}
               className={`group flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-200 ${
                 isActive 
                   ? 'bg-blue-600/10 text-white shadow-[inset_0_0_20px_rgba(37,99,235,0.05)]' 
@@ -95,7 +131,7 @@ function NavPanel({ user, onLogout, onShowLogin }: { user: any, onLogout: () => 
           );
         })}
 
-        <div className="my-6 border-t border-white/5 mx-4" />
+        <div className="my-4 border-t border-white/5 mx-4" />
 
         {/* Secondary Nav */}
         <div className="flex flex-col gap-1">
@@ -120,14 +156,14 @@ function NavPanel({ user, onLogout, onShowLogin }: { user: any, onLogout: () => 
 
             if (item.path) {
               return (
-                <Link key={idx} to={item.path} className={className}>
+                <Link key={idx} to={item.path} onClick={handleLinkClick} className={className}>
                   {content}
                 </Link>
               );
             }
 
             return (
-              <button key={idx} onClick={item.onClick} className={className}>
+              <button key={idx} onClick={() => { item.onClick?.(); handleLinkClick(); }} className={className}>
                 {content}
               </button>
             );
@@ -136,18 +172,18 @@ function NavPanel({ user, onLogout, onShowLogin }: { user: any, onLogout: () => 
       </div>
 
       {/* Footer Actions */}
-      <div className="mt-auto flex flex-col gap-4 pt-6 px-4">
+      <div className="mt-auto flex flex-col gap-3 pt-4 px-2 border-t border-white/5">
         {/* Game Selector */}
         <div className="grid grid-cols-2 gap-2 p-1.5 bg-black/40 rounded-2xl border border-white/5">
           <button 
             onClick={() => setGame('cs2')} 
-            className={`py-2 rounded-xl text-[10px] font-black transition-all ${game === 'cs2' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-white/20 hover:text-white'}`}
+            className={`py-2 rounded-xl text-[10px] font-black transition-all cursor-pointer ${game === 'cs2' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-white/20 hover:text-white'}`}
           >
             CS2
           </button>
           <button 
             onClick={() => setGame('so2')} 
-            className={`py-2 rounded-xl text-[10px] font-black transition-all ${game === 'so2' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' : 'text-white/20 hover:text-white'}`}
+            className={`py-2 rounded-xl text-[10px] font-black transition-all cursor-pointer ${game === 'so2' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' : 'text-white/20 hover:text-white'}`}
           >
             SO2
           </button>
@@ -166,7 +202,7 @@ function NavPanel({ user, onLogout, onShowLogin }: { user: any, onLogout: () => 
             
             <button 
               onClick={onLogout}
-              className="p-2 text-white/20 hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10"
+              className="p-2 text-white/20 hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10 cursor-pointer"
               title="Выйти"
             >
               <LogOut className="w-4 h-4" />
@@ -174,8 +210,8 @@ function NavPanel({ user, onLogout, onShowLogin }: { user: any, onLogout: () => 
           </div>
         ) : (
           <button 
-            onClick={onShowLogin}
-            className="w-full flex items-center gap-3 p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl transition-all shadow-lg shadow-blue-600/20"
+            onClick={() => { onShowLogin(); handleLinkClick(); }}
+            className="w-full flex items-center gap-3 p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl transition-all shadow-lg shadow-blue-600/20 cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
               <User className="w-5 h-5" />
@@ -199,6 +235,7 @@ const CHANNELS = [
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSo2Media, setShowSo2Media] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
@@ -646,18 +683,64 @@ export default function App() {
   return (
     <Router>
       <div className="flex h-screen bg-[#08080c] font-sans text-white overflow-hidden">
+        {/* Desktop Sidebar */}
         <NavPanel 
           user={user} 
           onLogout={handleLogout} 
           onShowLogin={() => setShowLoginModal(true)} 
         />
+
+        {/* Mobile Slide-over Drawer */}
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden flex">
+            <div 
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+              onClick={() => setMobileNavOpen(false)}
+            />
+            <div className="relative z-10 w-72 max-w-[85vw] h-full bg-[#0a0a0f] border-r border-white/10 flex flex-col shadow-2xl animate-fade-in">
+              <NavPanel 
+                user={user} 
+                onLogout={handleLogout} 
+                onShowLogin={() => setShowLoginModal(true)} 
+                onCloseMobile={() => setMobileNavOpen(false)}
+                isMobileDrawer
+              />
+            </div>
+          </div>
+        )}
         
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+          {/* Mobile Top Header Bar */}
+          <div className="lg:hidden flex items-center justify-between px-4 py-2.5 bg-[#0a0a0f] border-b border-white/10 z-30 shrink-0">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 flex items-center justify-center cursor-pointer transition-colors"
+              title="Открыть меню"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center shadow-md shadow-blue-600/20">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/>
+                </svg>
+              </div>
+              <span className="text-xs font-black uppercase tracking-wider text-white">MATCH SIMULATOR</span>
+            </div>
+            <div className="w-8 flex justify-end">
+              {user && (
+                <div className="w-7 h-7 rounded-lg border border-white/10 overflow-hidden">
+                  <img src={user.photoURL || `/api/avatar/${encodeURIComponent(user.displayName || user.name || "?")}`} className="w-full h-full object-cover" />
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Background decorations */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/20 rounded-full blur-[100px] pointer-events-none -translate-y-1/2 translate-x-1/3"></div>
           <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none translate-y-1/3 -translate-x-1/3"></div>
           
-          <div className="flex-1 overflow-y-auto z-10 p-4 lg:p-8 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto z-10 p-3 sm:p-5 lg:p-8 custom-scrollbar">
             <Routes>
               <Route path="/" element={<Simulator user={user} />} />
               <Route path="/stats" element={<Statistics user={user} />} />
@@ -669,10 +752,8 @@ export default function App() {
               <Route path="/players" element={<Players user={user} />} />
               <Route path="/news" element={<News user={user} />} />
               <Route path="/transfers" element={<Transfers user={user} />} />
-              <Route 
-                path="/map-center" 
-                element={isBamepAdmin ? <MapCenter user={user} /> : <AccessDenied sectionName="Карты и Тактики" roomName={user?.name} />} 
-              />
+              <Route path="/ai-negotiator" element={<AiNegotiator user={user} />} />
+              <Route path="/map-center" element={<AiNegotiator user={user} />} />
               <Route 
                 path="/analytics" 
                 element={isBamepAdmin ? <AdminAnalytics user={user} /> : <AccessDenied sectionName="Аналитика и Управление Комнатами" roomName={user?.name} />} 

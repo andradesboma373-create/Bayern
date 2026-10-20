@@ -8,6 +8,7 @@ import PlayerProfileModal from './PlayerProfileModal';
 import { safeLocalStorageSet } from '../lib/utils';
 import { getCanonicalRoomId } from './setka_tourn/storage';
 import { filterItemsForRoom } from '../lib/roomIsolation';
+import { optimizeImageForUpload } from '../lib/imageOptimizer';
 import { useGameUniverse } from '../lib/gameUniverse';
 
 export default function Players({ user }: { user: any }) {
@@ -570,13 +571,10 @@ export default function Players({ user }: { user: any }) {
                   input.onchange = async (e) => {
                     const file = (e.target as HTMLInputElement).files?.[0];
                     if (!file) return;
-                    const formData = new FormData();
-                    formData.append('file', file);
                     try {
-                      const res = await fetch('/api/upload?type=avatar', { method: 'POST', body: formData });
-                      const data = await res.json();
-                      if (data.url) setNewPlayer({...newPlayer, avatarUrl: data.url});
-                    } catch(e) {}
+                      const dataUrl = await optimizeImageForUpload(file, 'avatar');
+                      if (dataUrl) setNewPlayer({...newPlayer, avatarUrl: dataUrl});
+                    } catch(err) { console.error(err); }
                   };
                   input.click();
                 }}

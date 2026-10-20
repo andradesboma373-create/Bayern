@@ -38,13 +38,7 @@ export class CombatSystem {
           ? Math.min(3, Math.floor((state.round - regMax) / 6) + 1)
           : 0;
 
-        // Overconfidence / Confidence delay: if a team is significantly ahead in alive players (e.g. 5v1), 
-        // they might be slightly slower to react than someone fighting for survival.
-        const shooterTeamAlive = Object.values(state.players).filter(pl => pl.teamId === p.teamId && pl.alive).length;
-        const otherTeamAlive = Object.values(state.players).filter(pl => pl.teamId !== p.teamId && pl.alive).length;
         let confidenceDelay = 0;
-        if (shooterTeamAlive >= 4 && otherTeamAlive === 1) confidenceDelay = 2;
-        else if (shooterTeamAlive >= 3 && otherTeamAlive === 1) confidenceDelay = 1;
 
         if (state.tick < (p.reactionTimer + otFatigueReactionDelay + confidenceDelay)) {
            continue; 
@@ -80,6 +74,19 @@ export class CombatSystem {
     let effectiveAim = shooter.aim || 100;
     let effectiveIq = target.iq || 100;
 
+    // Team Stat Normalization: pull individual performance toward team average to reduce "gaps"
+    // Value from RATING_CONFIG.STAT_NORMALIZATION_FACTOR (e.g. 0.82)
+    const normFactor = RATING_CONFIG.STAT_NORMALIZATION_FACTOR || 1.0;
+    if (normFactor < 1.0) {
+      const shooterTeamPlayers = Object.values(state.players).filter(pl => pl.teamId === shooter.teamId);
+      const shooterTeamAvgAim = shooterTeamPlayers.reduce((sum, pl) => sum + (pl.aim || 100), 0) / (shooterTeamPlayers.length || 1);
+      effectiveAim = shooterTeamAvgAim + (effectiveAim - shooterTeamAvgAim) * normFactor;
+
+      const targetTeamPlayers = Object.values(state.players).filter(pl => pl.teamId === target.teamId);
+      const targetTeamAvgIq = targetTeamPlayers.reduce((sum, pl) => sum + (pl.iq || 100), 0) / (targetTeamPlayers.length || 1);
+      effectiveIq = targetTeamAvgIq + (effectiveIq - targetTeamAvgIq) * normFactor;
+    }
+
     // Apply individual player perks if configured in Settings -> Индивидуальные Рейты
     if (shooter.perk && shooter.perk.killMultiplier) {
       effectiveAim *= shooter.perk.killMultiplier;
@@ -106,8 +113,8 @@ export class CombatSystem {
       if (scoreDiff <= -3) {
         // Trailing team tactical timeout & reset
         const trailingAmount = Math.min(6, Math.abs(scoreDiff));
-        effectiveAim += trailingAmount * 0.5; // subtle +1.5 to +3.0 max
-        effectiveIq += trailingAmount * 0.4;
+        effectiveAim += trailingAmount * 0.3; // reduced from 0.5
+        effectiveIq += trailingAmount * 0.2; // reduced from 0.4
       }
       
       // Clutch / Desperation moment: 1vX situation boosts star players or desperation for anyone alone
@@ -134,7 +141,7 @@ export class CombatSystem {
     // Rating Scaling: ensure higher rated players (110+) naturally outperform lower rated players (80)
     // while keeping team contribution and trading healthy
     const baseAimRatio = Math.max(0.10, effectiveAim / 100);
-    const aimRatio = 1.0 + (baseAimRatio - 1.0) * 1.00; // Reduced from 1.15 to prevent invincibility
+    const aimRatio = 1.0 + (baseAimRatio - 1.0) * 1.12; // Reduced from 1.25 to prevent snowballing and compress stat gaps
     
     const baseIqRatio = Math.max(0.10, effectiveIq / 100);
     const pRoleLower = (shooter.role || '').toLowerCase();
@@ -214,7 +221,7 @@ export class CombatSystem {
     // Exit frag / saving ambush defensive advantage: saving player holding an ambush corner against greedy hunters
     const shooterTeamObj = state.teams[shooter.teamId];
     if (shooter.state === 'HOLDING' && (shooterTeamObj?.strategy === 'SAVE' || state.phase === 'POST_ROUND_COMBAT')) {
-      hitChance *= 1.18; // Ambushing greedy exit hunters
+      hitChance *= 1.01; // Reduced from 1.04 to fix "too strong shooters after round loss"
     }
 
     // Site anchor defensive advantage: CT holding site zone against attackers emerging from chokes
@@ -420,8 +427,13 @@ export class CombatSystem {
         let isTrade = false;
         const tradeWindowTicks = RATING_CONFIG.TRADE_WINDOW_TICKS;
         
-        // New players are harder to trade because of poor positioning/coordination
-        const effectiveTradeWindow = shooter.isNewPlayer ? tradeWindowTicks * 0.6 : tradeWindowTicks;
+        // Team synergy directly scales communication speed and trade window
+        const shooterTeam = state.teams[shooter.teamId];
+        const shooterSynergy = shooterTeam?.synergy !== undefined ? shooterTeam.synergy : 100;
+        const synergyTradeScale = 0.70 + (shooterSynergy / 100) * 0.30;
+        const effectiveTradeWindow = shooter.isNewPlayer 
+            ? tradeWindowTicks * 0.6 * synergyTradeScale 
+            : tradeWindowTicks * synergyTradeScale;
 
         for (let i = recentDeaths.length - 1; i >= 0; i--) {
             const rd = recentDeaths[i];
@@ -456,24 +468,31 @@ export class CombatSystem {
         });
 
         // Alert victim's nearby teammates for immediate trade opportunity
-        // (Allows trading star players so they are not immortal and die in realistic round skirmishes)
+        // High synergy squads communicate instantly; low synergy mixes suffer from delayed/missed callouts
+        const victimTeam = state.teams[target.teamId];
+        const victimSynergy = victimTeam?.synergy !== undefined ? victimTeam.synergy : 100;
+        const commsChance = 0.60 + (victimSynergy / 100) * 0.40;
+
         for (const tm of Object.values(state.players)) {
           if (tm && tm.alive && tm.teamId === target.teamId && tm.id !== target.id) {
             if (MapSystem.hasLineOfSight(tm.currentNodeId, shooter.currentNodeId) || tm.currentNodeId === target.currentNodeId) {
-              tm.targetEnemyId = shooter.id;
-              tm.state = 'ENGAGING';
-              tm.path = [];
-              tm.targetNodeId = null;
-              tm.knownEnemies.set(shooter.id, {
-                enemyId: shooter.id,
-                position: { ...shooter.position },
-                nodeId: shooter.currentNodeId,
-                timestamp: state.tick,
-                confidence: 1.0
-              });
-              // Immediate trade reaction advantage (peeker / trader swing)
-              tm.reactionTimer = state.tick;
-              tm.aimProgress = Math.max(0.85, tm.aimProgress || 0);
+              if (this.random() <= commsChance) {
+                tm.targetEnemyId = shooter.id;
+                tm.state = 'ENGAGING';
+                tm.path = [];
+                tm.targetNodeId = null;
+                tm.knownEnemies.set(shooter.id, {
+                  enemyId: shooter.id,
+                  position: { ...shooter.position },
+                  nodeId: shooter.currentNodeId,
+                  timestamp: state.tick,
+                  confidence: 1.0
+                });
+                // Immediate trade reaction advantage (scaled by team synergy)
+                tm.reactionTimer = state.tick;
+                const baseAimBoost = 0.72 + (victimSynergy / 100) * 0.18;
+                tm.aimProgress = Math.max(baseAimBoost, tm.aimProgress || 0);
+              }
             }
           }
         }

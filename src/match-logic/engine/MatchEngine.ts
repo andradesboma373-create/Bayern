@@ -2,6 +2,7 @@ import { MatchState, Player, Team, MatchEvent } from '../models';
 import { RoundEngine } from './RoundEngine';
 import { CombatSystem } from '../systems/CombatSystem';
 import { getPlayerPerks } from '../../lib/playerPerks';
+import { CALLS_CONFIG } from '../config/CallsConfig';
 
 export interface MatchEngineOptions {
   team1Synergy?: number;
@@ -111,28 +112,37 @@ export class MatchEngine {
     (state as any).t2Overall = t2Overall;
     (state as any).teamRatingDiff = teamRatingDiff;
 
-    // Team synergy: subtle impact (max ±1.5% as requested by user), adjusted if new player in roster
+    // Team synergy: meaningful competitive impact on communication, trades and teamwork
     const t1NewPlayersCount = (team1Input || []).filter((p: any) => p && p.isNewPlayer).length;
     const t2NewPlayersCount = (team2Input || []).filter((p: any) => p && p.isNewPlayer).length;
 
-    let team1Synergy = options?.team1Synergy ?? 100;
-    let team2Synergy = options?.team2Synergy ?? 100;
+    // Team synergy: use explicit value if passed, otherwise compute from fresh additions
+    let team1Synergy = options?.team1Synergy !== undefined
+      ? options.team1Synergy
+      : (t1NewPlayersCount > 0 ? Math.max(25, 100 - (t1NewPlayersCount * 15)) : 100);
+    let team2Synergy = options?.team2Synergy !== undefined
+      ? options.team2Synergy
+      : (t2NewPlayersCount > 0 ? Math.max(25, 100 - (t2NewPlayersCount * 15)) : 100);
 
-    if (t1NewPlayersCount > 0) {
-      team1Synergy = Math.max(30, team1Synergy - (t1NewPlayersCount * 15));
-    }
-    if (t2NewPlayersCount > 0) {
-      team2Synergy = Math.max(30, team2Synergy - (t2NewPlayersCount * 15));
-    }
+    // 100% synergy = +4.5% boost (tier-1 squad), 70% = 1.00 (standard baseline), 40% = -4.5% (uncoordinated), 10% = -9% (mix)
+    const t1SynergyMod = 1.0 + ((team1Synergy - 70) / 30) * 0.045;
+    const t2SynergyMod = 1.0 + ((team2Synergy - 70) / 30) * 0.045;
 
-    const t1SynergyMod = 0.985 + (team1Synergy / 100) * 0.03;
-    const t2SynergyMod = 0.985 + (team2Synergy / 100) * 0.03;
-
-    // Map experience: subtle impact (max ±2%)
+    // Map experience: 50 is default (1.00), 100 is Signature map (+5.5%), 10 is Permaban (-4.4%)
     const team1MapExp = options?.team1MapExp ?? 50;
     const team2MapExp = options?.team2MapExp ?? 50;
-    const t1MapExpMod = 0.98 + (team1MapExp / 100) * 0.04;
-    const t2MapExpMod = 0.98 + (team2MapExp / 100) * 0.04;
+    const t1MapExpMod = 1.0 + ((team1MapExp - 50) / 50) * 0.055;
+    const t2MapExpMod = 1.0 + ((team2MapExp - 50) / 50) * 0.055;
+
+    // Persist to team state for combat trade checks and AI decisions
+    if (state.teams[t1Id]) {
+      state.teams[t1Id].synergy = team1Synergy;
+      state.teams[t1Id].mapExp = team1MapExp;
+    }
+    if (state.teams[t2Id]) {
+      state.teams[t2Id].synergy = team2Synergy;
+      state.teams[t2Id].mapExp = team2MapExp;
+    }
 
     let seedCounter = state.seed || 12345;
     const rng = () => {
@@ -184,8 +194,8 @@ export class MatchEngine {
       // 2. Captain resolution: exactly 1 primary IGL/Captain per team
       const captains = enriched.filter(p => p.isCaptain);
       if (captains.length > 1) {
-        // Best captain by rating/IQ remains Captain
-        captains.sort((a, b) => b.rawRating - a.rawRating);
+        // Best captain by CALLS (tactical leadership), then rating/IQ remains Captain
+        captains.sort((a, b) => (Number(b.calls || 70) - Number(a.calls || 70)) || (b.rawRating - a.rawRating));
         captains[0].assignedRole = 'Captain';
         captains[0].isAdaptedRole = false;
 
@@ -280,70 +290,56 @@ export class MatchEngine {
       const isCaptain = roleLower === 'igl' || roleLower === 'captain' || roleLower === 'капитан' || roleLower === 'кэп' || roleLower === 'leader';
 
       if (isSniper) {
-          aim = skillVal * 1.02;
+          aim = skillVal * 1.01;
           iq = skillVal * 1.01;
           movement = skillVal * 1.00;
-          utility = skillVal * 0.96;
-          focus *= 1.02;
-          aggression = 0.90;
-          impact = 1.02;
-          reaction = skillVal * 1.05;
-          speedBonus = 0.00;
-      } else if (isEntry) {
-          // Entry goes in first; takes aggressive opening duels without unrealistic god-mode aim
-          aim = skillVal * 1.03;
-          iq = skillVal * 1.02;
-          movement = skillVal * 1.03;
           utility = skillVal * 0.98;
           focus *= 1.01;
-          aggression = 1.08;
-          impact = 1.06;
-          reaction = skillVal * 1.04;
+          aggression = 0.94;
+          impact = 1.02;
+          reaction = skillVal * 1.02;
+          speedBonus = 0.00;
+      } else if (isEntry) {
+          // Entry goes in first; takes aggressive opening duels
+          aim = skillVal * 1.01;
+          iq = skillVal * 1.01;
+          movement = skillVal * 1.02;
+          utility = skillVal * 0.99;
+          focus *= 1.01;
+          aggression = 1.04;
+          impact = 1.03;
+          reaction = skillVal * 1.02;
           speedBonus = 0.00;
       } else if (isLurker) {
           aim = skillVal * 1.01;
           iq = skillVal * 1.02;
           movement = skillVal * 1.01;
-          utility = skillVal * 0.95;
+          utility = skillVal * 0.97;
           focus *= 1.01;
-          aggression = 0.94;
+          aggression = 0.96;
           impact = 1.01;
           reaction = skillVal * 1.01;
           speedBonus = 0.01;
       } else if (isSupport) {
-          // Support / Anchor: plays disciplined crossfires & utility, does not push solo
-          aim = skillVal * 0.94;
-          iq = skillVal * 1.03;
-          movement = skillVal * 0.98;
-          utility = skillVal * 1.08;
-          focus *= 1.00;
-          aggression = 0.65;
-          impact = 0.88;
-          reaction = skillVal * 0.95;
+          // Support / Anchor: plays disciplined crossfires & utility, trades effectively
+          aim = skillVal * 0.99;
+          iq = skillVal * 1.04;
+          movement = skillVal * 0.99;
+          utility = skillVal * 1.06;
+          focus *= 1.01;
+          aggression = 0.92;
+          impact = 0.98;
+          reaction = skillVal * 0.99;
           speedBonus = 0.00;
       } else if (isCaptain) {
           // Captain / IGL focuses on calling strats; mechanical skill is preserved close to team level
-          const isStarCaptain = rawRating >= 115;
-          const isStrongCaptain = rawRating >= 105;
-          if (isStarCaptain) {
-              aim = skillVal * 1.00;
-              reaction = skillVal * 1.00;
-              aggression = 0.90;
-              impact = 1.00;
-          } else if (isStrongCaptain) {
-              aim = skillVal * 0.98;
-              reaction = skillVal * 0.98;
-              aggression = 0.86;
-              impact = 0.97;
-          } else {
-              aim = skillVal * 0.96;
-              reaction = skillVal * 0.96;
-              aggression = 0.84;
-              impact = 0.95;
-          }
+          aim = skillVal * 0.96;
+          reaction = skillVal * 0.97;
+          aggression = 0.90;
+          impact = 0.95;
           iq = skillVal * 1.08;
-          movement = skillVal * 0.98;
-          utility = skillVal * 1.00;
+          movement = skillVal * 0.99;
+          utility = skillVal * 1.02;
           focus = 1.00;
           speedBonus = 0.00;
       } else {
@@ -413,6 +409,10 @@ export class MatchEngine {
         aggression *= 1.20; // Играет больше на себя, лезет в ненужные дуэли
       }
       
+      const callsVal = pData.calls !== undefined && pData.calls !== null
+        ? Math.max(0, Math.min(100, Math.round(Number(pData.calls))))
+        : (isCaptain ? CALLS_CONFIG.DEFAULT_CALLS : undefined);
+
       const p: Player = {
         id: pId,
         name: pData.nickname,
@@ -423,6 +423,7 @@ export class MatchEngine {
         isAdaptedRole,
         isNewPlayer,
         rating,
+        calls: callsVal,
         aim: Math.max(40, aim),
         iq: Math.max(40, iq),
         movement: Math.max(40, movement),
@@ -463,8 +464,28 @@ export class MatchEngine {
 
     adaptedTeam1.forEach(p => initPlayer(p, t1Id));
     adaptedTeam2.forEach(p => initPlayer(p, t2Id));
+
+    // Resolve team captain and tactical CALLS rating
+    this.refreshTeamCaptainCalls(state, t1Id);
+    this.refreshTeamCaptainCalls(state, t2Id);
     
     return state;
+  }
+
+  static refreshTeamCaptainCalls(state: MatchState, teamId: string) {
+    const team = state.teams[teamId];
+    if (!team) return;
+    const players = Object.values(state.players).filter(p => p && p.teamId === teamId);
+    const isCaptainRole = (role: string) => {
+        const r = role.toLowerCase().trim();
+        return r === 'igl' || r === 'captain' || r === 'капитан' || r === 'кэп' || r === 'leader';
+    };
+    let cap = players.find(p => isCaptainRole(p.role)) ||
+              players.find(p => p.originalRole && isCaptainRole(p.originalRole));
+    const calls = cap && cap.calls !== undefined ? cap.calls : (cap ? CALLS_CONFIG.DEFAULT_CALLS : CALLS_CONFIG.NO_CAPTAIN_CALLS);
+    team.calls = calls;
+    team.callsNorm = CALLS_CONFIG.normalize(calls);
+    team.captainPlayerId = cap ? cap.id : null;
   }
   
   static isMatchOver(s1: number, s2: number, format: string, isCS2: boolean = true): boolean {

@@ -69,6 +69,7 @@ export interface Player {
 
   // Base Characteristics
   rating: number;
+  calls?: number; // 0 to 100 tactical calls quality rating for Captains
   aim: number;
   iq: number;
   movement: number;
@@ -130,6 +131,11 @@ export interface Team {
   tactic: string;
   strategy: 'DEFAULT' | 'FAST_A' | 'FAST_B' | 'EXECUTE_A' | 'EXECUTE_B' | 'MID_SPLIT_A' | 'MID_SPLIT_B' | 'MID_CONTROL' | 'SPLIT' | 'CONTACT' | 'FAKE' | 'SLOW' | 'AGGRESSIVE' | 'PASSIVE' | 'STACK_A' | 'STACK_B' | 'RETAKE' | 'SAVE' | 'DEFEND_BOMB' | 'RECOVER_BOMB' | 'MID_ROUND_HOLD';
   lossStreak?: number;
+  synergy?: number;
+  mapExp?: number;
+  calls?: number; // Current active captain's CALLS rating (0 - 100)
+  callsNorm?: number; // Normalized [0.0 - 1.0]
+  captainPlayerId?: string | null;
 }
 
 export interface BombState {

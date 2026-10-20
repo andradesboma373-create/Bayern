@@ -288,10 +288,10 @@ export class PlayerAI {
 
     // 1. Base weights from role specialization
     const priorities: BehaviorPriorities = {
-      aggression: isEntry ? 1.00 : (isSniper ? 0.40 : (isSupport ? 0.42 : (isIGL ? 0.45 : 0.70))),
-      caution: isEntry ? 0.35 : (isSniper ? 0.90 : (isLurker ? 0.85 : (isIGL ? 0.75 : (isSupport ? 0.80 : 0.38)))),
-      support: isSupport ? 1.00 : (isIGL ? 0.80 : 0.40),
-      lurk: isLurker ? 0.95 : 0.05,
+      aggression: isEntry ? 0.95 : (isSniper ? 0.70 : (isSupport ? 0.75 : (isIGL ? 0.72 : 0.82))),
+      caution: isEntry ? 0.35 : (isSniper ? 0.55 : (isLurker ? 0.60 : (isIGL ? 0.50 : (isSupport ? 0.45 : 0.40)))),
+      support: isSupport ? 0.90 : (isIGL ? 0.75 : 0.50),
+      lurk: isLurker ? 0.85 : 0.10,
       objective: 0.75
     };
 
@@ -347,6 +347,9 @@ export class PlayerAI {
      const pRoleLower = (p.role || '').toLowerCase();
      const isSniper = pRoleLower.includes('sniper') || pRoleLower.includes('awp') || pRoleLower.includes('снайпер');
      const isEntry = pRoleLower.includes('entry') || pRoleLower.includes('opener') || pRoleLower.includes('энтри');
+     const isSupport = pRoleLower.includes('support') || pRoleLower.includes('саппорт');
+     const isLurker = pRoleLower.includes('lurker') || pRoleLower.includes('люркер');
+     const isCaptain = pRoleLower.includes('captain') || pRoleLower.includes('igl') || pRoleLower.includes('капитан');
      const myIdx = team?.players ? team.players.indexOf(p.id) : 0;
      const teamPlayers = team?.players ? team.players.map((id: string) => state.players[id]).filter(Boolean) : [];
 
@@ -402,40 +405,38 @@ export class PlayerAI {
             return;
         }
 
-        // Support role: Tactical movement during execution
-        // They stay at entry nodes longer to throw utility before entering site
-        const isSupport = pRoleLower.includes('support') || pRoleLower.includes('саппорт');
-        if (isSupport && isExecuting && !p.currentNodeId.includes('site')) {
-            const myEntryNode = entryNodes[myIdx % entryNodes.length];
-            if (p.currentNodeId === myEntryNode && state.tick < 300) {
-                // Holding at entry to "throw utility"
-                p.state = 'HOLDING';
-                p.actionTimer = state.tick + 25;
-                return;
-            }
-            PlayerAI.routeTo(p, myEntryNode);
-            return;
-        }
-
-        // Aggressive Entry logic: Entry Fragger pushes site on execution
-        const isEntry = pRoleLower.includes('entry') || pRoleLower.includes('opener') || pRoleLower.includes('энтри');
-        if (isEntry || priorities.aggression > 0.90) {
-            const myEntryNode = entryNodes[myIdx % entryNodes.length];
-            // If defaulting/holding, stay with team at entry node rather than solo-rushing
-            if (isHolding && !isExecuting) {
+        // 4. Execution Movement: during site execution, team moves together onto the bombsite to trade!
+        if (isExecuting) {
+            // Support: throws early utility for the first 25 ticks of execute, then pushes site with team to trade
+            if (isSupport && !p.currentNodeId.includes('site') && state.tick < 75) {
+                const myEntryNode = entryNodes[myIdx % entryNodes.length];
                 if (p.currentNodeId === myEntryNode) {
                     p.state = 'HOLDING';
-                    p.actionTimer = state.tick + 35;
+                    p.actionTimer = state.tick + 15;
                     return;
                 }
                 PlayerAI.routeTo(p, myEntryNode);
                 return;
             }
+
+            // Sniper: holds the entry choke angle or moves into site to cover long angles
+            if (isSniper) {
+                const chokeNode = team.strategy.includes('_B') ? 'b_apps' : 'a_main';
+                if (p.currentNodeId === chokeNode || p.currentNodeId.includes('site')) {
+                    p.state = 'HOLDING';
+                    p.actionTimer = state.tick + 35;
+                    return;
+                }
+                PlayerAI.routeTo(p, chokeNode);
+                return;
+            }
+
+            // Entry, Rifler, Captain, and Support push the site together to trade kills
             PlayerAI.routeTo(p, targetSite);
             return;
         }
 
-        // Support/Hold logic for others (Snipers, etc.)
+        // Support/Hold logic for defaulting when NOT executing
         if (priorities.caution > 0.6 || isSniper) {
             let holdNode = 'mid';
             if (team.strategy.includes('_A')) holdNode = priorities.aggression > 0.5 ? 'a_main' : 't_ramp';
@@ -443,26 +444,11 @@ export class PlayerAI {
             
             if (p.currentNodeId === holdNode) {
                 p.state = 'HOLDING';
-                p.actionTimer = state.tick + (isSniper ? 50 : 30);
+                p.actionTimer = state.tick + (isSniper ? 45 : 25);
             } else {
                 PlayerAI.routeTo(p, holdNode);
             }
             return;
-        }
-
-        // Default: Move with team
-        const isRifler = pRoleLower.includes('rifler') || pRoleLower.includes('рифлер');
-        if (isRifler && isExecuting) {
-            // Riflers follow the entry fraggers to the site for trading, 
-            // but some might hold a flank or stay back slightly
-            if (CombatSystem.random() < 0.70) {
-              PlayerAI.routeTo(p, targetSite);
-              return;
-            } else {
-              const myHoldNode = entryNodes[myIdx % entryNodes.length];
-              PlayerAI.routeTo(p, myHoldNode);
-              return;
-            }
         }
 
         const strategyNode = team.strategy.includes('_B') ? 'b_apps' : (team.strategy.includes('_A') ? 'a_main' : 'mid');
@@ -479,19 +465,31 @@ export class PlayerAI {
         let enemiesOnA = 0;
         let enemiesOnB = 0;
         for (const [, mem] of p.knownEnemies.entries()) {
-            if (mem.confidence > 0.4) {
+            if (mem.confidence > 0.35) {
                 if (['a_site', 'a_main', 't_ramp', 'connector'].includes(mem.nodeId)) enemiesOnA++;
                 if (['b_site', 'b_apps', 'b_apps_entrance', 'short'].includes(mem.nodeId)) enemiesOnB++;
             }
         }
 
-        if (enemiesOnA >= 2 && !p.currentNodeId?.includes('a_')) {
-            PlayerAI.routeTo(p, 'a_site');
-            return;
+        const isHoldingA = p.currentNodeId?.includes('a_') || p.currentNodeId === 'connector';
+        const isHoldingB = p.currentNodeId?.includes('b_') || p.currentNodeId === 'short';
+
+        if (enemiesOnA >= 1 && !isHoldingA) {
+            // Mid rotators (connector/window) rotate immediately; opposite site rotates if 2+ enemies or bomb spotted
+            const isWindow = p.currentNodeId === 'window';
+            const bombAtA = (state.bomb.state === 'CARRIED' || (state.bomb.state as string) === 'PLANTED') && (state.bomb.nodeId?.includes('a_') || state.bomb.nodeId === 'a_site');
+            if (isWindow || enemiesOnA >= 2 || bombAtA || (state.bomb.state as string) === 'PLANTED') {
+                PlayerAI.routeTo(p, 'a_site');
+                return;
+            }
         }
-        if (enemiesOnB >= 2 && !p.currentNodeId?.includes('b_')) {
-            PlayerAI.routeTo(p, 'b_site');
-            return;
+        if (enemiesOnB >= 1 && !isHoldingB) {
+            const isWindow = p.currentNodeId === 'window';
+            const bombAtB = (state.bomb.state === 'CARRIED' || (state.bomb.state as string) === 'PLANTED') && (state.bomb.nodeId?.includes('b_') || state.bomb.nodeId === 'b_site');
+            if (isWindow || enemiesOnB >= 2 || bombAtB || (state.bomb.state as string) === 'PLANTED') {
+                PlayerAI.routeTo(p, 'b_site');
+                return;
+            }
         }
 
         // Defensive positioning: Every CT is assigned to hold a key site or zone
@@ -508,7 +506,7 @@ export class PlayerAI {
         if (p.currentNodeId === assignedSpot) {
             p.state = 'HOLDING';
             // Hold angle defensively and wait for enemy contact or rotation trigger
-            p.actionTimer = state.tick + 100;
+            p.actionTimer = state.tick + 60;
         } else {
             PlayerAI.routeTo(p, assignedSpot);
         }
@@ -533,18 +531,31 @@ export class PlayerAI {
         }
       }
       
-      // 2. Teammates reporting multiple enemies at other site
+      // 2. Teammates reporting enemies at sites
       let enemiesOnA = 0;
       let enemiesOnB = 0;
       for (const [, mem] of p.knownEnemies.entries()) {
-        if (mem.confidence > 0.6) {
+        if (mem.confidence > 0.35) {
           if (['a_site', 'a_main', 't_ramp', 'connector'].includes(mem.nodeId)) enemiesOnA++;
           if (['b_site', 'b_apps', 'b_apps_entrance', 'short'].includes(mem.nodeId)) enemiesOnB++;
         }
       }
-      
-      if (enemiesOnA >= 2 && p.currentNodeId.includes('b_')) return true;
-      if (enemiesOnB >= 2 && p.currentNodeId.includes('a_')) return true;
+
+      // 3. Teammate killed recently -> immediate rotation response to trade
+      const recentDeaths = (state as any).recentDeaths || [];
+      const teammateFellRecently = recentDeaths.some((rd: any) => 
+        rd.victimTeamId === p.teamId && (state.tick - rd.tick < 50)
+      );
+      if (teammateFellRecently) return true;
+
+      // 4. Rotators (window / connector / short) rotate immediately on first contact
+      const isRotator = p.currentNodeId === 'window' || p.currentNodeId === 'connector' || p.currentNodeId === 'short';
+      if (isRotator && (enemiesOnA >= 1 || enemiesOnB >= 1)) return true;
+
+      // 5. Anchors rotate if bomb is planted or enemy contact at other site
+      if (state.bomb.state === 'PLANTED') return true;
+      if (enemiesOnA >= 1 && p.currentNodeId.includes('b_')) return true;
+      if (enemiesOnB >= 1 && p.currentNodeId.includes('a_')) return true;
     } else {
       // T side rotation: follow strategy if out of position
       if (team.strategy.includes('_A') && p.currentNodeId.includes('b_')) return true;

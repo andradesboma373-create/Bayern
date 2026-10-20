@@ -173,6 +173,25 @@ process.on('unhandledRejection', (reason: any) => {
   }
   originalError("Unhandled Rejection:", reason);
 });
+
+process.on('uncaughtException', (err: any) => {
+  const str = String(err?.message || err?.stack || err || '');
+  if (
+    str.includes("RESOURCE_EXHAUSTED") ||
+    str.includes("resource-exhausted") ||
+    str.includes("Quota limit exceeded") ||
+    str.includes("CANCELLED: Disconnecting idle stream") ||
+    str.includes("GrpcConnection RPC") ||
+    str.includes("Port 24678 is already in use") ||
+    str.includes("WebSocket") ||
+    str.includes("ECONNRESET") ||
+    str.includes("EPIPE")
+  ) {
+    markQuotaExhausted();
+    return;
+  }
+  originalError("Uncaught Exception:", err);
+});
 // ==========================================
 
 import { MAP_POOL_CS2, MAP_POOL_S2, simulateMatchSeries, CS2_MAP_IDS, S2_MAP_IDS } from "./src/lib/simulation";
@@ -1116,7 +1135,23 @@ app.get('/maps/:name', (req, res, next) => {
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/api/gemini/live" });
-const PORT = 3000;
+wss.on("error", (err) => {
+  console.warn("[WebSocketServer] Handled WebSocket error:", err?.message || err);
+});
+
+function resolveServerPort(): number {
+  const portArgIdx = process.argv.indexOf("--port");
+  if (portArgIdx !== -1 && process.argv[portArgIdx + 1]) {
+    const parsed = parseInt(process.argv[portArgIdx + 1], 10);
+    if (!isNaN(parsed)) return parsed;
+  }
+  if (process.env.PORT) {
+    const parsed = parseInt(process.env.PORT, 10);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return 3000;
+}
+const PORT = resolveServerPort();
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -1185,7 +1220,13 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       details: `Загружен файл: ${desc} (${filename}, ${(buf.length / 1024).toFixed(1)} КБ) | Взято лимитов: 0 (локальное хранилище сервера)`
     });
     
-    res.json({ url: `/uploads/${filename}` });
+    const mime = ext === '.webp' ? 'image/webp' : (ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png');
+    const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+    res.json({ 
+      url: dataUrl,
+      localUrl: `/uploads/${filename}`,
+      filename 
+    });
   } catch (err: any) {
     console.error("Upload error:", err.message);
     res.status(500).json({ error: err.message });
@@ -1609,6 +1650,214 @@ app.post("/api/gemini/chat", async (req, res) => {
     res.json({ text: response.text });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// 5.5. AI Transfer Negotiator ("Жёсткий отказчик" & Защитник клубов без лидеров)
+app.post("/api/gemini/transfer-negotiate", async (req, res) => {
+  try {
+    const {
+      userTeam,
+      targetTeam,
+      userBudget,
+      targetBudget,
+      offeredPlayer,
+      requestedPlayer,
+      cashOffer,
+      sampleMatches,
+      chatHistory,
+      userMessage
+    } = req.body;
+
+    const systemPrompt = `Ты — Виктор «V1KTOR» Громов, легендарный спортивный директор киберспортивного клуба "${targetTeam || 'Unknown'}".
+Ты ведешь переговоры по трансферам игроков в дисциплинах CS2 / Standoff 2.
+
+ТВОЙ ХАРАКТЕР И РОЛЬ:
+- Ты — «ЖЁСТКИЙ ОТКАЗЧИК» (Tough Esports Negotiator). Ты суров, крайне придирчив, ревностно защищаешь состав своего клуба.
+- Твоя главная миссия — ЗАЩИТИТЬ КЛУБ ОТ ГРАБЕЖА! Другие команды привыкли легко забирать хороших игроков, но с тобой этот номер не пройдет!
+- Ты презираешь лоуболлеров (заниженные предложения) и попытки всучить «сбитого летчика» или игрока с чуть худшим рейтингом.
+- Ты говоришь на профессиональном киберспортивном сленге (HLTV rating, тир-1 лан, байаут, клаусула, тильт, энтри, снайпер, синергия).
+- Ты говоришь прямо, с сарказмом и железными аргументами.
+
+СВЕРХВАЖНОЕ ПРАВИЛО МАСШТАБА РЕЙТИНГОВ (ДИАПАЗОН 90–110):
+- В нашем симуляторе рейтинги игроков плотно сжаты в диапазоне 90–110!
+- В ЭТОМ ДИАПАЗОНЕ РАЗНИЦА ДАЖЕ В +1 ИЛИ +2 РЕЙТИНГА ЯВЛЯЕТСЯ ОГРОМНОЙ И РЕШАЮЩЕЙ!
+  Например, игрок с рейтингом 102 по сравнению с игроком 100 — это колоссальная разница в клатчах, фрагах и выигрыше раундов.
+- Если у нас хотят забрать игрока, который выше предлагаемого хотя бы на +1 или +2 рейта — это ПРЯМАЯ ПОТЕРЯ ОГНЕВОЙ МОЩИ!
+  Ты НЕ ИМЕЕШЬ ПРАВА соглашаться на это просто так!
+- За каждый пункт отставания (+1, +2) ты требуешь огромную денежную компенсацию (от $60,000 до $150,000+ за пункт) и проверочные матчи.
+- Если доплата смехотворная — немедленно отвергай сделку (REJECTED) со словами: «У нас разница даже в +1 или +2 рейта решает исходы матчей! Вы хотите ослабить наш состав за сущие копейки?!»
+
+КЛЮЧЕВЫЕ КРИТЕРИИ ОЦЕНКИ СДЕЛКИ:
+1. РАЗНИЦА В РЕЙТИНГАХ И ЧИСТЫЙ ВЫКУП:
+   - Предлагаемый игрок: ${offeredPlayer?.nickname || 'Неизвестно'} (${offeredPlayer?.role || 'Rifler'}, рейтинг ${offeredPlayer?.rating || 100}).
+   - Желаемый игрок: ${requestedPlayer?.nickname || 'Неизвестно'} (${requestedPlayer?.role || 'Rifler'}, рейтинг ${requestedPlayer?.rating || 100}).
+   - Если предлагают «чистый выкуп» (без игрока взамен): ты остаешься с 4 игроками в составе! Требуй полный байаут от $350k до $800k+.
+2. ЗВЕЗДА КЛУБА ИЛИ СНАЙПЕР:
+   - Если забирают звезду команды (${requestedPlayer?.isStarPlayer ? 'ДА, ЭТО ЗВЕЗДА КЛУБА!' : 'Обычный игрок'}) или снайпера (AWP):
+     Шансы на сделку резко падают! За звезду (как pepes с 126 рейтингом или лучшего стрелка ростера) требуй минимум $250k-$500k+ отступных!
+3. TIER-1 ОПЫТ:
+   - У предлагаемого игрока: ${offeredPlayer?.tier1Experience ? 'ЕСТЬ ОПЫТ ТИР-1 СЦЕНЫ' : 'НЕТ ОПЫТА ТИР-1 СЦЕНЫ (пабер/тир-3)'}.
+   - Без Т1 опыта игрок обесценивается в разы.
+4. КАЗНА КЛУБА И ПРАВИЛО ЖАДНОСТИ БОГАТЫХ КОМАНД:
+   - В казне нашего клуба «${targetTeam || 'Наш клуб'}»: $${Number(targetBudget || 500000).toLocaleString()}.
+   - Чем больше денег у нас в казне — тем больше денег мы требуем! Мы сытые, нам подачки не нужны.
+
+ФОРМАТ ОТВЕТА:
+Ты ДОЛЖЕН вернуть ответ в строгом JSON-формате (только валидный JSON, без markdown и лишнего текста):
+{
+  "verdict": "REJECTED" | "COUNTER_OFFER" | "ACCEPTED" | "NEED_TEST_MATCH",
+  "fairnessScore": <число от 0 до 100, где 0-35 грабеж, 36-77 жесткий торг/отказ, 78-100 выгодно>,
+  "speech": "<твой дерзкий, суровый и аргументированный ответ от первого лица Виктора с упоминанием важности разницы в рейтах и богатства клуба>",
+  "reasons": ["<пункт 1 анализа>", "<пункт 2 анализа>", "<пункт 3 анализа>"],
+  "counterDemand": "<твое жесткое встречное требование: сумма доплаты, спарринг или сохранение игрока. Если ACCEPTED — условия оформления.>"
+}`;
+
+    const contents: any[] = [];
+    if (Array.isArray(chatHistory)) {
+      for (const msg of chatHistory) {
+        if (msg && msg.content) {
+          contents.push({
+            role: msg.role === 'user' ? 'user' : 'model',
+            parts: [{ text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }]
+          });
+        }
+      }
+    }
+
+    const contextPrompt = `
+Текущее трансферное предложение:
+- Покупатель: ${userTeam || 'Клуб пользователя'} (Бюджет: $${Number(userBudget || 0).toLocaleString()})
+- Наш клуб: ${targetTeam || 'Наш клуб'} (Казна: $${Number(targetBudget || 0).toLocaleString()})
+- Нам предлагают: ${offeredPlayer?.nickname || 'Неизвестно'} (Роль: ${offeredPlayer?.role || 'Rifler'}, Рейтинг: ${offeredPlayer?.rating || 100}, T1 опыт: ${offeredPlayer?.tier1Experience ? 'Да' : 'Нет'})
+- У нас хотят забрать: ${requestedPlayer?.nickname || 'Неизвестно'} (Роль: ${requestedPlayer?.role || 'Rifler'}, Рейтинг: ${requestedPlayer?.rating || 100}, Звезда: ${requestedPlayer?.isStarPlayer ? 'Да' : 'Нет'})
+- Предложенная доплата: $${Number(cashOffer || 0).toLocaleString()}
+- Прикрепленные тестовые матчи: ${sampleMatches && sampleMatches.length > 0 ? JSON.stringify(sampleMatches) : 'Матчи не прикреплены'}
+
+Сообщение менеджера: "${userMessage || 'Мы делаем вам официальное предложение по трансферу. Что скажете?'}"
+`;
+
+    contents.push({
+      role: 'user',
+      parts: [{ text: contextPrompt }]
+    });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents,
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: 0.65
+      }
+    });
+
+    let rawText = response.text || '{}';
+    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch (parseErr) {
+      const match = rawText.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch (e) {
+          parsed = null;
+        }
+      }
+      if (!parsed) {
+        parsed = {
+          verdict: 'REJECTED',
+          fairnessScore: 20,
+          speech: rawText || 'Сделка категорически отклонена. Даже разница в 1-2 рейтинга в нашем ростере недопустима без огромной доплаты.',
+          reasons: ['Недостаточная выгода для клуба', 'Критический риск потери огневой мощи команды'],
+          counterDemand: 'Увеличьте доплату минимум в три раза или предложите игрока сильнее.'
+        };
+      }
+    }
+
+    res.json(parsed);
+  } catch (error: any) {
+    console.warn('[Transfer Negotiate AI Warning, using intelligent fallback]:', error.message);
+    const { offeredPlayer, requestedPlayer, cashOffer, targetBudget, targetTeam } = req.body || {};
+    const reqRating = Number(requestedPlayer?.rating || 100);
+    const offRating = Number(offeredPlayer?.rating || 0);
+    const cash = Number(cashOffer || 0);
+    const tBudget = Number(targetBudget || 500000);
+    const isCashOnly = !offeredPlayer || offeredPlayer.nickname?.includes('Без игрока') || offRating === 0;
+    const ratingGap = isCashOnly ? reqRating : (reqRating - offRating);
+    
+    // Wealth greed multiplier: richer clubs want far more money!
+    const greedMult = 1.0 + Math.max(0, (tBudget - 100000) / 1400000);
+    
+    // Strict valuation in 90-110 rating scale:
+    let baseCashNeeded = 0;
+    if (isCashOnly) {
+      baseCashNeeded = 320000 + Math.max(0, reqRating - 90) * 15000;
+    } else if (ratingGap > 0) {
+      // Even +1 or +2 rating is heavily valued in 90-110 scale
+      baseCashNeeded = Math.round(Math.pow(ratingGap, 1.35) * 55000 + 45000);
+    } else {
+      // Equal or slightly better: chemistry disruption fee
+      baseCashNeeded = 45000;
+    }
+
+    if (requestedPlayer?.isStarPlayer) {
+      baseCashNeeded += 180000;
+    }
+
+    const fairCashNeeded = Math.round(baseCashNeeded * greedMult);
+
+    let penalty = 0;
+    if (isCashOnly) {
+      penalty += 36;
+    } else if (ratingGap === 1) {
+      penalty += 18;
+    } else if (ratingGap === 2) {
+      penalty += 32;
+    } else if (ratingGap === 3) {
+      penalty += 46;
+    } else if (ratingGap >= 4) {
+      penalty += 60;
+    }
+
+    if (requestedPlayer?.isStarPlayer) {
+      penalty += 25;
+    }
+
+    const cashRatio = fairCashNeeded > 0 ? (cash / fairCashNeeded) : 1;
+    let fairnessScore = Math.max(5, Math.min(95, Math.round(cashRatio * 45 + (offeredPlayer?.tier1Experience ? 12 : 0) - penalty)));
+
+    let verdict = 'REJECTED';
+    let speech = `У нас в симуляторе рейтинг 90–110, и даже разница в +1 или +2 пункта решает исходы клатчей! Вы хотите забрать ${requestedPlayer?.nickname || 'игрока'} за копейки ($${cash.toLocaleString()}). В казне нашего клуба $${tBudget.toLocaleString()}, мы игроков задаром не раздаем!`;
+    let counterDemand = `Требуем справедливый выкуп: поднимайте доплату минимум до $${fairCashNeeded.toLocaleString()} и предоставьте доказательства формы.`;
+    
+    if (fairnessScore >= 78 && cash >= fairCashNeeded * 0.8) {
+      verdict = 'ACCEPTED';
+      speech = `Условия действительно весомые. $${cash.toLocaleString()} сполна компенсируют риски ростера клуба «${targetTeam || 'нашего клуба'}». Мы даем добро на трансфер!`;
+      counterDemand = 'Сделка согласована. Оформляйте трансфер в системе.';
+    } else if (fairnessScore >= 45) {
+      verdict = 'COUNTER_OFFER';
+      speech = `Разница в классе ${ratingGap > 0 ? `-${ratingGap.toFixed(1)}` : 'на равных'} заметна по игре. Для нашего достатка ($${tBudget.toLocaleString()}) доплата $${cash.toLocaleString()} слишком скромная.`;
+      counterDemand = `Поднимайте доплату до $${fairCashNeeded.toLocaleString()} и сыграйте проверочный спарринг.`;
+    } else if (fairnessScore >= 32) {
+      verdict = 'NEED_TEST_MATCH';
+      speech = `Сделка слишком сомнительна. Сыграйте проверочный спарринг прямо сейчас, чтобы доказать форму предлагаемого игрока!`;
+      counterDemand = 'Прикрепите результаты матча или спарринга.';
+    }
+
+    res.json({
+      verdict,
+      fairnessScore,
+      speech,
+      reasons: [
+        isCashOnly ? 'Чистый выкуп без игрока взамен (разрушает состав)' : `Разница в рейтинге: ${ratingGap > 0 ? `-${ratingGap.toFixed(1)} (потеря огневой мощи)` : `+${Math.abs(ratingGap).toFixed(1)}`}`,
+        requestedPlayer?.isStarPlayer ? '⭐ Звезда клуба (трансфер блокируется ИИ)' : 'Оценка ценности для ростера',
+        `Казна клуба «${targetTeam || 'Наш клуб'}»: $${tBudget.toLocaleString()} (Жадность: x${greedMult.toFixed(2)})`,
+        `Запрошено компенсации: $${fairCashNeeded.toLocaleString()} (Предложено: $${cash.toLocaleString()})`
+      ],
+      counterDemand
+    });
   }
 });
 
@@ -5590,7 +5839,11 @@ async function startServer() {
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        hmr: false,
+        watch: null,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -5601,6 +5854,14 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[Server] Port ${PORT} already occupied or server restarting.`);
+    } else {
+      console.error("[Server] HTTP server error:", err);
+    }
+  });
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
