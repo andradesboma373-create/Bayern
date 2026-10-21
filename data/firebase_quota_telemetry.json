@@ -1,17 +1,17 @@
 {
   "date": "2026-10-21",
-  "readsToday": 1444,
-  "writesToday": 6336,
+  "readsToday": 2288,
+  "writesToday": 7480,
   "maxReads": 50000,
   "maxWrites": 20000,
-  "remainingReads": 48556,
-  "remainingWrites": 13664,
-  "percentReads": 2.89,
-  "percentWrites": 31.68,
-  "percentReadsFormatted": "2.89%",
-  "percentWritesFormatted": "31.68%",
-  "lastUpdated": "2026-10-21T09:41:27.418Z",
-  "lastSyncWithFirestore": "2026-10-21T09:41:27.459Z",
+  "remainingReads": 47712,
+  "remainingWrites": 12520,
+  "percentReads": 4.58,
+  "percentWrites": 37.4,
+  "percentReadsFormatted": "4.58%",
+  "percentWritesFormatted": "37.40%",
+  "lastUpdated": "2026-10-21T12:25:54.054Z",
+  "lastSyncWithFirestore": "2026-10-21T12:25:26.142Z",
   "firestoreConnected": true,
   "firestoreDatabaseId": "ai-studio-matchsimulator-cf882484-249e-4726-9c8b-046071d33a59",
   "projectId": "conductive-state-tf6jr",
@@ -25,28 +25,28 @@
   },
   "roomActivity": {
     "channel_bamep_cs2": {
-      "reads": 657,
       "writes": 0,
-      "lastActive": "2026-10-21T09:41:21.927Z"
+      "lastActive": "2026-10-21T12:25:54.054Z",
+      "reads": 1356
     },
     "channel_airy": {
-      "lastActive": "2026-10-21T06:52:01.801Z",
       "reads": 0,
+      "lastActive": "2026-10-21T06:52:01.801Z",
       "writes": 0
     },
     "channel_simu": {
-      "lastActive": "2026-10-21T06:52:01.801Z",
       "writes": 0,
+      "lastActive": "2026-10-21T06:52:01.801Z",
       "reads": 0
     },
     "room_bamep": {
-      "writes": 5352,
       "reads": 0,
-      "lastActive": "2026-10-21T09:40:43.561Z"
+      "writes": 6496,
+      "lastActive": "2026-10-21T10:59:55.949Z"
     },
     "channel_bamep_so2": {
-      "reads": 81,
-      "lastActive": "2026-10-21T09:36:11.479Z",
+      "lastActive": "2026-10-21T11:31:58.738Z",
+      "reads": 117,
       "writes": 1048
     },
     "channel_bam": {
@@ -55,14 +55,14 @@
       "reads": 0
     },
     "room_airy": {
-      "lastActive": "2026-10-10T09:15:25.191Z",
       "reads": 0,
-      "writes": 0
+      "writes": 0,
+      "lastActive": "2026-10-10T09:15:25.191Z"
     },
     "guest": {
+      "reads": 0,
       "writes": 0,
-      "lastActive": "2026-10-06T10:12:42.897Z",
-      "reads": 0
+      "lastActive": "2026-10-06T10:12:42.897Z"
     }
   }
 }
