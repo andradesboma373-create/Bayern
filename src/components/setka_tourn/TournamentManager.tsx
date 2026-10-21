@@ -253,37 +253,32 @@ export default function TournamentManager({ user }: { user: any }) {
       <div className="bg-[#12121a] p-6 rounded-3xl border border-white/5 min-h-[500px]">
         {currentStage?.type === 'swiss' && (
           <SwissStage 
-            stage={currentStage as any} 
             tournament={activeTournament} 
-            onUpdateTournament={handleUpdateActiveTournament} 
+            onUpdate={handleUpdateActiveTournament} 
           />
         )}
         {currentStage?.type === 'playoff' && (
           <SingleEliminationStage 
-            stage={currentStage as any} 
             tournament={activeTournament} 
-            onUpdateTournament={handleUpdateActiveTournament} 
+            onUpdate={handleUpdateActiveTournament} 
           />
         )}
         {currentStage?.type === 'gsl_groups' && (
           <GslGroupStage 
-            stage={currentStage as any} 
             tournament={activeTournament} 
-            onUpdateTournament={handleUpdateActiveTournament} 
+            onUpdate={handleUpdateActiveTournament} 
           />
         )}
         {currentStage?.type === 'qualifier' && (
           <QualifierStage 
-            stage={currentStage as any} 
             tournament={activeTournament} 
-            onUpdateTournament={handleUpdateActiveTournament} 
+            onUpdate={handleUpdateActiveTournament} 
           />
         )}
         {currentStage?.type === 'groups' && (
           <GroupStage 
-            stage={currentStage as any} 
             tournament={activeTournament} 
-            onUpdateTournament={handleUpdateActiveTournament} 
+            onUpdate={handleUpdateActiveTournament} 
           />
         )}
       </div>

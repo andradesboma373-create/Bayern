@@ -8,7 +8,7 @@ import { recordTournamentMatchResult } from '../../lib/tournamentMatchRecorder';
 interface Props {
   tournament: Tournament;
   onUpdate: (tournament: Tournament) => void;
-  onAdvanceToBracket: () => void;
+  onAdvanceToBracket?: () => void;
   onVetoMatch?: (t1: Team, t2: Team, matchInfo?: any) => void;
   isExporting?: boolean;
   isSwapMode?: boolean;
@@ -170,7 +170,7 @@ export default function GslGroupStage({
 
         {!isExporting && (
           <button
-            onClick={onAdvanceToBracket}
+            onClick={() => onAdvanceToBracket?.()}
             disabled={!isAllReady}
             className={`px-6 py-3.5 rounded-xl font-black text-sm uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
               isAllReady

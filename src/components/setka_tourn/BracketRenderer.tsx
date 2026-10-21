@@ -25,6 +25,17 @@ export default function BracketRenderer({
 }: Props) {
   const [hiddenRounds, setHiddenRounds] = React.useState<Record<number, boolean>>({});
 
+  const optimizeEmptyRounds = () => {
+    const updated: Record<number, boolean> = {};
+    safeRounds.forEach((round, rIdx) => {
+      const hasAnyTeams = Array.isArray(round) && round.some(m => m && (m.team1 || m.team2));
+      if (!hasAnyTeams && (safeRounds.length - rIdx) >= 2) {
+        updated[rIdx] = true;
+      }
+    });
+    setHiddenRounds(prev => ({ ...prev, ...updated }));
+  };
+
   const toggleRoundHidden = (rIdx: number, hide?: boolean) => {
     setHiddenRounds(prev => ({
       ...prev,
@@ -124,6 +135,14 @@ export default function BracketRenderer({
                     })}
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={optimizeEmptyRounds}
+                        className="text-xs font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg border border-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                        title="Автоматически скрыть пустые раунды без матчей"
+                    >
+                        <span>⚡</span> Оптимизировать пустые
+                    </button>
                     <button
                         type="button"
                         onClick={() => {

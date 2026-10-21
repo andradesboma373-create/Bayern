@@ -22,7 +22,7 @@ import {
 interface Props {
   tournament: Tournament;
   onUpdate: (updated: Tournament) => void;
-  onAdvanceToBracket: () => void;
+  onAdvanceToBracket?: () => void;
   isExporting?: boolean;
   isSwapMode?: boolean;
   onVetoMatch?: (t1: any, t2: any, matchInfo?: any) => void;
@@ -56,17 +56,18 @@ export default function SwissStage({
   isSwapMode,
   onVetoMatch
 }: Props) {
-  const swissRounds = tournament.swissRounds || [];
-  const winsToAdvance = tournament.settings.swissWinsToAdvance || 3;
-  const lossesToEliminate = tournament.settings.swissLossesToEliminate || 3;
+  const swissRounds = tournament?.swissRounds || [];
+  const settings = tournament?.settings || {};
+  const winsToAdvance = settings.swissWinsToAdvance || 3;
+  const lossesToEliminate = settings.swissLossesToEliminate || 3;
   const totalRounds = winsToAdvance + lossesToEliminate - 1; // 5 rounds for 3-3 system
-  const isLogosOnly = tournament.settings?.swissLogosOnly ?? false;
+  const isLogosOnly = settings.swissLogosOnly ?? false;
 
   const toggleLogosOnly = () => {
     onUpdate({
       ...tournament,
       settings: {
-        ...tournament.settings,
+        ...(tournament?.settings || {}),
         swissLogosOnly: !isLogosOnly
       }
     });
@@ -111,7 +112,8 @@ export default function SwissStage({
   // Compute full cumulative standings and qualification milestones
   const allTeamStats = useMemo<Map<string, TeamSwissStats>>(() => {
     const stats = new Map<string, TeamSwissStats>();
-    tournament.teams.forEach(t => {
+    const teams = tournament?.teams || [];
+    teams.forEach(t => {
       if (t.id !== 'BYE') {
         stats.set(t.id, { team: t, w: 0, l: 0, status: 'playing' });
       }
@@ -224,9 +226,9 @@ export default function SwissStage({
     allTeamStats.forEach(st => {
       if (st.status === 'qualified') qualifiedCount++;
     });
-    const targetAdvancing = Math.floor(tournament.teams.filter(t => t.id !== 'BYE').length / 2);
+    const targetAdvancing = Math.floor((tournament?.teams || []).filter(t => t.id !== 'BYE').length / 2);
     return (qualifiedCount >= targetAdvancing && isCurrentRoundFinished()) || swissRounds.length >= totalRounds;
-  }, [allTeamStats, tournament.teams, isCurrentRoundFinished, swissRounds.length, totalRounds]);
+  }, [allTeamStats, tournament?.teams, isCurrentRoundFinished, swissRounds.length, totalRounds]);
 
   // Match score updater
   const updateMatchScore = (rIdx: number, mIdx: number, teamNum: 1 | 2, score: number) => {
@@ -269,7 +271,7 @@ export default function SwissStage({
     const isRoundFinished = currentRound.every(rm => rm.winnerId !== null || (rm.team1?.id === 'BYE' || rm.team2?.id === 'BYE'));
     
     if (isRoundFinished && rIdx === swissRounds.length - 1 && swissRounds.length < totalRounds) {
-      const nextRound = generateNextSwissRound(tournament.teams, newRounds, winsToAdvance, lossesToEliminate);
+      const nextRound = generateNextSwissRound(tournament?.teams || [], newRounds, winsToAdvance, lossesToEliminate);
       if (nextRound && nextRound.length > 0) {
         updatedTournament.swissRounds = [...newRounds, nextRound];
       }
@@ -302,7 +304,7 @@ export default function SwissStage({
     const isRoundFinished = currentRound.every(rm => rm.winnerId !== null || (rm.team1?.id === 'BYE' || rm.team2?.id === 'BYE'));
     
     if (isRoundFinished && rIdx === swissRounds.length - 1 && swissRounds.length < totalRounds) {
-      const nextRound = generateNextSwissRound(tournament.teams, newRounds, winsToAdvance, lossesToEliminate);
+      const nextRound = generateNextSwissRound(tournament?.teams || [], newRounds, winsToAdvance, lossesToEliminate);
       if (nextRound && nextRound.length > 0) {
         updatedTournament.swissRounds = [...newRounds, nextRound];
       }
@@ -466,13 +468,13 @@ export default function SwissStage({
   const handleUndoLastRound = () => handleUndoRounds(1);
 
   const handleGenerateNextRound = () => {
-    const nextRound = generateNextSwissRound(tournament.teams, swissRounds, winsToAdvance, lossesToEliminate);
+    const nextRound = generateNextSwissRound(tournament?.teams || [], swissRounds, winsToAdvance, lossesToEliminate);
     if (nextRound && nextRound.length > 0) {
       onUpdate({ ...tournament, swissRounds: [...swissRounds, nextRound] });
     }
   };
 
-  const activeTeamsCount = tournament.teams.filter(t => t.id !== 'BYE').length;
+  const activeTeamsCount = (tournament?.teams || []).filter(t => t.id !== 'BYE').length;
   const targetAdvancingCount = Math.floor(activeTeamsCount / 2);
 
   // Generate structure config for each round column (0 to totalRounds - 1)
@@ -902,7 +904,7 @@ export default function SwissStage({
 
           {!isExporting && (
             <button
-              onClick={onAdvanceToBracket}
+              onClick={() => onAdvanceToBracket?.()}
               disabled={!isStageFullyComplete}
               className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
                 isStageFullyComplete

@@ -8,18 +8,19 @@ import { recordTournamentMatchResult } from '../../lib/tournamentMatchRecorder';
 interface Props {
   tournament: Tournament;
   onUpdate: (tournament: Tournament) => void;
-  onAdvanceToBracket: () => void;
+  onAdvanceToBracket?: () => void;
   onVetoMatch?: (t1: any, t2: any, matchInfo?: any) => void;
   isExporting?: boolean;
   isSwapMode?: boolean;
 }
 
 export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, onVetoMatch, isExporting, isSwapMode }: Props) {
-  const settings = tournament.settings;
-  const groups = tournament.groups || [];
+  const settings = tournament?.settings || {};
+  const groups = tournament?.groups || [];
+  const teams = tournament?.teams || [];
 
   const handleSwapTeam = (groupId: string, matchId: string, teamNum: 1 | 2, teamId: string) => {
-    let team = tournament.teams.find(t => t.id === teamId) || null;
+    let team = teams.find(t => t.id === teamId) || null;
     if (teamId === 'BYE') team = { id: 'BYE', name: 'BYE' };
 
     const newGroups = groups.map(g => {
@@ -141,7 +142,7 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-black">Групповой Этап</h3>
         <button 
-            onClick={onAdvanceToBracket}
+            onClick={() => onAdvanceToBracket?.()}
             disabled={!allMatchesFinished}
             className="bg-[#ff8f00] text-black px-6 py-2 rounded-xl font-bold uppercase disabled:opacity-30"
         >

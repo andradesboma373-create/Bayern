@@ -45,6 +45,56 @@ export function normalizeTournament(t: any): any {
     res.settings = { ...res.settings };
   }
 
+  if (!res.stages || !Array.isArray(res.stages) || res.stages.length === 0) {
+    if (res.bracketRounds && Array.isArray(res.bracketRounds) && res.bracketRounds.length > 0) {
+      res.stages = [
+        {
+          id: `stage_pl_${Date.now()}`,
+          name: 'Play-off Bracket',
+          type: 'playoff',
+          bracketRounds: res.bracketRounds,
+          losersBracketRounds: res.losersBracketRounds,
+          grandFinal: res.grandFinal,
+          teams: res.teams || []
+        }
+      ];
+    } else {
+      const defaultTeams = [
+        { id: 't1', name: 'NAVI', seed: 1 },
+        { id: 't2', name: 'FaZe', seed: 2 },
+        { id: 't3', name: 'Spirit', seed: 3 },
+        { id: 't4', name: 'Vitality', seed: 4 },
+        { id: 't5', name: 'G2', seed: 5 },
+        { id: 't6', name: 'MOUZ', seed: 6 },
+        { id: 't7', name: 'VP', seed: 7 },
+        { id: 't8', name: 'Astralis', seed: 8 }
+      ];
+      res.stages = [
+        {
+          id: `stage_auto_${Date.now()}`,
+          name: 'Play-off Bracket',
+          type: 'playoff',
+          teams: defaultTeams,
+          bracketRounds: [
+            [
+              { id: 'm1', team1: defaultTeams[0], team2: defaultTeams[7], score1: 0, score2: 0, winnerId: null },
+              { id: 'm2', team1: defaultTeams[3], team2: defaultTeams[4], score1: 0, score2: 0, winnerId: null },
+              { id: 'm3', team1: defaultTeams[1], team2: defaultTeams[6], score1: 0, score2: 0, winnerId: null },
+              { id: 'm4', team1: defaultTeams[2], team2: defaultTeams[5], score1: 0, score2: 0, winnerId: null }
+            ],
+            [
+              { id: 'm5', team1: null, team2: null, score1: 0, score2: 0, winnerId: null },
+              { id: 'm6', team1: null, team2: null, score1: 0, score2: 0, winnerId: null }
+            ],
+            [
+              { id: 'm7', team1: null, team2: null, score1: 0, score2: 0, winnerId: null }
+            ]
+          ]
+        }
+      ];
+    }
+  }
+
   const br = ensureArrayOfRounds(res.bracketRounds, res.bracketRounds_json);
   if (br) res.bracketRounds = br;
 

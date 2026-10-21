@@ -95,7 +95,7 @@ export default function QualifierStage({
     const bracket = brackets[qualIdx];
     if (!bracket || !Array.isArray(bracket) || bracket.length === 0) return [];
 
-    return getBracketQualifiedTeams(bracket, advancePerQual);
+    return getBracketQualifiedTeams(bracket);
   };
 
   const getAllQualifiedSoFar = (): Team[] => {
