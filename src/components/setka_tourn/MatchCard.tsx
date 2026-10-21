@@ -26,6 +26,8 @@ interface Props {
     btnStyle?: string;
     bracketMode?: 'standard' | 'realtime';
     onToggleImportance?: (type: 'winners' | 'losers' | 'gf', rIdx: number, mIdx: number) => void;
+    isLogosOnly?: boolean;
+    game?: string;
 }
 
 export default function MatchCard({
@@ -49,7 +51,9 @@ export default function MatchCard({
     cardThemeColor = '#ff8f00',
     btnStyle = 'gradient',
     bracketMode = 'standard',
-    onToggleImportance
+    onToggleImportance,
+    isLogosOnly = false,
+    game
 }: Props) {
     if (!match) {
         return <div className="flex-1 min-h-[140px]" />;
@@ -61,7 +65,7 @@ export default function MatchCard({
         return tm.id || tm.name || '';
     };
 
-    const getTeamName = (tm: any, fallback = 'TBD'): string => {
+    const getTeamName = (tm: any, fallback = '?'): string => {
         if (!tm) return fallback;
         if (typeof tm === 'string') return tm;
         return tm.name || tm.teamName || tm.title || fallback;
@@ -154,162 +158,156 @@ export default function MatchCard({
                 )}
 
                 <div className="flex flex-col gap-3">
-                    {/* Team 1 */}
-                    <div 
-                        className={`${
-                            isT1Winner 
-                                ? boxCls.selectedTeamRow 
-                                : hasWinner 
-                                    ? boxCls.nonSelectedTeamRow 
-                                    : boxCls.innerTeamRow
-                        }`}
-                        style={isT1Winner ? selectedCustomStyle : undefined}
-                    >
-                        <div className="flex items-center gap-3">
-                            <TeamLogo teamName={t1Name} logoUrl={getTeamLogo(match.team1)} sizeClassName="w-6 h-6" />
-                            {!hasWinner && !isExporting && isSwapMode && onSwapTeam && allTeams ? (
-                                <select
-                                    value={t1Id}
-                                    onChange={(e) => onSwapTeam(bracketType, rIdx, mIdx, 1, e.target.value)}
-                                    className="bg-zinc-950 text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate rounded border border-white/10 px-1"
-                                >
-                                    <option value="" className="bg-[#12121a]">TBD</option>
-                                    <option value="BYE" className="bg-[#12121a] text-emerald-400">BYE</option>
-                                    {allTeams.map(t => (
-                                        <option key={t.id} value={t.id} className="bg-[#12121a] text-white">
-                                            {t.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <span 
-                                    className={`truncate max-w-[120px] ${
-                                        isT1Winner 
-                                            ? boxCls.winnerText 
-                                            : hasWinner 
-                                                ? boxCls.loserText 
-                                                : boxCls.defaultText
-                                    }`}
-                                    style={isT1Winner ? winnerCustomTextStyle : undefined}
-                                >
-                                    {t1Name}
-                                </span>
-                            )}
-                        </div>
-                        {match.team1 && match.team2 && !match.winnerId && t1Id !== 'BYE' && t2Id !== 'BYE' && bracketMode !== 'realtime' && (
-                            <input 
-                                type="number" 
-                                className={boxCls.scoreInput} 
-                                placeholder="0" 
-                                value={match.score1 === 0 ? 0 : (match.score1 ?? '')}
-                                onChange={(e) => onUpdateScore(bracketType, rIdx, mIdx, 1, parseInt(e.target.value) || 0)} 
-                            />
-                        )}
-                        {match.winnerId && t1Id !== 'BYE' && t2Id !== 'BYE' && (
-                            <span className="font-mono font-black text-lg" style={isCustomAccent && isT1Winner ? { color: accentColor } : undefined}>
-                                {match.score1 ?? 0}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Team 2 */}
-                    <div 
-                        className={`${
-                            isT2Winner 
-                                ? boxCls.selectedTeamRow 
-                                : hasWinner 
-                                    ? boxCls.nonSelectedTeamRow 
-                                    : boxCls.innerTeamRow
-                        }`}
-                        style={isT2Winner ? selectedCustomStyle : undefined}
-                    >
-                        <div className="flex items-center gap-3">
-                            <TeamLogo teamName={t2Name} logoUrl={getTeamLogo(match.team2)} sizeClassName="w-6 h-6" />
-                            {!hasWinner && !isExporting && isSwapMode && onSwapTeam && allTeams ? (
-                                <select
-                                    value={t2Id}
-                                    onChange={(e) => onSwapTeam(bracketType, rIdx, mIdx, 2, e.target.value)}
-                                    className="bg-zinc-950 text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate rounded border border-white/10 px-1"
-                                >
-                                    <option value="" className="bg-[#12121a]">TBD</option>
-                                    <option value="BYE" className="bg-[#12121a] text-emerald-400">BYE</option>
-                                    {allTeams.map(t => (
-                                        <option key={t.id} value={t.id} className="bg-[#12121a] text-white">
-                                            {t.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <span 
-                                    className={`truncate max-w-[120px] ${
-                                        isT2Winner 
-                                            ? boxCls.winnerText 
-                                            : hasWinner 
-                                                ? boxCls.loserText 
-                                                : boxCls.defaultText
-                                    }`}
-                                    style={isT2Winner ? winnerCustomTextStyle : undefined}
-                                >
-                                    {t2Name}
-                                </span>
-                            )}
-                        </div>
-                        {match.team1 && match.team2 && !match.winnerId && t1Id !== 'BYE' && t2Id !== 'BYE' && bracketMode !== 'realtime' && (
-                            <input 
-                                type="number" 
-                                className={boxCls.scoreInput} 
-                                placeholder="0" 
-                                value={match.score2 === 0 ? 0 : (match.score2 ?? '')}
-                                onChange={(e) => onUpdateScore(bracketType, rIdx, mIdx, 2, parseInt(e.target.value) || 0)} 
-                            />
-                        )}
-                        {match.winnerId && t1Id !== 'BYE' && t2Id !== 'BYE' && (
-                            <span className="font-mono font-black text-lg" style={isCustomAccent && isT2Winner ? { color: accentColor } : undefined}>
-                                {match.score2 ?? 0}
-                            </span>
-                        )}
-                    </div>
-                    
-                    
-                    {/* Play / Veto Simulation Button or Confirm Button */}
-                    {match.team1 && match.team2 && !match.winnerId && match.team1.id !== 'BYE' && match.team2.id !== 'BYE' && !isExporting && (
-                        bracketMode === 'realtime' ? (
-                            onVetoMatch ? (
-                                <button 
-                                    onClick={() => onVetoMatch(match.team1!, match.team2!, { bracketType, rIdx, mIdx, matchId: match.id, stage: 'playoff' })} 
-                                    className="w-full mt-2 bg-purple-600 hover:bg-purple-500 text-white border border-purple-400 rounded-lg py-2 px-3 text-xs font-black uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(168,85,247,0.4)] flex items-center justify-center gap-1.5 cursor-pointer"
-                                >
-                                    🎮 Сыграть Матч (Симуляция)
-                                </button>
-                            ) : null
-                        ) : (
-                            <div className="flex flex-col gap-1.5 mt-2">
-                                <button 
-                                    onClick={() => {
-                                        if (match.score1 === match.score2) {
-                                            if (!window.confirm("У вас зафиксирована ничья. В плей-офф ничьи обычно не допускаются. Вы уверены, что хотите завершить матч? (Победитель может быть не определен корректно)")) {
-                                                return;
-                                            }
-                                        }
-                                        onAdvanceWinner(bracketType, rIdx, mIdx);
-                                    }} 
-                                    className={boxCls.btnConfirm}
-                                >
-                                    Завершить матч
-                                </button>
-                                {onVetoMatch && (
-                                    <button 
-                                        type="button"
-                                        onClick={() => onVetoMatch(match.team1!, match.team2!, { bracketType, rIdx, mIdx, matchId: match.id, stage: 'playoff' })} 
-                                        className="w-full bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-lg py-1.5 px-2 text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
-                                        title="Сыграть полноценный матч через симулятор с пиком карт и раундами"
+                                    {/* Team 1 */}
+                                    <div 
+                                        className={`flex items-center ${isLogosOnly ? 'justify-start w-fit px-1' : 'gap-1.5 flex-1 min-w-0 pr-1'} cursor-pointer transition-all ${
+                                            hasWinner && !isT1Winner ? 'opacity-35 hover:opacity-75 grayscale-[40%]' : ''
+                                        }`}
+                                        title={getTeamName(match.team1) ? `${getTeamName(match.team1)} (Нажмите для победы)` : 'Нажмите для победы'}
+                                        onClick={() => !isExporting && match.team1 && onAdvanceWinner(bracketType, rIdx, mIdx)}
                                     >
-                                        🎮 Или сыграть матч в симуляторе
-                                    </button>
-                                )}
-                            </div>
-                        )
-                    )}
+                                        <div className={`transition-all rounded-md shrink-0 ${isT1Winner ? 'p-0.5 bg-emerald-500/20 ring-2 ring-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : ''}`}>
+                                            <TeamLogo game={game as any} teamName={getTeamName(match.team1)} logoUrl={getTeamLogo(match.team1)} sizeClassName="w-5 h-5" />
+                                        </div>
+                                        {!isExporting && isSwapMode && onSwapTeam && allTeams ? (
+                                            <select
+                                                value={t1Id}
+                                                onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    onSwapTeam(bracketType, rIdx, mIdx, 1, e.target.value);
+                                                }}
+                                                className="bg-zinc-950 text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate rounded border border-white/10 px-1"
+                                            >
+                                                <option value="" className="bg-[#12121a]">TBD</option>
+                                                <option value="BYE" className="bg-[#12121a] text-emerald-400">BYE</option>
+                                                {allTeams.map(t => (
+                                                    <option key={t.id} value={t.id} className="bg-[#12121a] text-white">
+                                                        {t.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <span 
+                                                className={`truncate max-w-[120px] ${
+                                                    isT1Winner 
+                                                        ? boxCls.winnerText 
+                                                        : hasWinner 
+                                                            ? boxCls.loserText 
+                                                            : boxCls.defaultText
+                                                }`}
+                                                style={isT1Winner ? winnerCustomTextStyle : undefined}
+                                            >
+                                                {getTeamName(match.team1) === 'TBD' || !getTeamName(match.team1) || getTeamName(match.team1) === '?' ? 'TBD' : getTeamName(match.team1)}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Center Capsule (Score or VS) */}
+                                    <div className="shrink-0 flex items-center justify-center px-1">
+                                        {hasWinner ? (
+                                            <div
+                                                onClick={() => !isExporting && onRevertWinner?.(bracketType, rIdx, mIdx)}
+                                                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/90 border border-white/25 text-xs font-mono font-black cursor-pointer hover:border-rose-500/60 hover:text-rose-400 transition-all"
+                                                title="Нажмите, чтобы сбросить результат"
+                                            >
+                                                <span className={isT1Winner ? 'text-emerald-400 font-bold' : 'text-white/50'}>
+                                                    {match.score1 !== undefined ? match.score1 : '-'}
+                                                </span>
+                                                <span className="text-white/40 text-[10px]">:</span>
+                                                <span className={isT2Winner ? 'text-emerald-400 font-bold' : 'text-white/50'}>
+                                                    {match.score2 !== undefined ? match.score2 : '-'}
+                                                </span>
+                                            </div>
+                                        ) : isExporting ? (
+                                            <div className="flex items-center justify-center px-2 py-0.5 rounded-full bg-black/60 border border-white/10 text-white/50 font-mono font-bold text-[10px]">
+                                                - -
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1">
+                                                <input
+                                                    type="number"
+                                                    className="w-6 h-6 text-center rounded bg-black/60 text-white font-mono font-bold text-xs border border-white/10 focus:border-[#ff8f00] outline-none [appearance:textfield]"
+                                                    placeholder="-"
+                                                    value={match.score1 === undefined ? '' : match.score1}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                                        onUpdateScore(bracketType, rIdx, mIdx, 1, isNaN(val) ? 0 : val);
+                                                    }}
+                                                />
+                                                <span className="text-white/30 text-[10px] font-bold">:</span>
+                                                <input
+                                                    type="number"
+                                                    className="w-6 h-6 text-center rounded bg-black/60 text-white font-mono font-bold text-xs border border-white/10 focus:border-[#ff8f00] outline-none [appearance:textfield]"
+                                                    placeholder="-"
+                                                    value={match.score2 === undefined ? '' : match.score2}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                                        onUpdateScore(bracketType, rIdx, mIdx, 2, isNaN(val) ? 0 : val);
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Team 2 (Right) */}
+                                    <div 
+                                        className={`flex items-center ${isLogosOnly ? 'justify-end w-fit px-1' : 'justify-end gap-1.5 flex-1 min-w-0 pl-1'} cursor-pointer transition-all ${
+                                            hasWinner && !isT2Winner ? 'opacity-35 hover:opacity-75 grayscale-[40%]' : ''
+                                        }`}
+                                        title={getTeamName(match.team2) ? `${getTeamName(match.team2)} (Нажмите для победы)` : 'Нажмите для победы'}
+                                        onClick={() => !isExporting && match.team2 && onAdvanceWinner(bracketType, rIdx, mIdx)}
+                                    >
+                                        {!isExporting && isSwapMode && onSwapTeam && allTeams ? (
+                                            <select
+                                                value={t2Id}
+                                                onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    onSwapTeam(bracketType, rIdx, mIdx, 2, e.target.value);
+                                                }}
+                                                className="bg-zinc-950 text-white font-bold text-sm outline-none cursor-pointer w-[120px] truncate rounded border border-white/10 px-1"
+                                            >
+                                                <option value="" className="bg-[#12121a]">TBD</option>
+                                                <option value="BYE" className="bg-[#12121a] text-emerald-400">BYE</option>
+                                                {allTeams.map(t => (
+                                                    <option key={t.id} value={t.id} className="bg-[#12121a] text-white">
+                                                        {t.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <span 
+                                                className={`truncate max-w-[120px] ${
+                                                    isT2Winner 
+                                                        ? boxCls.winnerText 
+                                                        : hasWinner 
+                                                            ? boxCls.loserText 
+                                                            : boxCls.defaultText
+                                                }`}
+                                                style={isT2Winner ? winnerCustomTextStyle : undefined}
+                                            >
+                                                {getTeamName(match.team2) === 'TBD' || !getTeamName(match.team2) || getTeamName(match.team2) === '?' ? 'TBD' : getTeamName(match.team2)}
+                                            </span>
+                                        )}
+                                        <div className={`transition-all rounded-md shrink-0 ${isT2Winner ? 'p-0.5 bg-emerald-500/20 ring-2 ring-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : ''}`}>
+                                            <TeamLogo game={game as any} teamName={getTeamName(match.team2)} logoUrl={getTeamLogo(match.team2)} sizeClassName="w-5 h-5" />
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Hover Actions Bar */}
+                                    {!hasWinner && !isExporting && (
+                                        <div className="absolute -bottom-2.5 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 z-20">
+                                            {bracketMode === 'realtime' && onVetoMatch && match.team1 && match.team2 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); onVetoMatch(match.team1!, match.team2!, { bracketType, rIdx, mIdx, matchId: match.id, stage: 'playoff' })}}
+                                                    className="bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-md uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+                                                >
+                                                    🎮 Veto
+                                                </button>
+                                            )}
+                                        </div>
+                                    )
+                                }
                 </div>
             </div>
 

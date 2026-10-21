@@ -17,11 +17,14 @@ interface Props {
   allTeams?: Team[];
   isExporting?: boolean;
   isSwapMode?: boolean;
+  customBg?: string;
+  isLogosOnly?: boolean;
+  game?: string;
 }
 
 export default function BracketRenderer({
   title, rounds, bracketType, onUpdateScore, onAdvanceWinner, onVetoMatch,
-  boxStyle, cardThemeColor, btnStyle, bracketMode, onSwapTeam, allTeams, isExporting, isSwapMode
+  boxStyle, cardThemeColor, btnStyle, bracketMode, onSwapTeam, allTeams, isExporting, isSwapMode, customBg, isLogosOnly, game
 }: Props) {
   const [hiddenRounds, setHiddenRounds] = React.useState<Record<number, boolean>>({});
 
@@ -169,7 +172,7 @@ export default function BracketRenderer({
             </div>
         )}
 
-        <div className="flex gap-0 overflow-x-auto overflow-y-auto items-stretch w-full bg-black/20 p-6 rounded-2xl border border-white/5" style={{ minHeight: '300px' }}>
+        <div className={`flex gap-0 overflow-x-auto overflow-y-auto items-stretch w-full p-2 ${customBg ? 'bg-transparent' : 'bg-black/20'}`} style={{ minHeight: '300px' }}>
             {safeRounds.map((round, rIdx) => {
                 const safeMatches = Array.isArray(round) ? round : [];
                 const isHidden = !!hiddenRounds[rIdx];
@@ -258,30 +261,32 @@ export default function BracketRenderer({
                     </div>
                     <div className="flex flex-col flex-1">
                         {safeMatches.map((match, mIdx) => {
-                            if (!match) return null;
+                            const matchToRender = match || { id: `placeholder-${rIdx}-${mIdx}`, team1: null, team2: null, score1: 0, score2: 0, winnerId: null };
                             return (
-                            <MatchCard
-                                key={match.id || `m-${bracketType}-${rIdx}-${mIdx}`}
-                                match={match}
-                                bracketType={bracketType}
-                                rIdx={rIdx}
-                                mIdx={mIdx}
-                                onUpdateScore={onUpdateScore}
-                                onAdvanceWinner={onAdvanceWinner}
-                                onVetoMatch={onVetoMatch}
-                                isFinal={rIdx === safeRounds.length - 1}
-                                isTop={mIdx % 2 === 0}
-                                hasInConnector={rIdx > 0}
-                                hasOutConnector={rIdx < safeRounds.length - 1}
-                                boxStyle={boxStyle}
-                                cardThemeColor={cardThemeColor}
-                                btnStyle={btnStyle}
-                                bracketMode={bracketMode}
-                                onSwapTeam={onSwapTeam}
-                                allTeams={allTeams}
-                                isExporting={isExporting}
-                                isSwapMode={isSwapMode}
-                            />
+                                <MatchCard
+                                    key={matchToRender.id || `m-${bracketType}-${rIdx}-${mIdx}`}
+                                    match={matchToRender as Match}
+                                    bracketType={bracketType}
+                                    rIdx={rIdx}
+                                    mIdx={mIdx}
+                                    onUpdateScore={onUpdateScore}
+                                    onAdvanceWinner={onAdvanceWinner}
+                                    onVetoMatch={onVetoMatch}
+                                    isFinal={rIdx === safeRounds.length - 1}
+                                    isTop={mIdx % 2 === 0}
+                                    hasInConnector={rIdx > 0}
+                                    hasOutConnector={rIdx < safeRounds.length - 1}
+                                    boxStyle={boxStyle}
+                                    cardThemeColor={cardThemeColor}
+                                    btnStyle={btnStyle}
+                                    bracketMode={bracketMode}
+                                    onSwapTeam={onSwapTeam}
+                                    allTeams={allTeams}
+                                    isExporting={isExporting}
+                                    isSwapMode={isSwapMode}
+                                    isLogosOnly={isLogosOnly}
+                                    game={game}
+                                />
                             );
                         })}
                     </div>

@@ -344,7 +344,7 @@ export default function QualifierStage({
   return (
     <div className="w-full flex flex-col gap-8">
       {/* Qualifiers Navigation Tabs */}
-      <div className="flex items-center gap-3 overflow-x-auto pb-3 custom-scrollbar">
+      <div className="no-export flex items-center gap-3 overflow-x-auto pb-3 custom-scrollbar">
         {Array.from({ length: numQuals }).map((_, i) => {
           const isGenerated = brackets[i] && Array.isArray(brackets[i]) && brackets[i].length > 0;
           const qualWinners = getQualifiedTeams(i);
@@ -382,9 +382,9 @@ export default function QualifierStage({
       </div>
 
       {/* Main Playoff Bracket Container */}
-      <div className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6 sm:p-8 backdrop-blur-md shadow-2xl">
+      <div className="w-full">
         {/* Header toolbar */}
-        <div className="flex items-center justify-between mb-8 flex-wrap gap-4 border-b border-white/10 pb-6">
+        <div className="no-export flex items-center justify-between mb-8 flex-wrap gap-4 border-b border-white/10 pb-6">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-2xl">🏆</span>
@@ -462,7 +462,7 @@ export default function QualifierStage({
           <div className="space-y-8">
             {/* Qualified Teams Banner - only when this qual is ACTUALLY WON */}
             {qualifiedThisQual.length >= advancePerQual && (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 animate-in fade-in slide-in-from-top-4 duration-500 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="no-export bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 animate-in fade-in slide-in-from-top-4 duration-500 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h4 className="text-emerald-400 font-black uppercase text-xs tracking-widest mb-3 flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-400" /> 
@@ -685,6 +685,7 @@ export default function QualifierStage({
                           isSwapMode={isSwapMode}
                           onSwapTeam={handleSwapTeam}
                           allTeams={tournament.teams}
+                          game={tournament.game}
                         />
                       ))}
                     </div>
@@ -723,7 +724,7 @@ export default function QualifierStage({
       </div>
 
       {/* Global Summary of Qualified Teams & Remaining Teams */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="no-export grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-zinc-900/60 border border-zinc-800 p-6 sm:p-8 rounded-3xl backdrop-blur-md">
           <div className="flex items-center justify-between mb-5">
             <h4 className="text-zinc-400 font-black uppercase text-xs tracking-widest flex items-center gap-2">

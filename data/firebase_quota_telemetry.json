@@ -1,17 +1,17 @@
 {
   "date": "2026-10-21",
-  "readsToday": 2288,
-  "writesToday": 7480,
+  "readsToday": 2498,
+  "writesToday": 8977,
   "maxReads": 50000,
   "maxWrites": 20000,
-  "remainingReads": 47712,
-  "remainingWrites": 12520,
-  "percentReads": 4.58,
-  "percentWrites": 37.4,
-  "percentReadsFormatted": "4.58%",
-  "percentWritesFormatted": "37.40%",
-  "lastUpdated": "2026-10-21T12:25:54.054Z",
-  "lastSyncWithFirestore": "2026-10-21T12:25:26.142Z",
+  "remainingReads": 47502,
+  "remainingWrites": 11023,
+  "percentReads": 5,
+  "percentWrites": 44.89,
+  "percentReadsFormatted": "5.00%",
+  "percentWritesFormatted": "44.89%",
+  "lastUpdated": "2026-10-21T13:42:04.290Z",
+  "lastSyncWithFirestore": "2026-10-21T13:41:09.544Z",
   "firestoreConnected": true,
   "firestoreDatabaseId": "ai-studio-matchsimulator-cf882484-249e-4726-9c8b-046071d33a59",
   "projectId": "conductive-state-tf6jr",
@@ -25,9 +25,9 @@
   },
   "roomActivity": {
     "channel_bamep_cs2": {
-      "writes": 0,
-      "lastActive": "2026-10-21T12:25:54.054Z",
-      "reads": 1356
+      "lastActive": "2026-10-21T13:41:52.465Z",
+      "reads": 1524,
+      "writes": 0
     },
     "channel_airy": {
       "reads": 0,
@@ -40,9 +40,9 @@
       "reads": 0
     },
     "room_bamep": {
-      "reads": 0,
-      "writes": 6496,
-      "lastActive": "2026-10-21T10:59:55.949Z"
+      "writes": 7930,
+      "lastActive": "2026-10-21T12:53:08.953Z",
+      "reads": 0
     },
     "channel_bamep_so2": {
       "lastActive": "2026-10-21T11:31:58.738Z",
@@ -50,9 +50,9 @@
       "writes": 1048
     },
     "channel_bam": {
-      "writes": 0,
       "lastActive": "2026-10-03T10:14:13.399Z",
-      "reads": 0
+      "reads": 0,
+      "writes": 0
     },
     "room_airy": {
       "reads": 0,
@@ -60,9 +60,14 @@
       "lastActive": "2026-10-10T09:15:25.191Z"
     },
     "guest": {
+      "lastActive": "2026-10-06T10:12:42.897Z",
       "reads": 0,
-      "writes": 0,
-      "lastActive": "2026-10-06T10:12:42.897Z"
+      "writes": 0
+    },
+    "default-room": {
+      "reads": 0,
+      "writes": 30,
+      "lastActive": "2026-10-21T13:42:04.259Z"
     }
   }
 }

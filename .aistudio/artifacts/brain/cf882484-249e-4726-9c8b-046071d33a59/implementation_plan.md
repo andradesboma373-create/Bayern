@@ -1,40 +1,22 @@
-# Implementation Plan: Card-by-Card Series Simulation
+# Implementation Plan - Tournament & UI Fixes
 
-## Goal
-Replace the "Match Stitcher" (automatic series generation) with a manual, step-by-step card-by-card simulation system for BO1, BO3, and BO5, allowing for re-simulation of specific maps.
+This plan outlines the fixes for the reported issues in the tournament bracket, team logos, and map backgrounds.
 
-## Plan
+## 1. Fix Reference Errors
+- [x] Fix `ReferenceError: hue is not defined` in `logoMatcher.ts`.
+- [x] Fix `ReferenceError: RotateCcw is not defined` in `TournamentManager.tsx`.
+- [x] Verified build success.
 
-### 1. State Management (`Simulator.tsx`)
-*   Replace/Refactor `result` state to `seriesMatch`.
-*   Add `currentMapIndex` state to track the active map in the series.
-*   Add `seriesFinished` boolean state.
-*   Map-by-map results will be stored within the `seriesMatch.maps` array.
+## 2. Tournament Bracket Improvements
+- [x] **Saving Grid**: Moved the `id="tournament-stage-container"` to exclude the top menu bar, ensuring it's not captured during export.
+- [x] **TBD Styling**: Updated `MatchCard.tsx` and `TeamLogo.tsx` to use "TBD" and dark backgrounds for empty slots, removing green backgrounds as requested.
+- [x] **Undo Button**: Ensured the Undo button (RotateCcw) is correctly implemented and visible when history exists.
+- [x] **Game Propagation**: Passed the `game` prop through all stages (`SingleElimination`, `Swiss`, `GSL`, `Qualifier`) to `MatchCard` and `TeamLogo` for correct official logo matching.
 
-### 2. Logic Refactoring
-*   **Initialization**: When "Start Series" is clicked, generate the base `seriesMatch` structure (format, map pool, teams) but with map results initialized as "not played".
-*   **Step Simulation (`simulateNextMap`)**:
-    *   Run only the single map simulation based on the `currentMapIndex`.
-    *   Update `seriesMatch.maps[currentMapIndex]` with results.
-    *   Update series score.
-    *   Check for series completion (BO3 -> 2 maps, BO5 -> 3 maps).
-*   **Re-simulation (`resimulateMap`)**:
-    *   Keep `currentMapIndex` the same.
-    *   Re-run single map simulation for this index.
-    *   **Invalidation**: If a map *before* the last played map is re-simulated, future maps must be reset to "not played" because they depend on the series state.
-*   **Persistence**: Update the storage mechanism to save the state of the series and map results in Firebase and localStorage whenever a map is completed or re-simulated.
+## 3. Map Background Fixes
+- [x] **Match Details**: Updated `MatchDetails.tsx` to use the `getMapImageUrl` utility for both the main header background and map thumbnails.
+- [x] **Path Consistency**: Ensured that the `game` mode is correctly passed to the utility to resolve paths like `/maps/cs2/...` or `/maps/so2/...`.
 
-### 3. UI Changes
-*   Remove Match Stitcher UI.
-*   Add a series overview dashboard (e.g., "Series: 1-0", Map list with status badges).
-*   Buttons: "Simulate Map X", "Re-simulate Map X", "Next Map".
-
-## Risks
-*   Complexity in invalidating future maps upon re-simulating previous maps.
-*   Potential state desync if Firebase sync fails.
-*   Preserving all existing tournament logic.
-
-## Verification
-1. Verify BO1 completion.
-2. Verify BO3 transition after 2nd map.
-3. Verify re-simulation of Map 1 in BO3 resets Map 2.
+## 4. Verification
+- [x] Run `compile_applet` to ensure no syntax or reference errors.
+- [x] Verify visual changes in the bracket view.

@@ -1,4 +1,5 @@
 const LOGO_MAP: Record<string, string> = {
+  // CS2 / General
   'natus vincere': '/logos/natus vincere.svg',
   'navi': '/logos/natus vincere.svg',
   'faze': '/logos/faze.webp',
@@ -51,24 +52,69 @@ const LOGO_MAP: Record<string, string> = {
   'ence': '/logos/ence.webp',
   'sashi': '/logos/sashi.webp',
   'sangal': '/logos/sanghal.webp',
+  '100 thieves': '/logos/100 thieves.webp',
+  '100t': '/logos/100 thieves.webp',
+  'absolute': '/logos/absolute.svg',
+  'acend': '/logos/acend.webp',
+  'alliance': '/logos/alliance.webp',
+  'alpha7': '/logos/alpha7.svg',
+  'anable': '/logos/anable.svg',
+  'bbl': '/logos/bbl esports.jpg',
+  'bc.game': '/logos/bc game.jpg',
+  'berser': '/logos/berser.svg',
+  'bullet flame': '/logos/bullet flame.svg',
+  'cybershoke': '/logos/cybershoke.svg',
+  'cyberhero': '/logos/cyberhero.svg',
+  'dplus': '/logos/dplus kia.webp',
+  'eyeballers': '/logos/eyeballers.webp',
+  'forze': '/logos/forze.webp',
+  'heretics': '/logos/heretics.webp',
+  'hotu': '/logos/hotu.webp',
+  'inner circle': '/logos/inner circle.webp',
+  'k27': '/logos/k27.webp',
+  'legacy': '/logos/legacy.webp',
+  'monte': '/logos/monte.webp',
+  'nemesis': '/logos/nemesis.webp',
+  'sharks': '/logos/sharks.webp',
+  'falcons': '/logos/team falcons.webp',
+  'team falcons': '/logos/team falcons.webp',
+  'tyloo': '/logos/tyloo.svg',
+  
+  // Standoff 2 / Mobile
+  'heavenly spirits': '/logos/heavenly spirits.svg',
+  'shadow tigers': '/logos/shadow tigers.svg',
+  'saints': '/logos/saints.svg',
+  'horizon': '/logos/horizon.png',
+  'hzn': '/logos/horizon.png',
+  'rcb': '/logos/rcb.svg',
+  'rgc': '/logos/rgc.svg',
+  'rgg': '/logos/rgg.svg',
+  'st': '/logos/ST.svg',
+  'noway': '/logos/NoWay.svg',
 };
 
-function generateInitialsLogo(teamName: string): string {
+export function generateInitialsLogo(teamName: string): string {
   const clean = teamName.trim();
-  const initials = clean
+  let initials = clean
     .split(/\s+/)
     .map(w => w.charAt(0))
     .join('')
     .substring(0, 3)
     .toUpperCase() || '?';
 
+  if (initials === 'TBD') initials = '?';
+
   let hash = 0;
   for (let i = 0; i < clean.length; i++) {
     hash = clean.charCodeAt(i) + ((hash << 5) - hash);
   }
+  
+  const isTBD = initials === '?' || initials === 'TBD' || clean.toUpperCase() === 'TBD';
   const hue = Math.abs(hash) % 360;
-  const color1 = `hsl(${hue}, 85%, 48%)`;
-  const color2 = `hsl(${(hue + 45) % 360}, 90%, 25%)`;
+  
+  // Use dark neutral colors for TBD, colorful for actual teams
+  const color1 = isTBD ? '#0a0a0f' : `hsl(${hue}, 85%, 48%)`;
+  const color2 = isTBD ? '#12121a' : `hsl(${(hue + 45) % 360}, 90%, 25%)`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
     <defs>
@@ -77,31 +123,41 @@ function generateInitialsLogo(teamName: string): string {
         <stop offset="100%" stop-color="${color2}"/>
       </linearGradient>
     </defs>
-    <rect width="100" height="100" rx="24" ry="24" fill="url(#grad)" stroke="rgba(255,255,255,0.25)" stroke-width="3"/>
-    <text x="50" y="52" dominant-baseline="central" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="${initials.length > 2 ? '30' : '38'}" font-weight="900" fill="#ffffff" letter-spacing="1">${initials}</text>
+    <rect width="100" height="100" rx="24" ry="24" fill="url(#grad)" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
+    <text x="50" y="52" dominant-baseline="central" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="${initials.length > 2 ? '30' : '38'}" font-weight="900" fill="${isTBD ? 'rgba(255,255,255,0.4)' : '#ffffff'}" letter-spacing="1">${initials}</text>
   </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-export function getAutoMatchedVectorLogo(teamName: string): string {
-  if (!teamName) return generateInitialsLogo('TBD');
+export function getAutoMatchedVectorLogo(teamName: string, game?: string): string | null {
+  if (!teamName) return null;
   const raw = teamName.trim();
   const normalized = raw.toLowerCase();
   
+  // 1. Exact match in map
   if (LOGO_MAP[normalized]) {
     return LOGO_MAP[normalized];
   }
 
-  // Try stripping common suffixes
+  // 2. Try stripping common suffixes
   const stripped = normalized
-    .replace(/\s+(esports|team|gaming|club|gg|hq)$/g, '')
+    .replace(/\s+(esports|team|gaming|club|gg|hq|clan|2)$/g, '')
     .trim();
   
   if (LOGO_MAP[stripped]) {
     return LOGO_MAP[stripped];
   }
 
-  // Try removing dots, dashes and spaces
+  // 3. Try fuzzy/partial match in map (only for longer names)
+  if (normalized.length > 3) {
+    for (const [key, val] of Object.entries(LOGO_MAP)) {
+      if (key.length > 3 && (key.includes(normalized) || normalized.includes(key))) {
+        return val;
+      }
+    }
+  }
+
+  // 4. Try removing dots, dashes and spaces
   const compact = stripped.replace(/[\s._-]/g, '');
   for (const [key, val] of Object.entries(LOGO_MAP)) {
     if (key.replace(/[\s._-]/g, '') === compact) {
@@ -109,6 +165,6 @@ export function getAutoMatchedVectorLogo(teamName: string): string {
     }
   }
 
-  // Fallback to generated high-quality initials badge so no team ever lacks a logo
-  return generateInitialsLogo(raw);
+  // Return null to allow TeamLogo to try guessed paths or fall back to initials correctly
+  return null;
 }

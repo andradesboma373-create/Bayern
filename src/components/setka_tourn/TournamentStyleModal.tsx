@@ -12,6 +12,10 @@ interface Props {
   onSelectCardColor: (colorHex: string) => void;
   onSelectBgTheme: (themeId: string) => void;
   onUploadBg: (file: File) => void;
+  currentBgBlur?: number;
+  currentBgOverlay?: number;
+  onSelectBgBlur?: (val: number) => void;
+  onSelectBgOverlay?: (val: number) => void;
 }
 
 const BOX_STYLES = [
@@ -36,7 +40,11 @@ export function TournamentStyleModal({
   onSelectBoxStyle,
   onSelectCardColor,
   onSelectBgTheme,
-  onUploadBg
+  onUploadBg,
+  currentBgBlur = 10,
+  currentBgOverlay = 40,
+  onSelectBgBlur,
+  onSelectBgOverlay
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,6 +134,38 @@ export function TournamentStyleModal({
                   className="w-9 h-9 rounded-xl bg-transparent border border-white/20 cursor-pointer"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Background Adjustments */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label className="text-xs font-black uppercase text-white/60 tracking-wider flex items-center justify-between mb-3">
+                <span className="flex items-center gap-2"><ImageIcon className="w-4 h-4 text-blue-400" /> Размытие фона</span>
+                <span className="text-white/40">{currentBgBlur}px</span>
+              </label>
+              <input 
+                type="range"
+                min="0"
+                max="40"
+                value={currentBgBlur}
+                onChange={(e) => onSelectBgBlur?.(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-black uppercase text-white/60 tracking-wider flex items-center justify-between mb-3">
+                <span className="flex items-center gap-2"><Palette className="w-4 h-4 text-emerald-400" /> Затемнение</span>
+                <span className="text-white/40">{currentBgOverlay}%</span>
+              </label>
+              <input 
+                type="range"
+                min="0"
+                max="90"
+                value={currentBgOverlay}
+                onChange={(e) => onSelectBgOverlay?.(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+              />
             </div>
           </div>
 

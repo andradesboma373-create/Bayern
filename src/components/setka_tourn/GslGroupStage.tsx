@@ -137,9 +137,9 @@ export default function GslGroupStage({
   const activeStandings = activeGroup ? getGslGroupStandings(activeGroup, advanceCount) : null;
 
   return (
-    <div className="flex flex-col gap-8 w-full">
+    <div className="flex flex-col gap-4 w-full p-4 sm:p-6">
       {/* Header Info & Advance Button */}
-      <div className="bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+      <div className="bg-black/20 backdrop-blur-sm p-6 rounded-2xl border border-white/5 flex flex-wrap items-center justify-between gap-4 shadow-xl">
         <div>
           <div className="flex items-center gap-2">
             <span className="bg-[#ff8f00]/20 text-[#ff8f00] font-black text-xs px-3 py-1 rounded-lg uppercase tracking-wider">
@@ -172,11 +172,7 @@ export default function GslGroupStage({
           <button
             onClick={() => onAdvanceToBracket?.()}
             disabled={!isAllReady}
-            className={`px-6 py-3.5 rounded-xl font-black text-sm uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-              isAllReady
-                ? 'bg-gradient-to-r from-[#ff8f00] to-amber-500 hover:from-[#ffa733] hover:to-amber-400 text-black shadow-[0_0_25px_rgba(255,143,0,0.4)] scale-105'
-                : 'bg-white/5 text-white/30 border border-white/10 cursor-not-allowed'
-            }`}
+            className="no-export px-6 py-3.5 rounded-xl font-black text-sm uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer bg-gradient-to-r from-[#ff8f00] to-amber-500 hover:from-[#ffa733] hover:to-amber-400 text-black shadow-[0_0_25px_rgba(255,143,0,0.4)] scale-105 disabled:opacity-30 disabled:scale-100 disabled:from-white/5 disabled:to-white/5 disabled:text-white/30 disabled:border-white/10 disabled:shadow-none disabled:cursor-not-allowed"
           >
             <span>🏆 Перейти к Плей-офф</span>
             <ArrowRight className="w-4 h-4" />
@@ -194,7 +190,7 @@ export default function GslGroupStage({
               <button
                 key={group.id}
                 onClick={() => setSelectedGroupIdx(idx)}
-                className={`px-5 py-3 rounded-xl font-black text-sm transition-all flex items-center gap-2 cursor-pointer border ${
+                className={`no-export px-5 py-3 rounded-xl font-black text-sm transition-all flex items-center gap-2 cursor-pointer border ${
                   isSelected
                     ? 'bg-[#ff8f00] text-black border-[#ff8f00] shadow-[0_0_15px_rgba(255,143,0,0.3)]'
                     : 'bg-black/40 backdrop-blur-sm text-white/70 border-white/10 hover:border-white/25 hover:text-white'
@@ -212,7 +208,7 @@ export default function GslGroupStage({
 
       {/* Active Group Content */}
       {activeGroup && activeStandings && (
-        <div className="flex flex-col gap-8 bg-black/35 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-2xl">
+        <div className="flex flex-col gap-8 bg-black/20 backdrop-blur-sm p-4 sm:p-6 rounded-2xl border border-white/5 shadow-2xl">
           {/* Group Header & Standings Preview */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-3 flex flex-col justify-center">
@@ -228,7 +224,7 @@ export default function GslGroupStage({
             </div>
 
             {/* Live Seeds Box */}
-            <div className="bg-black/60 backdrop-blur-md p-4 rounded-xl border border-white/10 flex flex-col gap-2">
+            <div className="bg-black/30 backdrop-blur-sm p-4 rounded-xl border border-white/5 flex flex-col gap-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-[#ff8f00]">
                 Итоги группы (Путевки в Плей-офф):
               </span>
@@ -336,6 +332,8 @@ export default function GslGroupStage({
                         allTeams={tournament.teams}
                         isExporting={isExporting}
                         isSwapMode={isSwapMode}
+                        isLogosOnly={settings?.isLogosOnly || (settings as any)?.swissLogosOnly}
+                        game={tournament.game}
                       />
                     ))}
                   </div>
@@ -395,6 +393,7 @@ export default function GslGroupStage({
                         allTeams={tournament.teams}
                         isExporting={isExporting}
                         isSwapMode={isSwapMode}
+                        isLogosOnly={settings?.isLogosOnly || (settings as any)?.swissLogosOnly}
                       />
                     ))}
                   </div>

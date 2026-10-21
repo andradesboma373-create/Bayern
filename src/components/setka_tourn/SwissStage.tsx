@@ -62,9 +62,9 @@ export default function SwissStage({
   const lossesToEliminate = settings.swissLossesToEliminate || 3;
   const totalRounds = winsToAdvance + lossesToEliminate - 1; // 5 rounds for 3-3 system
   const getTeamName = (team: any) => {
-    if (!team) return 'TBD';
+    if (!team) return '?';
     if (typeof team === 'string') return team;
-    return team.name || team.teamName || team.id || 'TBD';
+    return team.name || team.teamName || team.id || '?';
   };
 
   const getTeamLogo = (team: any) => {
@@ -170,7 +170,7 @@ export default function SwissStage({
     });
 
     return stats;
-  }, [swissRounds, tournament.teams, winsToAdvance, lossesToEliminate]);
+  }, [swissRounds, tournament?.teams, winsToAdvance, lossesToEliminate]);
 
   // Teams qualified for the specific round column:
   // - For Round 4 column (rIdx === 3): teams qualified from Round 3 with 3-0 (2 teams)
@@ -844,24 +844,22 @@ export default function SwissStage({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 no-export">
           {/* Logos Only vs Full Team Names Display Toggle */}
-          {!isExporting && (
-            <button
-              type="button"
-              onClick={toggleLogosOnly}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border ${
-                isLogosOnly
-                  ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-[#ff8f00] shadow-[0_0_12px_rgba(255,143,0,0.3)]'
-                  : 'bg-white/5 hover:bg-white/10 text-white/70 border-white/10 hover:text-white'
-              }`}
-              title="Переключить отображение: только логотипы (киберспортивный компактный вид) или с названиями"
-            >
-              <span>{isLogosOnly ? '⚡ Только логотипы' : '📝 С названиями'}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={toggleLogosOnly}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border ${
+              isLogosOnly
+                ? 'bg-[#ff8f00]/20 border-[#ff8f00] text-[#ff8f00] shadow-[0_0_12px_rgba(255,143,0,0.3)]'
+                : 'bg-white/5 hover:bg-white/10 text-white/70 border-white/10 hover:text-white'
+            }`}
+            title="Переключить отображение: только логотипы (киберспортивный компактный вид) или с названиями"
+          >
+            <span>{isLogosOnly ? '⚡ Только логотипы' : '📝 С названиями'}</span>
+          </button>
 
-          {(swissRounds.length > 1 || (swissRounds.length === 1 && Array.isArray(swissRounds[0]) && swissRounds[0].some(m => m.winnerId))) && !isExporting && (
+          {swissRounds.length > 0 && (
             <div className="flex items-center gap-1.5 bg-red-500/10 p-1 rounded-xl border border-red-500/30 shadow-sm">
               <button
                 onClick={() => handleUndoRounds(1)}
@@ -931,7 +929,7 @@ export default function SwissStage({
       </div>
 
       {/* Main Swiss Board Columns (Exact layout and vertical alignment of SAWW.jpg) */}
-      <div className="w-full overflow-x-auto pb-8 pt-2 px-2 scrollbar-thin scrollbar-thumb-white/10">
+      <div className="w-full overflow-x-auto pb-8 pt-2 px-4 sm:px-8 scrollbar-thin scrollbar-thumb-white/10">
         <div className="flex items-stretch min-w-max mx-auto justify-center min-h-[820px]">
           {roundConfigs.map((colConfig, colIdx) => {
             const { rIdx, roundNumber, baskets, advancingSlotsTotal, eliminatedSlotsTotal } = colConfig;
@@ -981,7 +979,7 @@ export default function SwissStage({
                                   title={qualTeam.team.name}
                                 >
                                   <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
-                                    <TeamLogo teamName={qualTeam.team.name} logoUrl={qualTeam.team.logoUrl} sizeClassName={isLogosOnly ? "w-5 h-5 shrink-0" : "w-4 h-4 shrink-0"} />
+                                    <TeamLogo game={tournament.game as any} teamName={qualTeam.team.name} logoUrl={qualTeam.team.logoUrl} sizeClassName={isLogosOnly ? "w-5 h-5 shrink-0" : "w-4 h-4 shrink-0"} />
                                     {!isLogosOnly && (
                                       <span className="text-[11px] font-black text-white truncate min-w-0 flex-1">
                                         {qualTeam.team.name}
@@ -1071,7 +1069,7 @@ export default function SwissStage({
                       return (
                         <div
                           key={`basket-${rIdx}-${basketKey}`}
-                          className="flex flex-col gap-1.5 p-2 rounded-xl bg-black/60 border border-white/15 shadow-xl"
+                          className="flex flex-col gap-1.5 p-2 rounded-xl bg-black/40 border border-white/10 shadow-xl"
                         >
                           {/* Basket Header Pill (РАУНД X / 0-0) */}
                           <div
@@ -1085,7 +1083,7 @@ export default function SwissStage({
                                 <button
                                   type="button"
                                   onClick={() => shuffleBasketMatches(rIdx, basketMatches)}
-                                  className="text-[9px] font-bold text-white/60 hover:text-white bg-black/40 hover:bg-black/80 px-1.5 py-0.5 rounded border border-white/10 transition-all flex items-center gap-1 cursor-pointer"
+                                  className="no-export text-[9px] font-bold text-white/60 hover:text-white bg-black/40 hover:bg-black/80 px-1.5 py-0.5 rounded border border-white/10 transition-all flex items-center gap-1 cursor-pointer"
                                   title="Перемешать пары в этой корзине"
                                 >
                                   <Shuffle className="w-2.5 h-2.5" />
@@ -1114,7 +1112,7 @@ export default function SwissStage({
                                     title={activeTeam?.name}
                                   >
                                     <div className="flex items-center gap-2 overflow-hidden">
-                                      <TeamLogo teamName={activeTeam?.name || ''} logoUrl={activeTeam?.logoUrl} sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"} />
+                                      <TeamLogo game={tournament.game as any} teamName={activeTeam?.name || ''} logoUrl={activeTeam?.logoUrl} sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"} />
                                       {!isLogosOnly && (
                                         <span className="text-xs font-black text-emerald-400 truncate">
                                           {activeTeam?.name}
@@ -1139,7 +1137,7 @@ export default function SwissStage({
                                       ?
                                     </div>
                                     <span className="text-[10px] font-black text-white/50 tracking-widest px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10">
-                                      VS
+                                      - -
                                     </span>
                                     <div className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[10px] text-white/30 font-black font-mono">
                                       ?
@@ -1208,22 +1206,18 @@ export default function SwissStage({
                                   {/* Center Capsule (Score or VS) */}
                                   <div className="shrink-0 flex items-center justify-center px-1">
                                     {hasWinner ? (
-                                      <div
-                                        onClick={() => undoMatchWinner(rIdx, mIdx)}
-                                        className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/90 border border-white/25 text-xs font-mono font-black cursor-pointer hover:border-rose-500/60 hover:text-rose-400 transition-all"
-                                        title="Нажмите, чтобы сбросить результат"
-                                      >
-                                        <span className={t1Won ? 'text-emerald-400 font-bold' : 'text-white/50'}>
-                                          {match.score1}
-                                        </span>
-                                        <span className="text-white/40 text-[10px]">:</span>
-                                        <span className={t2Won ? 'text-emerald-400 font-bold' : 'text-white/50'}>
-                                          {match.score2}
-                                        </span>
+                                      <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/90 border border-white/25 text-xs font-mono font-black cursor-pointer hover:border-rose-500/60 hover:text-rose-400 transition-all" onClick={() => !isExporting && undoMatchWinner(rIdx, mIdx)}>
+                                         <span className={t1Won ? 'text-emerald-400 font-bold' : 'text-white/50'}>
+                                           {match.score1 !== undefined ? match.score1 : (hasWinner ? 0 : '-')}
+                                         </span>
+                                         <span className="text-white/40 text-[10px]">:</span>
+                                         <span className={t2Won ? 'text-emerald-400 font-bold' : 'text-white/50'}>
+                                           {match.score2 !== undefined ? match.score2 : (hasWinner ? 0 : '-')}
+                                         </span>
                                       </div>
                                     ) : isExporting ? (
                                       <div className="flex items-center justify-center px-2 py-0.5 rounded-full bg-black/60 border border-white/10 text-white/50 font-mono font-bold text-[10px]">
-                                        VS
+                                        - -
                                       </div>
                                     ) : (
                                       <div className="flex items-center gap-1">
@@ -1231,20 +1225,22 @@ export default function SwissStage({
                                           type="number"
                                           min="0"
                                           className="w-5 h-5 text-center rounded bg-black/60 text-white font-mono font-bold text-xs border border-white/10 focus:border-[#ff8f00] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          value={match.score1 === 0 ? 0 : match.score1 || ''}
-                                          onChange={(e) =>
-                                            updateMatchScore(rIdx, mIdx, 1, parseInt(e.target.value) || 0)
-                                          }
+                                          value={match.score1 === undefined ? '' : match.score1}
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                            updateMatchScore(rIdx, mIdx, 1, isNaN(val) ? 0 : val);
+                                          }}
                                         />
                                         <span className="text-white/30 text-[10px] font-bold">:</span>
                                         <input
                                           type="number"
                                           min="0"
                                           className="w-5 h-5 text-center rounded bg-black/60 text-white font-mono font-bold text-xs border border-white/10 focus:border-[#ff8f00] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          value={match.score2 === 0 ? 0 : match.score2 || ''}
-                                          onChange={(e) =>
-                                            updateMatchScore(rIdx, mIdx, 2, parseInt(e.target.value) || 0)
-                                          }
+                                          value={match.score2 === undefined ? '' : match.score2}
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                            updateMatchScore(rIdx, mIdx, 2, isNaN(val) ? 0 : val);
+                                          }}
                                         />
                                       </div>
                                     )}
@@ -1349,7 +1345,7 @@ export default function SwissStage({
                                       title={activeTeam?.name}
                                     >
                                       <div className="flex items-center gap-2">
-                                        <TeamLogo teamName={activeTeam?.name || ''} logoUrl={activeTeam?.logoUrl} sizeClassName="w-5 h-5 shrink-0" />
+                                        <TeamLogo game={tournament.game as any} teamName={activeTeam?.name || ''} logoUrl={activeTeam?.logoUrl} sizeClassName="w-5 h-5 shrink-0" />
                                         {!isLogosOnly && <span className="font-extrabold text-xs text-white truncate max-w-[120px]">{activeTeam?.name}</span>}
                                       </div>
                                       <span className="text-[9px] font-black bg-emerald-500/15 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">BYE</span>
@@ -1362,25 +1358,25 @@ export default function SwissStage({
                                   <div
                                     key={match.id}
                                     className={`group relative flex items-center justify-between ${isLogosOnly ? 'px-2 py-1.5 h-11' : 'px-2.5 py-1.5'} rounded-lg border transition-all duration-200 shadow-md ${
-                                      hasWinner ? 'bg-black/80 border-white/20' : 'bg-[#151824] border-white/15 hover:border-[#ff8f00]/50 hover:bg-[#1a1f2e]'
+                                      hasWinner ? 'bg-black/60 border-white/20' : 'bg-white/5 border-white/10 hover:border-[#ff8f00]/50 hover:bg-white/10'
                                     }`}
                                   >
                                     <div
                                       onClick={() => match.team1 && setQuickWinner(rIdx, mIdx, match.team1)}
                                       className={`flex items-center ${isLogosOnly ? 'justify-start' : 'gap-1.5 flex-1 min-w-0 pr-1'} cursor-pointer`}
                                     >
-                                      <TeamLogo teamName={match.team1?.name || ''} logoUrl={match.team1?.logoUrl} sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"} />
+                                      <TeamLogo game={tournament.game as any} teamName={match.team1?.name || ''} logoUrl={match.team1?.logoUrl} sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"} />
                                       {!isLogosOnly && <span className={`text-[11px] font-extrabold truncate ${t1Won ? 'text-emerald-400 font-black' : 'text-white'}`}>{match.team1?.name || 'TBD'}</span>}
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0 px-1">
-                                      <span className="font-mono text-xs font-black text-white/80">{match.score1 ?? 0} : {match.score2 ?? 0}</span>
+                                      <span className="font-mono text-xs font-black text-white/80">{(match.score1 !== undefined ? match.score1 : '-') || (hasWinner ? 0 : '-')} : {(match.score2 !== undefined ? match.score2 : '-') || (hasWinner ? 0 : '-')}</span>
                                     </div>
                                     <div
                                       onClick={() => match.team2 && setQuickWinner(rIdx, mIdx, match.team2)}
                                       className={`flex items-center ${isLogosOnly ? 'justify-end' : 'gap-1.5 flex-1 min-w-0 pl-1 justify-end'} cursor-pointer`}
                                     >
                                       {!isLogosOnly && <span className={`text-[11px] font-extrabold truncate text-right ${t2Won ? 'text-emerald-400 font-black' : 'text-white'}`}>{match.team2?.name || 'TBD'}</span>}
-                                      <TeamLogo teamName={match.team2?.name || ''} logoUrl={match.team2?.logoUrl} sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"} />
+                                      <TeamLogo game={tournament.game as any} teamName={match.team2?.name || ''} logoUrl={match.team2?.logoUrl} sizeClassName={isLogosOnly ? "w-6 h-6 shrink-0" : "w-5 h-5 shrink-0"} />
                                     </div>
                                   </div>
                                 );
@@ -1419,7 +1415,7 @@ export default function SwissStage({
                                   title={elimTeam.team.name}
                                 >
                                   <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
-                                    <TeamLogo teamName={elimTeam.team.name} logoUrl={elimTeam.team.logoUrl} sizeClassName={isLogosOnly ? "w-5 h-5 shrink-0" : "w-4 h-4 shrink-0"} />
+                                    <TeamLogo game={tournament.game as any} teamName={elimTeam.team.name} logoUrl={elimTeam.team.logoUrl} sizeClassName={isLogosOnly ? "w-5 h-5 shrink-0" : "w-4 h-4 shrink-0"} />
                                     {!isLogosOnly && (
                                       <span className="text-[11px] font-bold text-white/90 truncate min-w-0 flex-1">
                                         {elimTeam.team.name}

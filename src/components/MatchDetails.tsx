@@ -303,8 +303,8 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
         <div className="flex-1 overflow-y-auto p-6">
           <div 
             className="bg-[#12121a] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden mb-6"
-            style={cleanActiveMapKey ? {
-              backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('/maps/${cleanActiveMapKey.replace(/\.(webp|jpg|png)$/i, "")}.webp')`,
+            style={activeMapName ? {
+              backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('${getMapImageUrl(activeMapName, match?.game || match?.gameMode || 'cs2')}')`,
               backgroundSize: 'cover',
               backgroundPosition: 'center'
             } : {}}
@@ -407,7 +407,7 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
                       >
                         <div 
                           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('${getMapImageUrl(mName)}')` }}
+                          style={{ backgroundImage: `url('${getMapImageUrl(mName, match?.game || match?.gameMode || 'cs2')}')` }}
                           title={mName}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/60 flex flex-col items-center justify-center p-1">

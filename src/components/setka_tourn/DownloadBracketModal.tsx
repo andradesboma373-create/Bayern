@@ -24,6 +24,7 @@ export const DownloadBracketModal: React.FC<DownloadBracketModalProps> = ({
   const [exportOptimize, setExportOptimize] = useState(true);
   const [exportLoadingType, setExportLoadingType] = useState<string | null>(null);
   const [exportProgressText, setExportProgressText] = useState<string>('');
+  const [isCapturing, setIsCapturing] = useState(false);
 
   if (!isOpen || !tournament) return null;
 
@@ -47,9 +48,10 @@ export const DownloadBracketModal: React.FC<DownloadBracketModalProps> = ({
     setExportLoadingType('pdf');
     setExportProgressText(optimized ? 'Оптимизация разметки и сжатие...' : 'Рендеринг сетки в Ultra-HD качестве...');
     onExportStart?.();
+    setIsCapturing(true);
 
     try {
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 200));
 
       const { exportElementToDataUrl } = await import('../../lib/exportImage');
       const dataUrl = await exportElementToDataUrl(target, { 
@@ -58,6 +60,8 @@ export const DownloadBracketModal: React.FC<DownloadBracketModalProps> = ({
         pixelRatio: optimized ? 1.5 : 2.0,
         onProgress: (status) => setExportProgressText(status)
       });
+      
+      setIsCapturing(false);
       
       if (dataUrl) {
         setExportProgressText('Сборка PDF документа...');
@@ -95,6 +99,7 @@ export const DownloadBracketModal: React.FC<DownloadBracketModalProps> = ({
       console.error("PDF Export error:", err);
       onNotify?.("Ошибка при создании PDF: " + (err?.message || 'Попробуйте скачать как PNG'));
     } finally {
+      setIsCapturing(false);
       onExportEnd?.();
       setExportLoadingType(null);
       setExportProgressText('');
@@ -111,9 +116,10 @@ export const DownloadBracketModal: React.FC<DownloadBracketModalProps> = ({
     setExportLoadingType('png');
     setExportProgressText('Подготовка изображения...');
     onExportStart?.();
+    setIsCapturing(true);
 
     try {
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 200));
 
       const { downloadElementAsImage } = await import('../../lib/exportImage');
       const cleanName = (tournament.name || 'tournament').replace(/[^a-zA-Z0-9а-яА-Я_-]/g, '_');
@@ -125,12 +131,15 @@ export const DownloadBracketModal: React.FC<DownloadBracketModalProps> = ({
         pixelRatio: optimized ? 1.5 : 2.0,
         onProgress: (status) => setExportProgressText(status)
       });
+      
+      setIsCapturing(false);
       onNotify?.("Изображение сетки успешно скачано!");
       onClose();
     } catch (err: any) {
       console.error("PNG Export error:", err);
       onNotify?.("Ошибка при скачивании PNG: " + (err?.message || 'Ошибка рендеринга'));
     } finally {
+      setIsCapturing(false);
       onExportEnd?.();
       setExportLoadingType(null);
       setExportProgressText('');
@@ -173,7 +182,7 @@ export const DownloadBracketModal: React.FC<DownloadBracketModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+    <div className={`no-export fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 ${isCapturing ? 'opacity-0 pointer-events-none' : ''}`}>
       <div className="bg-[#12121a] border border-white/10 p-6 sm:p-8 rounded-[2.5rem] max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-200">
         
         {/* Header */}

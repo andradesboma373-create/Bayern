@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Trophy, Plus, Trash2, Settings, Download, Users, Swords, 
-  Sparkles, RefreshCw, Layers, ArrowRight, Play, Edit3, Image as ImageIcon
+  Sparkles, RefreshCw, Layers, ArrowRight, Play, Edit3, Image as ImageIcon, RotateCcw
 } from 'lucide-react';
 import { loadTournaments, saveTournament, deleteTournament, getCanonicalRoomId } from './storage';
 import { Tournament, Team, TournamentStageConfig } from './types';
@@ -90,6 +90,8 @@ export default function TournamentManager({ user }: { user: any }) {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  
+  const [history, setHistory] = useState<Tournament[]>([]);
 
   useEffect(() => {
     const loaded = loadTournaments(canonicalRoom);
@@ -100,6 +102,22 @@ export default function TournamentManager({ user }: { user: any }) {
   }, [canonicalRoom]);
 
   const activeTournament = tournaments.find(t => t.id === activeTournamentId);
+
+  const handleUpdateActiveTournament = (updated: Tournament, pushHistory = true) => {
+    if (pushHistory && activeTournament) {
+      setHistory(prev => [activeTournament, ...prev].slice(0, 20)); // Keep last 20 actions
+    }
+    const newTourns = tournaments.map(t => t.id === updated.id ? updated : t);
+    setTournaments(newTourns);
+    saveTournament(canonicalRoom, updated);
+  };
+
+  const handleUndo = () => {
+    if (history.length === 0) return;
+    const previous = history[0];
+    setHistory(prev => prev.slice(1));
+    handleUpdateActiveTournament(previous, false);
+  };
 
   const handleCreatePreset = (preset: typeof DEFAULT_PRESETS[0]) => {
     const newStages: TournamentStageConfig[] = preset.stages.map((st, idx) => {
@@ -125,7 +143,9 @@ export default function TournamentManager({ user }: { user: any }) {
       createdAt: new Date().toISOString(),
       settings: {
         themeId: 'cyber_grid',
-        bestOf: 3
+        bestOf: 3,
+        bgBlur: 10,
+        bgOverlay: 40
       }
     };
 
@@ -134,12 +154,6 @@ export default function TournamentManager({ user }: { user: any }) {
     setActiveTournamentId(newTourn.id);
     setActiveStageIdx(0);
     saveTournament(canonicalRoom, newTourn);
-  };
-
-  const handleUpdateActiveTournament = (updated: Tournament) => {
-    const newTourns = tournaments.map(t => t.id === updated.id ? updated : t);
-    setTournaments(newTourns);
-    saveTournament(canonicalRoom, updated);
   };
 
   const handleDeleteActive = () => {
@@ -191,17 +205,18 @@ export default function TournamentManager({ user }: { user: any }) {
   const themeId = activeTournament.settings?.themeId || 'cyber_grid';
   const currentTheme = BG_THEMES[themeId] || BG_THEMES.cyber_grid;
   const customBg = activeTournament.settings?.bgImage;
+  const blurVal = activeTournament.settings?.bgBlur ?? 10;
+  const overlayVal = (activeTournament.settings?.bgOverlay ?? 40) / 100;
 
-  const containerStyle: React.CSSProperties = customBg
-    ? { backgroundImage: `linear-gradient(to bottom, rgba(10,10,15,0.85), rgba(10,10,15,0.95)), url('${customBg}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : (currentTheme.style || {});
-
-  const containerClassName = `flex flex-col gap-6 p-4 sm:p-8 rounded-3xl min-h-[850px] transition-all duration-300 ${customBg ? 'bg-[#0a0a0f]' : (currentTheme.className || '')}`;
+  const bgStyle: React.CSSProperties = customBg
+    ? { backgroundImage: `url('${customBg}')`, backgroundSize: 'cover', backgroundPosition: 'center', filter: `blur(${blurVal}px)` }
+    : { ...(currentTheme.style || {}), filter: `blur(${blurVal}px)` };
 
   return (
-    <div className="flex flex-col gap-6" id="tournament-stage-container">
+    <>
+      <div className="flex flex-col gap-6">
       {/* Top Bar */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#12121a] p-6 rounded-3xl border border-white/5 shadow-xl">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#12121a] p-6 rounded-3xl border border-white/5 shadow-xl no-export">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-purple-600/20 border border-purple-500/30 rounded-2xl flex items-center justify-center">
             <Trophy className="w-6 h-6 text-purple-400" />
@@ -213,11 +228,20 @@ export default function TournamentManager({ user }: { user: any }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {history.length > 0 && (
+            <button 
+              onClick={handleUndo}
+              className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-colors flex items-center gap-2 cursor-pointer border border-white/10 shadow-lg"
+              title="Отменить последнее действие"
+            >
+              <RotateCcw className="w-4 h-4 text-orange-400" /> Undo
+            </button>
+          )}
           <button 
             onClick={() => setShowDownloadModal(true)}
             className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-blue-600/20"
           >
-            <Download className="w-4 h-4" /> Экспорт сетки
+            <Download className="w-4 h-4" /> Экспорт
           </button>
           <button 
             onClick={() => setShowStyleModal(true)}
@@ -240,9 +264,10 @@ export default function TournamentManager({ user }: { user: any }) {
           </button>
         </div>
       </div>
-
-      {/* Stage Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2">
+      
+      <div id="tournament-stage-container" className="flex flex-col gap-6">
+        {/* Stage Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-export">
         {activeTournament.stages?.map((stage, idx) => (
           <button
             key={stage.id || idx}
@@ -259,41 +284,58 @@ export default function TournamentManager({ user }: { user: any }) {
         ))}
       </div>
 
-      {/* Stage View Content */}
-      <div style={containerStyle} className={`p-6 rounded-3xl border border-white/5 min-h-[500px] overflow-hidden relative shadow-2xl ${customBg ? 'bg-[#0a0a0f]' : (currentTheme.className || 'bg-[#12121a]')}`}>
-        {currentStage?.type === 'swiss' && (
-          <SwissStage 
-            tournament={activeTournament} 
-            onUpdate={handleUpdateActiveTournament} 
-          />
-        )}
-        {currentStage?.type === 'playoff' && (
-          <SingleEliminationStage 
-            tournament={activeTournament} 
-            onUpdate={handleUpdateActiveTournament} 
-          />
-        )}
-        {currentStage?.type === 'gsl_groups' && (
-          <GslGroupStage 
-            tournament={activeTournament} 
-            onUpdate={handleUpdateActiveTournament} 
-          />
-        )}
-        {currentStage?.type === 'qualifier' && (
-          <QualifierStage 
-            tournament={activeTournament} 
-            onUpdate={handleUpdateActiveTournament} 
-          />
-        )}
-        {currentStage?.type === 'groups' && (
-          <GroupStage 
-            tournament={activeTournament} 
-            onUpdate={handleUpdateActiveTournament} 
-          />
-        )}
-      </div>
+      {/* Stage View Content Area */}
+      <div className="relative rounded-3xl border border-white/5 min-h-[500px] overflow-hidden shadow-2xl bg-[#0a0a0f]">
+        {/* Background Layer */}
+        <div 
+          style={bgStyle} 
+          className={`absolute inset-0 z-0 transition-all duration-500 scale-105 ${customBg ? '' : (currentTheme.className || '')}`}
+        />
+        
+        {/* Dark Overlay Layer */}
+        <div 
+          className="absolute inset-0 z-10 pointer-events-none"
+          style={{ backgroundColor: `rgba(0,0,0,${overlayVal})` }}
+        />
 
-      {/* Modals */}
+        {/* Content Layer */}
+        <div className="relative z-20">
+          {currentStage?.type === 'swiss' && (
+            <SwissStage 
+              tournament={activeTournament} 
+              onUpdate={handleUpdateActiveTournament} 
+            />
+          )}
+          {currentStage?.type === 'playoff' && (
+            <SingleEliminationStage 
+              tournament={activeTournament} 
+              onUpdate={handleUpdateActiveTournament} 
+            />
+          )}
+          {currentStage?.type === 'gsl_groups' && (
+            <GslGroupStage 
+              tournament={activeTournament} 
+              onUpdate={handleUpdateActiveTournament} 
+            />
+          )}
+          {currentStage?.type === 'qualifier' && (
+            <QualifierStage 
+              tournament={activeTournament} 
+              onUpdate={handleUpdateActiveTournament} 
+            />
+          )}
+          {currentStage?.type === 'groups' && (
+            <GroupStage 
+              tournament={activeTournament} 
+              onUpdate={handleUpdateActiveTournament} 
+            />
+          )}
+        </div>
+      </div>
+    </div>
+    </div>
+
+    {/* Modals */}
       {showDownloadModal && (
         <DownloadBracketModal 
           isOpen={showDownloadModal}
@@ -309,10 +351,14 @@ export default function TournamentManager({ user }: { user: any }) {
           currentBoxStyle={activeTournament.settings?.boxStyle || 'dark'}
           currentCardColor={activeTournament.settings?.cardThemeColor || '#3b82f6'}
           currentBgTheme={activeTournament.settings?.themeId || 'cyber_grid'}
+          currentBgBlur={activeTournament.settings?.bgBlur ?? 10}
+          currentBgOverlay={activeTournament.settings?.bgOverlay ?? 40}
           bgThemes={BG_THEMES}
           onSelectBoxStyle={(boxStyle) => handleUpdateActiveTournament({ ...activeTournament, settings: { ...activeTournament.settings, boxStyle } })}
           onSelectCardColor={(cardThemeColor) => handleUpdateActiveTournament({ ...activeTournament, settings: { ...activeTournament.settings, cardThemeColor } })}
           onSelectBgTheme={(themeId) => handleUpdateActiveTournament({ ...activeTournament, settings: { ...activeTournament.settings, themeId } })}
+          onSelectBgBlur={(bgBlur) => handleUpdateActiveTournament({ ...activeTournament, settings: { ...activeTournament.settings, bgBlur } })}
+          onSelectBgOverlay={(bgOverlay) => handleUpdateActiveTournament({ ...activeTournament, settings: { ...activeTournament.settings, bgOverlay } })}
           onUploadBg={(file) => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -347,6 +393,6 @@ export default function TournamentManager({ user }: { user: any }) {
           }}
         />
       )}
-    </div>
+    </>
   );
 }

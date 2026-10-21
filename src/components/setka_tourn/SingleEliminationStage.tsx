@@ -244,7 +244,7 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
     }[];
 
   return (
-    <div className="w-full flex flex-col gap-12">
+    <div className="w-full flex flex-col gap-6 p-4 sm:p-6">
         {wRounds.length > 0 && (
             <div className="flex flex-col mb-12">
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
@@ -349,7 +349,7 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                     </div>
                 )}
 
-                <div className="flex gap-0 overflow-x-auto overflow-y-auto items-stretch w-full bg-black/20 p-6 rounded-2xl border border-white/5" style={{ minHeight: '400px' }}>
+                <div className="flex gap-0 overflow-x-auto overflow-y-auto items-stretch w-full p-2 rounded-2xl" style={{ minHeight: '400px' }}>
                     {/* Render Winners Bracket Rounds */}
                     {wRounds.map((round, rIdx) => {
                         const isHidden = !!hiddenRounds[rIdx];
@@ -429,14 +429,14 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-white/40">Пара 1:</span>
                                                                     <span className={hasWinner1 ? 'text-emerald-400 font-bold' : 'text-white/60'}>
-                                                                        {m1 ? `${m1.team1?.name || 'TBD'} ${m1.score1 ?? 0}:${m1.score2 ?? 0} ${m1.team2?.name || 'TBD'}` : 'TBD'}
+                                                                        {m1 ? `${m1.team1?.name || '?'} ${m1.score1 ?? '-'}  ${m1.score2 ?? '-'} ${m1.team2?.name || '?'}` : '?'}
                                                                         {winner1Name ? ` (Вышел: ${winner1Name})` : ''}
                                                                     </span>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-white/40">Пара 2:</span>
                                                                     <span className={hasWinner2 ? 'text-emerald-400 font-bold' : 'text-white/60'}>
-                                                                        {m2 ? `${m2.team1?.name || 'TBD'} ${m2.score1 ?? 0}:${m2.score2 ?? 0} ${m2.team2?.name || 'TBD'}` : 'TBD'}
+                                                                        {m2 ? `${m2.team1?.name || '?'} ${m2.score1 ?? '-'}  ${m2.score2 ?? '-'} ${m2.team2?.name || '?'}` : '?'}
                                                                         {winner2Name ? ` (Вышел: ${winner2Name})` : ''}
                                                                     </span>
                                                                 </div>
@@ -489,6 +489,8 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                                             isExporting={isExporting}
                                             isSwapMode={isSwapMode}
                                             onToggleImportance={onToggleImportance}
+                                            isLogosOnly={tournament.settings?.isLogosOnly || (tournament.settings as any)?.swissLogosOnly}
+                                            game={tournament.game}
                                         />
                                     ))}
                                 </div>
@@ -530,6 +532,7 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                                         allTeams={tournament.teams}
                                         isExporting={isExporting}
                                         isSwapMode={isSwapMode}
+                                        isLogosOnly={tournament.settings?.isLogosOnly || (tournament.settings as any)?.swissLogosOnly}
                                     />
                                 </div>
                             </div>
@@ -561,6 +564,7 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                                             allTeams={tournament.teams}
                                             isExporting={isExporting}
                                             isSwapMode={isSwapMode}
+                                            isLogosOnly={tournament.settings?.isLogosOnly || (tournament.settings as any)?.swissLogosOnly}
                                         />
                                     </div>
                                 </div>
@@ -587,6 +591,8 @@ export default function SingleEliminationStage({ tournament, onUpdate, isExporti
                     allTeams={tournament.teams}
                     isExporting={isExporting}
                     isSwapMode={isSwapMode}
+                    isLogosOnly={tournament.settings?.isLogosOnly || (tournament.settings as any)?.swissLogosOnly}
+                    game={tournament.game}
                 />
             </div>
         )}

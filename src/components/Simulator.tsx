@@ -1070,7 +1070,7 @@ export default function Simulator({ user }: { user: any }) {
         <div ref={resultContainerRef} className="flex flex-col gap-6 bg-[#0a0a0f] p-6 rounded-3xl border border-white/5">
           <div className="bg-[#12121a] border border-white/10 shadow-2xl shadow-black/50 rounded-2xl p-8 text-center relative overflow-hidden"
                style={bgSourceMap ? {
-                 backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('/maps/${activeBgMapName.replace(/\.(webp|jpg|png)$/i, "")}.webp')`,
+                 backgroundImage: `linear-gradient(to bottom, rgba(18,18,26,0.92), rgba(26,26,36,0.98)), url('${getMapImageUrl(bgSourceMap?.mapName || bgSourceMap?.name || 'mirage', game)}')`,
                  backgroundSize: 'cover',
                  backgroundPosition: 'center'
                } : {}}>
@@ -1201,7 +1201,7 @@ export default function Simulator({ user }: { user: any }) {
                       >
                         <div 
                           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('${getMapImageUrl(mTitle)}')` }}
+                          style={{ backgroundImage: `url('${getMapImageUrl(mTitle, game)}')` }}
                           title={mTitle}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/60 flex flex-col items-center justify-center p-1">

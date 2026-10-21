@@ -138,13 +138,13 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
   const allMatchesFinished = Array.isArray(groups) && groups.every(g => Array.isArray(g?.matches) && g.matches.every(m => m.winnerId || m.isDraw));
 
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-black">Групповой Этап</h3>
         <button 
             onClick={() => onAdvanceToBracket?.()}
             disabled={!allMatchesFinished}
-            className="bg-[#ff8f00] text-black px-6 py-2 rounded-xl font-bold uppercase disabled:opacity-30"
+            className="no-export bg-[#ff8f00] text-black px-6 py-2 rounded-xl font-bold uppercase disabled:opacity-30"
         >
             Завершить этап и перейти в Плей-офф
         </button>
@@ -156,7 +156,7 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
           const advanceCount = settings.advancingPerGroup || 2;
 
           return (
-            <div key={group.id} className="bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-xl">
+            <div key={group.id} className="bg-black/20 backdrop-blur-sm p-6 rounded-2xl border border-white/5 shadow-xl">
               <h4 className="font-bold text-xl mb-4 text-[#ff8f00]">{group.name}</h4>
               
               {/* Standings */}
@@ -224,7 +224,7 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
                                             : isFinished && match.winnerId !== match.team1?.id && !match.isDraw
                                                 ? boxCls.loserText 
                                                 : boxCls.defaultText
-                                    }`}>{match.team1?.name}</span>
+                                    }`}>{match.team1?.name || '?'}</span>
                                 )}
                                 <TeamLogo teamName={match.team1?.name || ''} logoUrl={match.team1?.logoUrl} sizeClassName="w-6 h-6" />
                             </div>
@@ -232,8 +232,8 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
                             <div className="px-4 flex flex-col items-center gap-1">
                                 {isFinished ? (
                                     <div className="flex flex-col items-center gap-1">
-                                        <div className="font-mono font-black text-lg px-3 py-1 rounded-lg border bg-black/40 border-white/10 text-[#ff8f00]">
-                                            {match.score1} : {match.score2}
+                                        <div className="font-mono font-black text-lg px-3 py-1 rounded-lg border bg-black/20 border-white/5 text-[#ff8f00]">
+                                            {(match.score1 ?? '-') || (isFinished ? 0 : '-')}   {(match.score2 ?? '-') || (isFinished ? 0 : '-')}
                                         </div>
                                         {(!tournament.settings?.bracketMode || tournament.settings.bracketMode === 'realtime') && (
                                             <button
@@ -320,7 +320,7 @@ export default function GroupStage({ tournament, onUpdate, onAdvanceToBracket, o
                                             : isFinished && match.winnerId !== match.team2?.id && !match.isDraw
                                                 ? boxCls.loserText 
                                                 : boxCls.defaultText
-                                    }`}>{match.team2?.name}</span>
+                                    }`}>{match.team2?.name || '?'}</span>
                                 )}
                             </div>
                         </div>

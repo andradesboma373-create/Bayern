@@ -80,6 +80,8 @@ export interface TournamentSettings {
   boxStyle?: string;
   btnStyle?: string;
   bracketMode?: 'standard' | 'realtime';
+  bgBlur?: number;
+  bgOverlay?: number;
   [key: string]: any;
 }
 
