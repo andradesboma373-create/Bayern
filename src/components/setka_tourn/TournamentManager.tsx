@@ -188,6 +188,16 @@ export default function TournamentManager({ user }: { user: any }) {
 
   const currentStage = activeTournament.stages?.[activeStageIdx] || activeTournament.stages?.[0];
 
+  const themeId = activeTournament.settings?.themeId || 'cyber_grid';
+  const currentTheme = BG_THEMES[themeId] || BG_THEMES.cyber_grid;
+  const customBg = activeTournament.settings?.bgImage;
+
+  const containerStyle: React.CSSProperties = customBg
+    ? { backgroundImage: `linear-gradient(to bottom, rgba(10,10,15,0.85), rgba(10,10,15,0.95)), url('${customBg}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : (currentTheme.style || {});
+
+  const containerClassName = `flex flex-col gap-6 p-4 sm:p-8 rounded-3xl min-h-[850px] transition-all duration-300 ${customBg ? 'bg-[#0a0a0f]' : (currentTheme.className || '')}`;
+
   return (
     <div className="flex flex-col gap-6" id="tournament-stage-container">
       {/* Top Bar */}
@@ -250,7 +260,7 @@ export default function TournamentManager({ user }: { user: any }) {
       </div>
 
       {/* Stage View Content */}
-      <div className="bg-[#12121a] p-6 rounded-3xl border border-white/5 min-h-[500px]">
+      <div style={containerStyle} className={`p-6 rounded-3xl border border-white/5 min-h-[500px] overflow-hidden relative shadow-2xl ${customBg ? 'bg-[#0a0a0f]' : (currentTheme.className || 'bg-[#12121a]')}`}>
         {currentStage?.type === 'swiss' && (
           <SwissStage 
             tournament={activeTournament} 

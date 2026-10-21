@@ -47,13 +47,68 @@ const LOGO_MAP: Record<string, string> = {
   'nip': '/logos/nip.webp',
   'ninjas in pyjamas': '/logos/ninjas in pyjamas.webp',
   'gamerlegion': '/logos/gamerlegion.webp',
+  'imperial': '/logos/imperial.webp',
+  'ence': '/logos/ence.webp',
+  'sashi': '/logos/sashi.webp',
+  'sangal': '/logos/sanghal.webp',
 };
 
-export function getAutoMatchedVectorLogo(teamName: string): string | null {
-  if (!teamName) return null;
-  const normalized = teamName.trim().toLowerCase();
+function generateInitialsLogo(teamName: string): string {
+  const clean = teamName.trim();
+  const initials = clean
+    .split(/\s+/)
+    .map(w => w.charAt(0))
+    .join('')
+    .substring(0, 3)
+    .toUpperCase() || '?';
+
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) {
+    hash = clean.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  const color1 = `hsl(${hue}, 85%, 48%)`;
+  const color2 = `hsl(${(hue + 45) % 360}, 90%, 25%)`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+    <defs>
+      <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${color1}"/>
+        <stop offset="100%" stop-color="${color2}"/>
+      </linearGradient>
+    </defs>
+    <rect width="100" height="100" rx="24" ry="24" fill="url(#grad)" stroke="rgba(255,255,255,0.25)" stroke-width="3"/>
+    <text x="50" y="52" dominant-baseline="central" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="${initials.length > 2 ? '30' : '38'}" font-weight="900" fill="#ffffff" letter-spacing="1">${initials}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export function getAutoMatchedVectorLogo(teamName: string): string {
+  if (!teamName) return generateInitialsLogo('TBD');
+  const raw = teamName.trim();
+  const normalized = raw.toLowerCase();
+  
   if (LOGO_MAP[normalized]) {
     return LOGO_MAP[normalized];
   }
-  return `/api/logo/${encodeURIComponent(normalized)}`;
+
+  // Try stripping common suffixes
+  const stripped = normalized
+    .replace(/\s+(esports|team|gaming|club|gg|hq)$/g, '')
+    .trim();
+  
+  if (LOGO_MAP[stripped]) {
+    return LOGO_MAP[stripped];
+  }
+
+  // Try removing dots, dashes and spaces
+  const compact = stripped.replace(/[\s._-]/g, '');
+  for (const [key, val] of Object.entries(LOGO_MAP)) {
+    if (key.replace(/[\s._-]/g, '') === compact) {
+      return val;
+    }
+  }
+
+  // Fallback to generated high-quality initials badge so no team ever lacks a logo
+  return generateInitialsLogo(raw);
 }

@@ -61,6 +61,17 @@ export default function SwissStage({
   const winsToAdvance = settings.swissWinsToAdvance || 3;
   const lossesToEliminate = settings.swissLossesToEliminate || 3;
   const totalRounds = winsToAdvance + lossesToEliminate - 1; // 5 rounds for 3-3 system
+  const getTeamName = (team: any) => {
+    if (!team) return 'TBD';
+    if (typeof team === 'string') return team;
+    return team.name || team.teamName || team.id || 'TBD';
+  };
+
+  const getTeamLogo = (team: any) => {
+    if (!team || typeof team === 'string') return undefined;
+    return team.logoUrl || team.logo;
+  };
+
   const isLogosOnly = settings.swissLogosOnly ?? false;
 
   const toggleLogosOnly = () => {
