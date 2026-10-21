@@ -248,22 +248,23 @@ export class MatchEngine {
       const mapExpMod = teamId === t1Id ? t1MapExpMod : t2MapExpMod;
       
       // Team-wide influence (Captain's calls / Team cohesion):
-      const teamOverallWeight = isCS2 ? 0.22 : 0.20; // Increased to 0.22/0.20 to reflect realistic team cohesion
+      // Team-wide influence (Captain's calls / Team cohesion):
+      const teamOverallWeight = isCS2 ? 0.12 : 0.10; // Reduced from 0.22 to make individual skill more decisive
       const individualWeight = 1.0 - teamOverallWeight;
 
       // Realistic match day form & situational variance:
       // Pro players have subtle good/bad days (tight bell curve distribution within ±3-4 points)
-      let matchFormLuck = (rng() + rng() + rng() - 1.5) * 2.2; // range ~ -3.3 to +3.3
+      let matchFormLuck = (rng() + rng() + rng() - 1.5) * 1.8; // Reduced range for more stability
       
       let playerFocusMod = 1.0;
       const popOffRoll = rng();
       if (popOffRoll < 0.10) {
-        // 10% chance of a solid form boost (+3.5 to +5.0)
-        matchFormLuck += 3.5 + rng() * 1.5;
+        // 10% chance of a solid form boost (+2.5 to +4.0)
+        matchFormLuck += 2.5 + rng() * 1.5;
         playerFocusMod = 1.02;
       } else if (popOffRoll > 0.90) {
-        // 10% chance of a tough game (-2.5 to -4.0)
-        matchFormLuck -= 2.5 + rng() * 1.5;
+        // 10% chance of a tough game (-2.0 to -3.5)
+        matchFormLuck -= 2.0 + rng() * 1.5;
         playerFocusMod = 0.98;
       }
 
@@ -337,9 +338,9 @@ export class MatchEngine {
           reaction = skillVal * 1.00;
           aggression = 0.96;
           impact = 0.98;
-          iq = skillVal * 1.06;
+          iq = skillVal * 1.04; // Reduced from 1.06
           movement = skillVal * 0.99;
-          utility = skillVal * 1.04;
+          utility = skillVal * 1.03; // Reduced from 1.04
           focus = 1.00;
           speedBonus = 0.00;
       } else {
@@ -359,9 +360,9 @@ export class MatchEngine {
             } else if (origLower.includes('captain') || origLower.includes('igl') || origLower.includes('капитан')) {
               const isStar = rawRating >= 115;
               aim = skillVal * (isStar ? 1.00 : 0.89);
-              iq = skillVal * 1.10;
+              iq = skillVal * 1.08; // Reduced from 1.10
               movement = skillVal * 0.96;
-              utility = skillVal * 1.10;
+              utility = skillVal * 1.06; // Reduced from 1.10
               focus = 1.00;
               aggression = isStar ? 0.84 : 0.72;
               impact = isStar ? 1.00 : 0.89;
@@ -400,13 +401,13 @@ export class MatchEngine {
 
       // New player adaptation penalty (shoots fine but plays for himself / poor coordination)
       if (isNewPlayer) {
-        aim *= 1.05;       // Стреляет даже чуть агрессивнее/лучше (игра на статистику)
-        reaction *= 0.85;  // Плохая реакция на командные коллы
-        utility *= 0.65;   // Не знает раскидок команды, играет "вслепую"
-        iq *= 0.70;        // Низкое понимание командных стратегий
-        impact *= 0.80;    // Низкий вклад в победу раунда (не вовремя зашел, не дождался)
-        focus *= 0.85;     // Часто отвлекается от задачи раунда
-        aggression *= 1.20; // Играет больше на себя, лезет в ненужные дуэли
+        aim *= 1.04;       // Reduced boost
+        reaction *= 0.88;  // Better reaction
+        utility *= 0.70;   
+        iq *= 0.75;        
+        impact *= 0.82;    
+        focus *= 0.88;     
+        aggression *= 1.15; 
       }
       
       let callsVal = pData.calls !== undefined && pData.calls !== null
@@ -418,21 +419,21 @@ export class MatchEngine {
         const sub = pData.subclass || 'classic_igl';
         if (sub === 'fragging_igl' || sub === 'shooter') {
           // Капитан-стрелок: коллит меньше, но аим и фраги на уровне рифлера
-          aim = Math.round(skillVal * 1.05);
-          reaction = Math.round(skillVal * 1.03);
+          aim = Math.round(skillVal * 1.03); // Reduced from 1.05
+          reaction = Math.round(skillVal * 1.02); // Reduced from 1.03
           aggression = 1.02;
           callsVal = 45;
         } else if (sub === 'caller_igl' || sub === 'tactician_igl' || sub === 'caller') {
           // Коллер капитан: больше коллов для победы команды, но меньше личного аима
           aim = Math.round(skillVal * 0.96);
-          iq = Math.round(skillVal * 1.15);
-          utility = Math.round(utility * 1.12);
+          iq = Math.round(skillVal * 1.08); // Reduced from 1.15
+          utility = Math.round(utility * 1.06); // Reduced from 1.12
           aggression = 0.92;
           callsVal = 95;
         } else {
           // Капитан обычный (базовый)
           aim = Math.round(skillVal * 1.00);
-          iq = Math.round(skillVal * 1.06);
+          iq = Math.round(skillVal * 1.04); // Reduced from 1.06
           callsVal = 70;
         }
       }

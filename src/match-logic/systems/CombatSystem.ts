@@ -141,7 +141,7 @@ export class CombatSystem {
     // Rating Scaling: ensure higher rated players (110+) naturally outperform lower rated players (80)
     // while keeping team contribution and trading healthy
     const baseAimRatio = Math.max(0.10, effectiveAim / 100);
-    const aimRatio = 1.0 + (baseAimRatio - 1.0) * 1.12; // Reduced from 1.25 to prevent snowballing and compress stat gaps
+    const aimRatio = 1.0 + (baseAimRatio - 1.0) * 0.92; // Reduced from 1.12 to compress mechanical gaps and allow upsets
     
     const baseIqRatio = Math.max(0.10, effectiveIq / 100);
     const pRoleLower = (shooter.role || '').toLowerCase();
@@ -160,8 +160,36 @@ export class CombatSystem {
 
     const progress = Math.min(1.0, Math.max(0.40, shooter.aimProgress || 0.70));
     
+    // Score-based Focus Adjustment (Anti-Snowball / Pressure):
+    // Leading teams might get complacent, trailing teams feel the pressure/hunger
+    let pressureMod = 1.0;
+    if (shooterTeam && targetTeam) {
+      const myScore = shooterTeam.score;
+      const enemyScore = targetTeam.score;
+      const scoreLead = myScore - enemyScore;
+      
+      if (scoreLead >= 8) {
+        // Heavy lead complacency: -4% focus
+        pressureMod *= 0.96;
+      } else if (scoreLead >= 4) {
+        // Moderate lead: -2% focus
+        pressureMod *= 0.98;
+      } else if (scoreLead <= -8) {
+        // Heavy trailing hunger: +5% focus
+        pressureMod *= 1.05;
+      } else if (scoreLead <= -4) {
+        // Trailing hunger: +3% focus
+        pressureMod *= 1.03;
+      }
+      
+      // Tight game intensity boost: if score is very close (e.g. 11:11, 12:12), both teams lock in
+      if (Math.abs(scoreLead) <= 1 && (myScore + enemyScore) >= 18) {
+        pressureMod *= 1.02;
+      }
+    }
+
     // Baseline hit chance scaling
-    let hitChance = 0.50 + (aimRatio - 1.0) * 0.45 * progress;
+    let hitChance = (0.50 + (aimRatio - 1.0) * 0.45 * progress) * pressureMod;
     if (state.game === 'so2') hitChance += 0.05;
 
     // Role-specific Hit Chance Tweaks

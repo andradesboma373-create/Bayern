@@ -115,5 +115,5 @@ export const RATING_CONFIG = {
 
   // Smoothing coefficient for normalizing performance gaps within a team (0.0 to 1.0)
   // 1.0 = no normalization, 0.0 = all players have team average stats
-  STAT_NORMALIZATION_FACTOR: 0.65
+  STAT_NORMALIZATION_FACTOR: 0.72
 };
