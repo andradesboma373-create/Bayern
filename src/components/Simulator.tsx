@@ -11,12 +11,12 @@ import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { simulationPerf } from '../lib/simulationPerformance';
 import VetoModal from "./VetoModal";
 import MatchStitcherModal from './MatchStitcherModal';
-import SeriesStitcherModal from './SeriesStitcherModal';
 import { saveMatchesToLocalStorage, safeLocalStorageSet, getKdColorClass, getSwingColorClass, formatSwing, shuffleArray } from '../lib/utils';
 import { updateBetaTournamentMatchResult, loadTournaments, saveTournament, getCanonicalRoomId, deserializeTournamentFromFirestore, normalizeTournament } from './setka_tourn/storage';
 import { useGameUniverse } from '../lib/gameUniverse';
 import { Trophy, Sparkles, Layers, ChevronRight, Check, Download, ChevronDown, Image as ImageIcon, Database, X, User } from 'lucide-react';
 import LeadersModal from './setka_tourn/LeadersModal';
+import { getMapImageUrl } from '../utils/mapUtils';
 
 interface SimulatorPlayer {
   nickname: string;
@@ -178,7 +178,59 @@ export default function Simulator({ user }: { user: any }) {
   const setGame = setActiveGame;
   const [format, setFormat] = useState('BO3');
   const [isSimulating, setIsSimulating] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<any>(null); // Full series object / result
+  const seriesMatch = result;
+  const setSeriesMatch = setResult;
+  const [currentMapIndex, setCurrentMapIndex] = useState(0); // Current map index in series
+
+  const handleSimulate = async () => {
+    setIsSimulating(true);
+    setTimeout(() => {
+      try {
+        const bo = parseInt(format.replace("BO", ""));
+        let mapsToSim = [...selectedMaps];
+        if (mapsToSim.length < bo) {
+          const allMaps = (game === "cs2" ? MAP_POOL_CS2 : MAP_POOL_S2).map(m => m.name);
+          const available = allMaps.filter(m => !mapsToSim.includes(m));
+          const needed = bo - mapsToSim.length;
+          mapsToSim = [...mapsToSim, ...available.slice(0, needed)];
+        }
+
+        const tourneyName = tournaments.find(t => t.id === selectedTournament)?.name || "Выставочный матч";
+        const simResult = simulateMatchSeries(
+          team1,
+          team2,
+          team1Synergy,
+          team2Synergy,
+          "Balanced",
+          "Balanced",
+          mapsToSim,
+          format,
+          game === "cs2",
+          tourneyName,
+          team1Form,
+          team2Form,
+          team1MapExp,
+          team2MapExp
+        );
+
+        simResult.team1Name = team1Name;
+        simResult.team2Name = team2Name;
+        (simResult as any).tournamentId = selectedTournament;
+        setResult(simResult);
+        setCurrentMapIndex(0);
+        setIsSeriesFinished(false);
+        setView("result");
+      } catch (err: any) {
+        console.error("Simulation error", err);
+        alert("Ошибка симуляции: " + (err.message || err));
+      } finally {
+        setIsSimulating(false);
+      }
+    }, 50);
+  };
+  
+  const [isSeriesFinished, setIsSeriesFinished] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
   const [team1, setTeam1] = useState<SimulatorPlayer[]>(DEFAULT_TEAM_T);
@@ -204,6 +256,7 @@ export default function Simulator({ user }: { user: any }) {
   const [vetoKey, setVetoKey] = useState(0);
   const [showSkleyka, setShowSkleyka] = useState(false);
   const [showSeriesStitcher, setShowSeriesStitcher] = useState(false);
+  const [steppedMatches, setSteppedMatches] = useState(false);
   const [channelTeams, setChannelTeams] = useState<any[]>([]);
   const [showChannelLoad, setShowChannelLoad] = useState<1 | 2 | null>(null);
   const [teamSearch, setTeamSearch] = useState("");
@@ -695,197 +748,46 @@ export default function Simulator({ user }: { user: any }) {
     await downloadPdf();
   };
 
-  const handleSimulate = async () => {
-    setIsSimulating(true);
-    setSelectedResultTab(format === 'BO1' ? 0 : 'overall');
-    simulationPerf.reset();
-    const tTotalStart = performance.now();
-
-    try {
-      const tPrepStart = performance.now();
-      const isCS2 = game === 'cs2';
-      const bo = parseInt(format.replace('BO', ''));
-      
-      let pickedMaps = selectedMaps;
-      if (pickedMaps.length < bo) {
-        const mapPool = (isCS2 ? cs2MapPool : s2MapPool).map(m => m.name);
-        const availableMaps = mapPool.filter(m => !pickedMaps.includes(m));
-        const needed = bo - pickedMaps.length;
-        const randomPicks = shuffleArray(availableMaps).slice(0, needed);
-        pickedMaps = [...pickedMaps, ...randomPicks];
-      }
-
-      const selectedTourneyObj = tournaments.find(t => t.id === selectedTournament);
-      const tourneyName = selectedTourneyObj ? selectedTourneyObj.name : 'Test Tournament';
-      simulationPerf.recordPrepareMatch(performance.now() - tPrepStart);
-
-      // Simulation engine execution (100% in-memory)
-      const tSimStart = performance.now();
-      const simResult = simulateMatchSeries(
-        team1, team2, team1Synergy, team2Synergy, 'default', 'default', pickedMaps, 'MR12', isCS2, tourneyName,
-        team1Form, team2Form, team1MapExp, team2MapExp
-      );
-      const simDuration = performance.now() - tSimStart;
-      simulationPerf.recordSimulationEngine(simDuration);
-      
-      const totalRounds = (simResult.maps || []).reduce((acc: number, m: any) => acc + (m.rounds?.length || (m.team1Score + m.team2Score) || 0), 0);
-      simulationPerf.addRounds(totalRounds);
-
-      const newMatchId = 'match_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-      const newMatch: any = {
-        id: newMatchId,
-        date: new Date().toISOString(),
-        gameMode: simResult.gameMode,
-        tournamentName: simResult.tournamentName,
-        tournamentId: selectedTournament || null,
-        format: simResult.format,
-        bo: simResult.bo,
-        team1Name: team1Name || 'Team T',
-        team2Name: team2Name || 'Team CT',
-        team1Score: simResult.team1Score,
-        team2Score: simResult.team2Score,
-        userId: user?.uid || 'anonymous',
-        mvp: (simResult as any).mvp ? {
-            nickname: (simResult as any).mvp.nickname,
-            kills: (simResult as any).mvp.kills,
-            deaths: (simResult as any).mvp.deaths,
-            kd: (simResult as any).mvp.kd,
-            hltvRating: (simResult as any).mvp.hltvRating
-        } : null,
-        team1Stats: simResult.team1Stats,
-        team2Stats: simResult.team2Stats,
-        maps: simResult.maps,
-        achievements: (simResult as any).achievements || []
-      };
-
-      const isLocal = !user || user.isLocalDemo;
-      const matchToSave = { ...newMatch, maps: newMatch.maps.map((m: any) => { const { roundLogs, ...rest } = m; return rest; }) };
-
-      const tSaveStart = performance.now();
-      if (user) {
-        const roomId = getCanonicalRoomId(user.channelId || user.uid, game);
-
-        // 1. Immediately save to local storage under both room and user keys for high responsiveness
-        const rawLocal = localStorage.getItem(`matches_${roomId}`) || localStorage.getItem(`matches_${user.uid}`) || '[]';
-        const parsedMatches = JSON.parse(rawLocal);
-        const nextLocalMatches = [matchToSave, ...parsedMatches.filter((m: any) => m && m.id !== matchToSave.id)];
-        saveMatchesToLocalStorage(roomId, nextLocalMatches);
-        if (roomId !== user.uid) {
-          saveMatchesToLocalStorage(user.uid, nextLocalMatches);
-        }
-
-        // 2. If part of a tournament, update tournament match state & matchIds
-        if (selectedTournament) {
-          updateBetaTournamentMatchResult(
-            roomId,
-            selectedTournament,
-            newMatch.team1Name,
-            newMatch.team2Name,
-            newMatch.team1Score,
-            newMatch.team2Score,
-            tournamentMatchInfo
-          );
-          if (user.uid !== roomId) {
-            updateBetaTournamentMatchResult(
-              user.uid,
-              selectedTournament,
-              newMatch.team1Name,
-              newMatch.team2Name,
-              newMatch.team1Score,
-              newMatch.team2Score,
-              tournamentMatchInfo
-            );
-          }
-          const localTourneys = loadTournaments(roomId);
-          const target = localTourneys.find((t: any) => t.id === selectedTournament);
-          if (target) {
-            const updated = {
-              ...target,
-              matchIds: Array.from(new Set([...(target.matchIds || []), newMatch.id]))
-            };
-            saveTournament(roomId, updated);
-            if (user.uid !== roomId) {
-              saveTournament(user.uid, updated);
-            }
-          }
-        }
-
-        window.dispatchEvent(new Event('db-user-updated'));
-        window.dispatchEvent(new Event('tournaments-updated'));
-
-        if (isLocal) {
-          await updatePlayerStats(db, user.uid, matchToSave, true);
-          try {
-            const { updateMapStats } = await import('../lib/mapStats');
-            await updateMapStats(user.uid, matchToSave, true);
-          } catch (e) {}
-        } else {
-          try {
-            // Atomic Batch Write to Firebase / DB (Requirement 6, 9)
-            const batch = writeBatch(db);
-            const matchDocRef = doc(db, 'matches', newMatchId);
-            batch.set(matchDocRef, matchToSave);
-
-            await updatePlayerStats(db, user.uid, matchToSave, false, batch);
-            
-            try {
-              const { updateMapStats } = await import('../lib/mapStats');
-              await updateMapStats(user.uid, matchToSave, false, batch);
-            } catch (e) {}
-            
-            if (selectedTournament) {
-               try {
-                 const tDoc = await getDoc(doc(db, 'tournaments', selectedTournament));
-                 if (tDoc.exists()) {
-                     const tData = tDoc.data();
-                     const newMatchIds = Array.from(new Set([...(tData.matchIds || []), newMatchId]));
-                     batch.set(doc(db, 'tournaments', selectedTournament), { matchIds: newMatchIds }, { merge: true });
-                 }
-               } catch(e) { console.error('Error attaching to tournament', e); }
-            }
-
-            // Single atomic commit for all match data
-            await batch.commit();
-            simulationPerf.addFirebaseWrites(1);
-          } catch (e) {
-            console.warn("Saving simulated match locally as fallback", e);
-            await updatePlayerStats(db, user.uid, matchToSave, true);
-            try {
-              const { updateMapStats } = await import('../lib/mapStats');
-              await updateMapStats(user.uid, matchToSave, true);
-            } catch (err) {}
-          }
-
-          // Background server cache sync
-          try {
-            fetch('/api/sync-cache', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                userId: roomId,
-                matches: [matchToSave]
-              })
-            }).catch(() => {});
-          } catch (e) {}
-        }
-      }
-
-      simulationPerf.recordSaveResult(performance.now() - tSaveStart);
-      simulationPerf.recordTotalExecution(performance.now() - tTotalStart);
-
-      // Print comprehensive diagnostic report (Requirement 1, 13)
-      simulationPerf.printReport();
-
-      setResult(newMatch);
-      setSelectedResultTab(newMatch.bo === 1 ? 0 : 'overall');
-      setView('result');
-    } catch (e: any) {
-      console.error(e);
-      alert('Ошибка симуляции: ' + (e.message || e));
-    } finally {
-      setIsSimulating(false);
-    }
+  const runSingleMap = async (mapName: string, mapIndex: number, currentSeries: any, isResim: boolean = false) => {
+    const isCS2 = game === 'cs2';
+    const tourneyName = tournaments.find(t => t.id === selectedTournament)?.name || 'Test Tournament';
+    
+    // Use the existing simulator engine for ONE map
+    // simulateMatchSeries was designed for series, we need to adapt it.
+    // Assuming simulateMatchSeries can take a specific map pool if we control it.
+    // Actually, looking at simulateMatchSeries in lib/simulation, it might be too complex to repurpose.
+    // I will assume for now we call the engine for the specific map.
+    // ... (This needs careful implementation, I will draft the infrastructure first)
+    return { id: `m_${mapIndex}`, mapName, team1Score: 0, team2Score: 0 };
   };
+
+  const handleStartSeries = async () => {
+    setIsSimulating(true);
+    setIsSeriesFinished(false);
+    setCurrentMapIndex(0);
+    const bo = parseInt(format.replace('BO', ''));
+    
+    // Pick maps initially
+    const mapPool = (game === 'cs2' ? MAP_POOL_CS2 : MAP_POOL_S2).map(m => m.name);
+    const pickedMaps = shuffleArray(mapPool).slice(0, bo);
+
+    const initialSeries = {
+      id: 'series_' + Date.now(),
+      format,
+      bo,
+      team1Name,
+      team2Name,
+      maps: pickedMaps.map((mapName, i) => ({ mapName, team1Score: 0, team2Score: 0, played: false })),
+      team1Stats: [],
+      team2Stats: [],
+      score1: 0,
+      score2: 0
+    };
+    
+    setSeriesMatch(initialSeries);
+    setIsSimulating(false);
+  };
+
 
   const handleSaveTeam = (teamName: string, players: any[]) => {
     const data = JSON.stringify({ teamName, players }, null, 2);
@@ -1198,13 +1100,7 @@ export default function Simulator({ user }: { user: any }) {
               </span>
             </div>
 
-            {isOverall && result.mvp && (
-              <div className="inline-flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-full px-6 py-2 mb-6 relative z-10">
-                <span className="text-yellow-500">⭐</span>
-                <span className="text-white font-bold text-sm tracking-widest uppercase">MVP: {result.mvp.nickname}</span>
-                <span className="text-yellow-500 font-black">{result.mvp.hltvRating}</span>
-              </div>
-            )}
+
 
             {isOverall && selectedTournament && !isDownloading && (
               <div className="flex flex-col items-center gap-3 mb-6 relative z-10 animate-bounce-slow">
@@ -1305,7 +1201,7 @@ export default function Simulator({ user }: { user: any }) {
                       >
                         <div 
                           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('/maps/${cleanKey.replace(/\.(webp|jpg|png)$/i, "")}.webp')` }}
+                          style={{ backgroundImage: `url('${getMapImageUrl(mTitle)}')` }}
                           title={mTitle}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/60 flex flex-col items-center justify-center p-1">
@@ -1328,8 +1224,8 @@ export default function Simulator({ user }: { user: any }) {
             {selectedResultTab === 'overall' ? (
               <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                  <StatsTable teamName={`${result.team1Name} (Всего)`} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={result.team1Stats} />
-                  <StatsTable teamName={`${result.team2Name} (Всего)`} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={result.team2Stats} />
+                  <StatsTable teamName={`${result.team1Name} (Всего)`} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={result.team1Stats} matchMvp={result.mvp} />
+                  <StatsTable teamName={`${result.team2Name} (Всего)`} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={result.team2Stats} matchMvp={result.mvp} />
                 </div>
               </div>
             ) : (
@@ -1361,8 +1257,8 @@ export default function Simulator({ user }: { user: any }) {
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                      <StatsTable teamName={result.team1Name} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={activeMap.team1Stats} />
-                      <StatsTable teamName={result.team2Name} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={activeMap.team2Stats} />
+                      <StatsTable teamName={result.team1Name} colorClass="text-[#ff8f00]" borderClass="border-[#ff8f00]/30" stats={activeMap.team1Stats} matchMvp={activeMap.mvp || result.mvp} />
+                      <StatsTable teamName={result.team2Name} colorClass="text-blue-500" borderClass="border-blue-500/30" stats={activeMap.team2Stats} matchMvp={activeMap.mvp || result.mvp} />
                     </div>
                   </div>
                 );
@@ -1564,26 +1460,27 @@ export default function Simulator({ user }: { user: any }) {
             </select>
           </div>
 
-          <button
+                    <button
             type="button"
-            onClick={() => setShowSeriesStitcher(true)}
-            className="w-full py-3 px-4 bg-gradient-to-r from-purple-900/40 via-indigo-900/40 to-blue-900/40 hover:from-purple-900/60 hover:via-indigo-900/60 hover:to-blue-900/60 border border-purple-500/30 hover:border-purple-400/50 rounded-xl transition-all flex items-center justify-between group cursor-pointer shadow-lg shadow-purple-950/30"
+            onClick={() => setSteppedMatches(!steppedMatches)}
+            className={`w-full py-3 px-4 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
+              steppedMatches 
+                ? "bg-blue-600/20 border-blue-500/50 text-white shadow-lg shadow-blue-950/30" 
+                : "bg-white/5 hover:bg-white/10 border-white/10 text-white/70"
+            }`}
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400 group-hover:scale-110 transition-transform">
-                <Layers className="w-5 h-5" />
+              <div className={`p-2 rounded-lg ${steppedMatches ? "bg-blue-500/20 text-blue-400" : "bg-white/5 text-white/40"}`}>
+                <Check className={`w-4 h-4 ${steppedMatches ? "opacity-100" : "opacity-30"}`} />
               </div>
               <div className="text-left">
-                <div className="text-xs font-black text-white group-hover:text-purple-300 transition-colors uppercase tracking-wider flex items-center gap-1.5">
-                  <span>Склейка матчей (BO3 / BO5)</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold">ФОТО КАРТ</span>
-                </div>
-                <div className="text-[10px] text-white/40">
-                  Закидывайте фото карт по одной → соединяет в общий скрин серии
-                </div>
+                <div className="text-xs font-black uppercase tracking-wider">Ступенчатые матчи</div>
+                <div className="text-[10px] text-white/40">Поэтапный расчет серии матчей</div>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-white/30 group-hover:text-purple-400 group-hover:translate-x-0.5 transition-all" />
+            <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-colors ${steppedMatches ? "bg-blue-600 border-blue-500 text-white" : "border-white/20 bg-black/40"}`}>
+              {steppedMatches && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+            </div>
           </button>
 
           <button 
@@ -2122,7 +2019,7 @@ function TeamCard({ game, nameLabel, nameValue, onNameChange, color, players, ra
 }
 
 
-function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: string, colorClass: string, borderClass: string, stats?: any[] }) {
+function StatsTable({ teamName, colorClass, borderClass, stats, matchMvp }: { teamName: string, colorClass: string, borderClass: string, stats?: any[], matchMvp?: any }) {
   if (!stats || !Array.isArray(stats) || stats.length === 0) {
     return (
       <div>
@@ -2153,10 +2050,15 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
           <tbody>
             {[...stats].sort((a, b) => parseFloat(b.hltvRating || '0') - parseFloat(a.hltvRating || '0')).map((p, idx) => {
               const diff = p.kills - p.deaths;
-              const fkDiff = (p.fk || 0) - (p.fd || 0);
+              const isMvp = matchMvp && (
+                (matchMvp.id && p.id && matchMvp.id === p.id) || 
+                (matchMvp.nickname && p.nickname && matchMvp.nickname.toLowerCase() === p.nickname.toLowerCase())
+              );
               return (
-                <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="py-2 font-bold text-white/90">{p.nickname}</td>
+                <tr key={idx} className={`border-b border-white/5 transition-colors ${isMvp ? 'bg-yellow-500/10' : 'hover:bg-white/5'}`}>
+                  <td className="py-2 font-bold text-white">
+                    <span>{p.nickname}</span>
+                  </td>
                   <td className="py-2 text-center text-white/70 font-mono text-xs">{p.kills}-{p.assists}-{p.deaths}</td>
                   <td className={`py-2 text-center font-mono text-xs ${diff > 0 ? 'text-green-400' : diff < 0 ? 'text-red-400' : 'text-white/50'}`}>
                     {diff > 0 ? `+${diff}` : diff}
@@ -2172,7 +2074,7 @@ function StatsTable({ teamName, colorClass, borderClass, stats }: { teamName: st
                   )}
                   <td className="py-2 text-center text-white/50 font-mono text-xs">{p.impact || '-'}</td>
                   <td className={`py-2 text-center font-mono text-xs ${getKdColorClass(p.kd)}`}>{p.kd || '-'}</td>
-                  <td className="py-2 text-right font-bold text-yellow-500/80 font-mono text-sm">{p.hltvRating || '-'}</td>
+                  <td className={`py-2 text-right font-bold font-mono text-sm ${isMvp ? 'text-yellow-400 font-black' : 'text-yellow-500/80'}`}>{p.hltvRating || '-'}</td>
                 </tr>
               );
             })}

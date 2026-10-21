@@ -1,6 +1,17 @@
-export type TeamSide = 'CT' | 'T';
-export type PlayerRole = 'Captain' | 'Entry' | 'Rifler' | 'Support' | 'Sniper' | 'Lurker';
-export type NodeZone = 'T_SPAWN' | 'CT_SPAWN' | 'MID' | 'A_SITE' | 'B_SITE' | 'A_MAIN' | 'B_MAIN' | 'CONNECTOR' | 'LONG' | 'SHORT' | 'APARTMENTS';
+export type TeamSide = 'T' | 'CT';
+
+export type NodeZone =
+  | 'T_SPAWN'
+  | 'CT_SPAWN'
+  | 'A_SITE'
+  | 'B_SITE'
+  | 'MID'
+  | 'A_MAIN'
+  | 'B_MAIN'
+  | 'APARTMENTS'
+  | 'CONNECTOR'
+  | 'SHORT'
+  | string;
 
 export interface Vector2D {
   x: number;
@@ -12,17 +23,20 @@ export interface MapNode {
   x: number;
   y: number;
   zone: NodeZone;
-  connections: string[]; // Node IDs
-  visibilityConnections: string[]; // Nodes visible from this node
+  connections: string[];
+  visibilityConnections: string[];
   isPlantZone?: boolean;
+  [key: string]: any;
 }
 
-export interface PlayerStats {
+export interface PlayerStatistics {
   kills: number;
   deaths: number;
   assists: number;
   damage: number;
   headshots: number;
+  shots: number;
+  hits: number;
   openingKills: number;
   openingDeaths: number;
   trades: number;
@@ -30,31 +44,14 @@ export interface PlayerStats {
   plants: number;
   defuses: number;
   utilityDamage: number;
-  clutches?: number;
-  shots?: number;
-  hits?: number;
-  k1?: number;
-  k2?: number;
-  k3?: number;
-  k4?: number;
-  k5?: number;
-  kastRounds?: number;
+  hltvRating?: string | number;
+  adr?: number | string;
+  kast?: string;
+  impact?: number | string;
+  kd?: number | string;
+  roundSwingNum?: number;
   roundSwing?: number;
-  clutchesWon1v1?: number;
-  clutchesWon1v2?: number;
-  clutchesWon1v3?: number;
-  clutchesWon1v4?: number;
-  clutchesWon1v5?: number;
-  openingKillsConverted?: number;
-  openingKillsTraded?: number;
-}
-
-export interface PlayerMemory {
-  enemyId: string;
-  position: Vector2D;
-  nodeId: string;
-  timestamp: number;
-  confidence: number;
+  [key: string]: any;
 }
 
 export interface Player {
@@ -62,135 +59,107 @@ export interface Player {
   name: string;
   teamId: string;
   side: TeamSide;
-  role: PlayerRole;
-  originalRole?: PlayerRole;
+  role: string;
+  originalRole?: string;
   isAdaptedRole?: boolean;
   isNewPlayer?: boolean;
-
-  // Base Characteristics
   rating: number;
-  subclass?: string; // Subclass (e.g. fragging_igl, caller_igl, classic_igl)
-  calls?: number; // 0 to 100 tactical calls quality rating for Captains
+  subclass?: string;
+  calls?: number;
   aim: number;
   iq: number;
   movement: number;
   reaction: number;
   roleSkill: number;
-  utility?: number;
-  focus?: number;
-  aggression?: number;
-  impact?: number;
-
-  // State
+  utility: number;
+  focus: number;
+  aggression: number;
+  impact: number;
+  perk?: any;
   hp: number;
-  armor: number; // 0, 1 (Kevlar), 2 (Helmet)
+  armor: number;
   money: number;
-  
-  // Loadout
   weaponId: string;
-  primaryWeaponId?: string | null;
-  secondaryWeaponId?: string;
   hasDefuseKit: boolean;
-  grenades: string[];
-  ammo?: number;
-
-  // Physical
+  grenades: any[];
   position: Vector2D;
-  currentNodeId?: string;
-  targetNodeId?: string | null;
-  targetPosition?: Vector2D | null;
-  path?: string[];
+  targetPosition: Vector2D | null;
   speed: number;
-  
-  // Logical
   alive: boolean;
-  state: 'IDLE' | 'MOVING' | 'HOLDING' | 'ENGAGING' | 'PLANTING' | 'DEFUSING' | 'DEAD' | 'SAVING' | 'RELOADING';
+  state: string;
   targetEnemyId: string | null;
-  
-  // Perception & Memory
-  knownEnemies: Map<string, PlayerMemory>;
-  
-  // Timers
+  knownEnemies: Map<string, any>;
   reactionTimer: number;
   shootTimer: number;
   actionTimer: number;
-  aimProgress?: number; // 0 to 1
-  perk?: any;
-
-  statistics: PlayerStats;
-  damageTaken?: Map<string, number>;
-  lastRoundKills?: number;
+  statistics: PlayerStatistics;
+  currentNodeId?: string;
+  targetNodeId?: string;
+  path?: string[];
+  aimProgress?: number;
+  [key: string]: any;
 }
 
 export interface Team {
   id: string;
   name: string;
-  score: number;
-  money: number;
   side: TeamSide;
-  players: string[]; // Player IDs
+  score: number;
+  economy: number;
+  lossStreak: number;
+  players: string[];
   tactic: string;
-  strategy: 'DEFAULT' | 'FAST_A' | 'FAST_B' | 'EXECUTE_A' | 'EXECUTE_B' | 'MID_SPLIT_A' | 'MID_SPLIT_B' | 'MID_CONTROL' | 'SPLIT' | 'CONTACT' | 'FAKE' | 'SLOW' | 'AGGRESSIVE' | 'PASSIVE' | 'STACK_A' | 'STACK_B' | 'RETAKE' | 'SAVE' | 'DEFEND_BOMB' | 'RECOVER_BOMB' | 'MID_ROUND_HOLD';
-  lossStreak?: number;
+  strategy: string;
+  timeoutsRemaining: number;
   synergy?: number;
   mapExp?: number;
-  calls?: number; // Current active captain's CALLS rating (0 - 100)
-  callsNorm?: number; // Normalized [0.0 - 1.0]
+  calls?: number;
+  callsNorm?: number;
   captainPlayerId?: string | null;
-}
-
-export interface BombState {
-  state: 'CARRIED' | 'DROPPED' | 'PLANTING' | 'PLANTED' | 'DEFUSING' | 'DEFUSED' | 'EXPLODED';
-  position: Vector2D | null;
-  nodeId?: string | null;
-  carrierId: string | null;
-  timer: number;
-  explosionTimer?: number;
-  defuseTimer?: number; // ticks left for plant/defuse/explode
-  defuserPlayerId?: string | null;
-}
-
-export interface MatchState {
-  matchId: string;
-  seed: number;
-  mapId: string;
-  isCS2: boolean;
-  game?: 'cs2' | 'so2';
-  format: string; // MR12, MR15
-  formatProfile?: any;
-  
-  phase: 'FREEZE' | 'BUY' | 'LIVE' | 'POST_ROUND_COMBAT' | 'ROUND_END' | 'MATCH_END';
-  round: number;
-  half: number;
-  tick: number; // For simulation timing
-  
-  teams: Record<string, Team>;
-  players: Record<string, Player>;
-  
-  bomb: BombState;
-  
-  events: MatchEvent[];
-  roundLogs: RoundLog[];
-  roundFirstKillId?: string | null;
+  [key: string]: any;
 }
 
 export interface MatchEvent {
   type: string;
-  tick: number;
-  data: any;
+  tick?: number;
+  round?: number;
+  playerId?: string;
+  targetId?: string;
+  weapon?: string;
+  isHeadshot?: boolean;
+  damage?: number;
+  message?: string;
+  [key: string]: any;
 }
 
-export interface RoundLog {
+export type BombStatus = 'CARRIED' | 'DROPPED' | 'PLANTING' | 'PLANTED' | 'DEFUSING' | 'DEFUSED' | 'EXPLODED';
+
+export interface BombState {
+  state: BombStatus;
+  position: Vector2D | null;
+  nodeId: string | null;
+  carrierId: string | null;
+  timer: number;
+  [key: string]: any;
+}
+
+export interface MatchState {
   round: number;
-  winnerTeamId: string;
-  reason: 'ELIMINATION' | 'DEFUSE' | 'EXPLOSION' | 'TIME';
-  duration: number;
-  t1Score: number;
-  t2Score: number;
-  kills: number;
-  firstKillId?: string;
-  aces?: string[];
-  clutch?: string;
-  t1EcoType: string;
-  t2EcoType: string;
+  tick: number;
+  phase: string;
+  isCS2: boolean;
+  mapId: string;
+  format: string;
+  teams: Record<string, Team>;
+  players: Record<string, Player>;
+  bomb: BombState;
+  events: MatchEvent[];
+  roundLogs: any[];
+  seed?: number;
+  t1StartedAs?: TeamSide;
+  t2StartedAs?: TeamSide;
+  t1Overall?: number;
+  t2Overall?: number;
+  teamRatingDiff?: number;
+  [key: string]: any;
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TeamLogo from './TeamLogo';
+import { getMapImageUrl } from '../utils/mapUtils';
 
 interface LiveMatchOverlayProps {
     matchResult: any;
@@ -8,12 +9,7 @@ interface LiveMatchOverlayProps {
     onComplete: () => void;
 }
 
-const getMapBg = (mapName?: string, game?: string) => {
-    if (!mapName) return '/maps/mirage.webp';
-    let clean = mapName.toLowerCase().replace(/^(de_|cs_)/i, '').replace(/[^a-z0-9]/g, '');
-    if (clean.includes('sakura')) clean = 'hanami';
-    return `/maps/${clean}.webp`;
-};
+const getMapBg = getMapImageUrl;
 
 export default function LiveMatchOverlay({ matchResult, game = 'cs2', onComplete }: LiveMatchOverlayProps) {
     const [mapIndex, setMapIndex] = useState(0);

@@ -1,143 +1,153 @@
-// Local Database Mock
+// Client proxy to backend DB endpoints
+export const db: any = "localdb";
 
-export const db = "localdb";
-
-// Auth Mock (since Firebase Auth is also removed)
-export const auth = {
-  currentUser: { uid: 'local_admin', name: 'Local Admin', email: 'admin@local' }
+export const auth: any = {
+  currentUser: {
+    uid: "local_admin",
+    name: "Local Admin",
+    email: "admin@local"
+  }
 };
 
-export const logout = async () => {
+export const logout = async (): Promise<void> => {
   try {
-    localStorage.removeItem('customUser');
-  } catch (e) {}
+    localStorage.removeItem("customUser");
+  } catch {}
   window.location.reload();
 };
 
-export const onAuthStateChanged = (authObj: any, callback: any) => {
+export const onAuthStateChanged = (authObj: any, callback: (user: any) => void): (() => void) => {
   try {
-    const userStr = localStorage.getItem('customUser');
-    if (userStr) {
+    const r = localStorage.getItem("customUser");
+    if (r) {
       try {
-        callback(JSON.parse(userStr));
+        callback(JSON.parse(r));
       } catch {
         callback(null);
       }
     } else {
       callback(null);
     }
-  } catch (e) {
+  } catch {
     callback(null);
   }
   return () => {};
 };
 
-export const signInWithEmailAndPassword = async (authObj: any, u: string, p: string) => {
-  return { user: { uid: u, name: u } };
-};
+export const signInWithEmailAndPassword = async (_auth: any, email: string, _pass: string) => ({
+  user: { uid: email, name: email }
+});
 
-export const createUserWithEmailAndPassword = async (authObj: any, u: string, p: string) => {
-  return { user: { uid: u, name: u } };
-};
+export const createUserWithEmailAndPassword = async (_auth: any, email: string, _pass: string) => ({
+  user: { uid: email, name: email }
+});
 
-export function collection(db: any, path: string) { return { path }; }
-export function doc(db: any, path?: any, id?: string) {
-  if (db && typeof db === 'object' && db.path && !path) {
-    const colPath = db.path;
-    const generatedId = 'local_' + Math.random().toString(36).substring(2, 15);
-    return { path: `${colPath}/${generatedId}`, id: generatedId };
-  }
-  if (typeof path === 'string') {
-    const finalId = id || 'local_' + Math.random().toString(36).substring(2, 15);
-    return { path: `${path}/${finalId}`, id: finalId };
-  }
-  return { path: String(db), id: 'local_doc' };
+export function collection(_db: any, path: string): { path: string } {
+  return { path };
 }
-export function query(col: any, ...filters: any[]) { return { path: col.path, filters }; }
-export function where(field: string, op: string, value: any) { return { field, op, value }; }
-export function orderBy(field: string, direction: string = 'asc') { return { field, op: 'orderBy', value: direction }; }
-export const increment = (n: number) => ({ __op: 'increment', value: n });
 
-export async function getDocs(queryRef: any) {
+export function doc(first: any, second?: string, third?: string): { path: string; id: string } {
+  if (first && typeof first === "object" && first.path && !second) {
+    const p = first.path;
+    const autoId = "local_" + Math.random().toString(36).substring(2, 15);
+    return { path: `${p}/${autoId}`, id: autoId };
+  }
+  if (typeof second === "string") {
+    const autoId = third || "local_" + Math.random().toString(36).substring(2, 15);
+    return { path: `${second}/${autoId}`, id: autoId };
+  }
+  return { path: String(first), id: "local_doc" };
+}
+
+export function query(colRef: { path: string }, ...filters: any[]): { path: string; filters: any[] } {
+  return { path: colRef.path, filters };
+}
+
+export function where(field: string, op: string, value: any): { field: string; op: string; value: any } {
+  return { field, op, value };
+}
+
+export function orderBy(field: string, direction: 'asc' | 'desc' = 'asc'): { field: string; op: string; value: string } {
+  return { field, op: 'orderBy', value: direction };
+}
+
+export function limit(count: number): { field: string; op: string; value: number } {
+  return { field: 'limit', op: 'limit', value: count };
+}
+
+export const increment = (val: number) => ({ __op: "increment", value: val });
+
+export async function getDocs(q: any): Promise<{ docs: any[]; empty: boolean; size: number; forEach: (fn: (doc: any) => void) => void }> {
   try {
-    const res = await fetch('/api/db/getDocs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(queryRef)
+    const res = await fetch("/api/db/getDocs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(q)
     });
-    
     if (!res.ok) {
       console.warn("getDocs failed with status:", res.status);
       return { docs: [], empty: true, size: 0, forEach: () => {} };
     }
-
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      console.warn("getDocs received non-json response:", contentType);
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      console.warn("getDocs received non-json response:", ct);
       return { docs: [], empty: true, size: 0, forEach: () => {} };
     }
-    
-    const data = await res.json();
-    if (!Array.isArray(data)) {
+    const json = await res.json();
+    if (!Array.isArray(json)) {
       return { docs: [], empty: true, size: 0, forEach: () => {} };
     }
-
-    const docs = data.map((d: any) => ({
-      id: d.id,
-      ref: doc(queryRef.path || 'items', d.id),
-      data: () => d.data,
+    const docs = json.map(item => ({
+      id: item.id,
+      ref: doc(q.path || "items", item.id),
+      data: () => item.data,
       exists: () => true
     }));
     return {
       docs,
       empty: docs.length === 0,
       size: docs.length,
-      forEach: (cb: any) => docs.forEach(cb)
+      forEach: fn => docs.forEach(fn)
     };
   } catch (err) {
-    console.error("getDocs error:", err);
+    console.warn("getDocs error:", err);
     return { docs: [], empty: true, size: 0, forEach: () => {} };
   }
 }
 
-export async function getDoc(docRef: any) {
+export async function getDoc(docRef: any): Promise<{ id: string; data: () => any; exists: () => boolean }> {
   try {
-    const res = await fetch('/api/db/getDoc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/db/getDoc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(docRef)
     });
-    
+    const id = docRef.path ? docRef.path.split("/").pop() : "unknown";
     if (!res.ok) {
       console.warn("getDoc failed with status:", res.status);
-      return { exists: () => false, data: () => null, id: docRef.path.split('/').pop() };
+      return { exists: () => false, data: () => null, id };
     }
-
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      return { exists: () => false, data: () => null, id: docRef.path.split('/').pop() };
+    if (!(res.headers.get("content-type") || "").includes("application/json")) {
+      return { exists: () => false, data: () => null, id };
     }
-    
-    const data = await res.json();
-    if (!data) {
-      return { exists: () => false, data: () => null, id: docRef.path.split('/').pop() };
-    }
-    return {
-      id: data.id,
-      data: () => data.data,
-      exists: () => true
-    };
+    const json = await res.json();
+    return json
+      ? { id: json.id, data: () => json.data, exists: () => true }
+      : { exists: () => false, data: () => null, id };
   } catch (err) {
-    console.error("getDoc error:", err);
-    return { exists: () => false, data: () => null, id: docRef.path.split('/').pop() };
+    console.warn("getDoc error:", err);
+    const id = docRef.path ? docRef.path.split("/").pop() : "unknown";
+    return { exists: () => false, data: () => null, id };
   }
 }
 
-export async function setDoc(docRef: any, data: any, options?: any) {
+export const getDocFromServer = getDoc;
+
+export async function setDoc(docRef: any, data: any, options?: any): Promise<void> {
   try {
-    await fetch('/api/db/setDoc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    await fetch("/api/db/setDoc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ docRef, data, options })
     });
   } catch (err) {
@@ -145,11 +155,11 @@ export async function setDoc(docRef: any, data: any, options?: any) {
   }
 }
 
-export async function updateDoc(docRef: any, data: any) {
+export async function updateDoc(docRef: any, data: any): Promise<void> {
   try {
-    await fetch('/api/db/updateDoc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    await fetch("/api/db/updateDoc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ docRef, data })
     });
   } catch (err) {
@@ -157,26 +167,26 @@ export async function updateDoc(docRef: any, data: any) {
   }
 }
 
-export async function addDoc(collectionRef: any, data: any) {
+export async function addDoc(colRef: any, data: any): Promise<{ id: string }> {
   try {
-    const res = await fetch('/api/db/addDoc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ collectionRef, data })
+    const res = await fetch("/api/db/addDoc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ collectionRef: colRef, data })
     });
     if (!res.ok) throw new Error("addDoc failed");
     return await res.json();
   } catch (err) {
     console.warn("addDoc error:", err);
-    return { id: 'local_' + Math.random().toString(36).substring(2, 15) };
+    return { id: "local_" + Math.random().toString(36).substring(2, 15) };
   }
 }
 
-export async function deleteDoc(docRef: any) {
+export async function deleteDoc(docRef: any): Promise<void> {
   try {
-    await fetch('/api/db/deleteDoc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    await fetch("/api/db/deleteDoc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ docRef })
     });
   } catch (err) {
@@ -184,51 +194,52 @@ export async function deleteDoc(docRef: any) {
   }
 }
 
-export function onSnapshot(ref: any, callback: any) {
-  // Mock onSnapshot with a single fetch and polling
+export function onSnapshot(ref: any, callback: (snap: any) => void): (() => void) {
   if (ref.filters) {
-    // it's a query
     getDocs(ref).then(callback);
     const interval = setInterval(() => getDocs(ref).then(callback), 5000);
     return () => clearInterval(interval);
   } else {
-    // it's a doc
     getDoc(ref).then(callback);
     const interval = setInterval(() => getDoc(ref).then(callback), 5000);
     return () => clearInterval(interval);
   }
 }
 
-export function writeBatch(db: any) {
+export function writeBatch(_db?: any) {
   const operations: any[] = [];
   return {
-    set: (ref: any, data: any, options?: any) => { operations.push({ type: 'set', docRef: ref, data, options }); },
-    update: (ref: any, data: any) => { operations.push({ type: 'update', docRef: ref, data }); },
-    delete: (ref: any) => { operations.push({ type: 'delete', docRef: ref }); },
+    set: (docRef: any, data: any, options?: any) => {
+      operations.push({ type: "set", docRef, data, options });
+    },
+    update: (docRef: any, data: any) => {
+      operations.push({ type: "update", docRef, data });
+    },
+    delete: (docRef: any) => {
+      operations.push({ type: "delete", docRef });
+    },
     commit: async () => {
       if (operations.length === 0) return;
       try {
-        const response = await fetch("/api/db/batch", {
+        const res = await fetch("/api/db/batch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ operations })
         });
-        if (!response.ok) {
-          throw new Error(`Batch request failed with status ${response.status}`);
-        }
-      } catch (err) {
-        // Safe fallback in case endpoint fails or offline
-        await Promise.allSettled(operations.map(op => {
-          if (op.type === 'set') return setDoc(op.docRef, op.data, op.options);
-          if (op.type === 'update') return updateDoc(op.docRef, op.data);
-          if (op.type === 'delete') return deleteDoc(op.docRef);
-          return Promise.resolve();
-        }));
+        if (!res.ok) throw new Error(`Batch request failed with status ${res.status}`);
+      } catch {
+        await Promise.allSettled(
+          operations.map(op =>
+            op.type === "set"
+              ? setDoc(op.docRef, op.data, op.options)
+              : op.type === "update"
+              ? updateDoc(op.docRef, op.data)
+              : op.type === "delete"
+              ? deleteDoc(op.docRef)
+              : Promise.resolve()
+          )
+        );
       }
     }
   };
 }
-
-export const getDocFromServer = getDoc;
-
-export function limit(n: number) { return { field: 'limit', op: 'limit', value: n }; }

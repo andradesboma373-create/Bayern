@@ -5,6 +5,7 @@ import TeamLogo from './TeamLogo';
 import { RATING_CONFIG } from '../match-logic/config/RatingConfig';
 import { RatingSystem } from '../match-logic/systems/RatingSystem';
 import { getKdColorClass, getSwingColorClass, formatSwing } from '../lib/utils';
+import { getMapImageUrl } from '../utils/mapUtils';
 
 function StatsTable({ teamName, colorClass, stats, totalRounds }: { teamName: string, colorClass: string, borderClass?: string, stats?: any[], totalRounds?: number }) {
   if (!stats || !Array.isArray(stats) || stats.length === 0) {
@@ -406,7 +407,7 @@ export default function MatchDetails({ match, onClose }: { match: any, onClose: 
                       >
                         <div 
                           className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
-                          style={{ backgroundImage: `url('/maps/${cleanKey.replace(/\.(webp|jpg|png)$/i, "")}.webp')` }}
+                          style={{ backgroundImage: `url('${getMapImageUrl(mName)}')` }}
                           title={mName}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/60 flex flex-col items-center justify-center p-1">

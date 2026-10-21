@@ -1,147 +1,109 @@
-/**
- * so2Assets.ts
- * Dedicated Standoff 2 (SO2) Asset Library, Team Logos, Player Photos & Maps.
- * Provides pre-populated high-resolution assets, SVG vectors, and curated rosters.
- */
-
-export interface So2TeamPreset {
-  id: string;
-  name: string;
-  tag: string;
-  country: string;
-  logoUrl: string;
-  primaryColor: string;
-  description: string;
-  players: So2PlayerPreset[];
-}
-
-export interface So2PlayerPreset {
+export interface So2Player {
   id: string;
   nickname: string;
-  realName: string;
-  role: 'captain' | 'sniper' | 'rifler' | 'opener' | 'support' | 'lurker';
-  rating: number;
-  valRating: number;
-  photoUrl: string;
-  country: string;
+  teamName: string;
+  role?: string;
+  photoUrl?: string;
 }
 
-export interface So2MapPreset {
+export interface So2Team {
   id: string;
   name: string;
-  displayName: string;
+  logoUrl: string;
+  players: { id: string; nickname: string; role?: string; photoUrl?: string }[];
+}
+
+export interface So2Map {
+  id: string;
+  name: string;
   imageUrl: string;
-  description: string;
-  tSideBias: number;
-  ctSideBias: number;
 }
 
-// Crisp inline SVG helpers to ensure 100% offline availability and instant rendering
-function createSvgDataUrl(bgGrad: [string, string], iconSvg: string, text: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-    <defs>
-      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="${bgGrad[0]}"/>
-        <stop offset="100%" stop-color="${bgGrad[1]}"/>
-      </linearGradient>
-    </defs>
-    <rect width="100" height="100" rx="24" fill="url(#g)"/>
-    <g transform="translate(20, 15) scale(0.6)">${iconSvg}</g>
-    <text x="50" y="86" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="900" font-size="14" fill="#ffffff" letter-spacing="1">${text}</text>
-  </svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-function createPlayerAvatarUrl(bgColor: string, text: string, roleIcon: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-    <rect width="100" height="100" rx="50" fill="${bgColor}"/>
-    <circle cx="50" cy="40" r="22" fill="#ffffff" opacity="0.9"/>
-    <path d="M 20 92 C 20 68, 80 68, 80 92 Z" fill="#ffffff" opacity="0.85"/>
-    <circle cx="76" cy="76" r="14" fill="#0b0b14"/>
-    <text x="76" y="81" text-anchor="middle" font-size="11" fill="#ff8f00" font-weight="900">${roleIcon}</text>
-    <text x="50" y="60" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="900" font-size="11" fill="#000000">${text.slice(0, 3)}</text>
-  </svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-// 1. Curated Standoff 2 Teams with Rosters & Logos (Emptied as requested)
-export const SO2_TEAMS: So2TeamPreset[] = [];
-
-// 2. Official Standoff 2 Maps
-export const SO2_MAPS: So2MapPreset[] = [
-  {
-    id: 'sandstone',
-    name: 'Sandstone',
-    displayName: 'Sandstone',
-    imageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80',
-    description: 'Самая популярная соревновательная карта Standoff 2. Баланс между плентами A и B.',
-    tSideBias: 0.50,
-    ctSideBias: 0.50
-  },
-  {
-    id: 'province',
-    name: 'Province',
-    displayName: 'Province',
-    imageUrl: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80',
-    description: 'Узкие улочки старинного европейского городка, фонтан и опасные прострелы.',
-    tSideBias: 0.52,
-    ctSideBias: 0.48
-  },
-  {
-    id: 'rust',
-    name: 'Rust',
-    displayName: 'Rust',
-    imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
-    description: 'Индустриальная фабрика и контейнерный терминал с вертикальным геймплеем.',
-    tSideBias: 0.48,
-    ctSideBias: 0.52
-  },
-  {
-    id: 'hanami',
-    name: 'Hanami',
-    displayName: 'Hanami',
-    imageUrl: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1920&q=90',
-    description: 'Традиционный японский храм, цветущие сакуры и длинные снайперские коридоры.',
-    tSideBias: 0.47,
-    ctSideBias: 0.53
-  },
-  {
-    id: 'breeze',
-    name: 'Breeze',
-    displayName: 'Breeze',
-    imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-    description: 'Солнечное морское побережье, виллы и открытые площади.',
-    tSideBias: 0.51,
-    ctSideBias: 0.49
-  },
-  {
-    id: 'zone9',
-    name: 'Zone 9',
-    displayName: 'Zone 9',
-    imageUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80',
-    description: 'Секретный военный комплекс с закрытыми коридорами и быстрыми выходами на точки.',
-    tSideBias: 0.49,
-    ctSideBias: 0.51
-  },
-  {
-    id: 'dune',
-    name: 'Dune',
-    displayName: 'Dune',
-    imageUrl: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=800&q=80',
-    description: 'Песчаная буря и древние руины, созданные для тактических перетяжек.',
-    tSideBias: 0.50,
-    ctSideBias: 0.50
-  }
+export const SO2_MAPS: So2Map[] = [
+  { id: 'sandstone', name: 'Sandstone', imageUrl: '/maps/so2/sandstone.webp' },
+  { id: 'rust', name: 'Rust', imageUrl: '/maps/so2/rust.webp' },
+  { id: 'province', name: 'Province', imageUrl: '/maps/so2/province.webp' },
+  { id: 'breeze', name: 'Breeze', imageUrl: '/maps/so2/breeze.webp' },
+  { id: 'dune', name: 'Dune', imageUrl: '/maps/so2/dune.webp' },
+  { id: 'hanami', name: 'Hanami', imageUrl: '/maps/so2/hanami.webp' },
+  { id: 'prison', name: 'Prison', imageUrl: '/maps/so2/prison.webp' },
 ];
 
-// Helper: flat list of all SO2 players
-export function getAllSo2Players(): So2PlayerPreset[] {
-  return [];
-}
+export const SO2_TEAMS: So2Team[] = [
+  {
+    id: 'saints',
+    name: 'Saints',
+    logoUrl: '/logos/saints.svg',
+    players: [
+      { id: 'p_sai_1', nickname: 'GentemaN', role: 'Captain' },
+      { id: 'p_sai_2', nickname: 'w1ne', role: 'Sniper' },
+      { id: 'p_sai_3', nickname: 'lunax', role: 'Rifler' },
+      { id: 'p_sai_4', nickname: 'FL4NE', role: 'Entry' },
+      { id: 'p_sai_5', nickname: 'sk1ll', role: 'Support' },
+    ]
+  },
+  {
+    id: 'horizon',
+    name: 'Horizon',
+    logoUrl: '/logos/horizon.png',
+    players: [
+      { id: 'p_hzn_1', nickname: 'johan', role: 'Captain' },
+      { id: 'p_hzn_2', nickname: 'erax', role: 'Sniper' },
+      { id: 'p_hzn_3', nickname: 'traffer', role: 'Rifler' },
+      { id: 'p_hzn_4', nickname: 'f1ash', role: 'Entry' },
+      { id: 'p_hzn_5', nickname: 'k1d', role: 'Support' },
+    ]
+  },
+  {
+    id: 'necessary',
+    name: 'Necessary',
+    logoUrl: '/logos/necessary.svg',
+    players: [
+      { id: 'p_ncs_1', nickname: 'kronos', role: 'Captain' },
+      { id: 'p_ncs_2', nickname: 'blitz', role: 'Sniper' },
+      { id: 'p_ncs_3', nickname: 'nexus', role: 'Rifler' },
+      { id: 'p_ncs_4', nickname: 'spark', role: 'Entry' },
+      { id: 'p_ncs_5', nickname: 'venom', role: 'Support' },
+    ]
+  },
+  {
+    id: 'streeteight',
+    name: 'StreetEight',
+    logoUrl: '/logos/streeteight.svg',
+    players: [
+      { id: 'p_str_1', nickname: 'dexter', role: 'Captain' },
+      { id: 'p_str_2', nickname: 'shadow', role: 'Sniper' },
+      { id: 'p_str_3', nickname: 'ghost', role: 'Rifler' },
+      { id: 'p_str_4', nickname: 'storm', role: 'Entry' },
+      { id: 'p_str_5', nickname: 'frost', role: 'Support' },
+    ]
+  },
+  {
+    id: 'noobs',
+    name: 'Noobs Team',
+    logoUrl: '/logos/noobs.svg',
+    players: [
+      { id: 'p_nb_1', nickname: 'alpha', role: 'Captain' },
+      { id: 'p_nb_2', nickname: 'bravo', role: 'Sniper' },
+      { id: 'p_nb_3', nickname: 'charlie', role: 'Rifler' },
+      { id: 'p_nb_4', nickname: 'delta', role: 'Entry' },
+      { id: 'p_nb_5', nickname: 'echo', role: 'Support' },
+    ]
+  },
+];
 
-export const SO2_PLAYERS: (So2PlayerPreset & { team: string; teamId: string; teamLogo: string; game: string; isAcademy?: boolean })[] = [];
-
-// Helper: get team logo by name
-export function getSo2TeamLogo(teamName: string): string | undefined {
-  return undefined;
+export function getAllSo2Players(): So2Player[] {
+  const result: So2Player[] = [];
+  SO2_TEAMS.forEach(team => {
+    team.players.forEach(p => {
+      result.push({
+        id: p.id,
+        nickname: p.nickname,
+        teamName: team.name,
+        role: p.role,
+        photoUrl: p.photoUrl
+      });
+    });
+  });
+  return result;
 }

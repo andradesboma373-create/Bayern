@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from '../firebase';
-import { Newspaper, Users, Plus, X, Image as ImageIcon, Search, LayoutTemplate, Trash2, ArrowRight, Download, User } from 'lucide-react';
+import { Newspaper, Users, Plus, X, Image as ImageIcon, Search, LayoutTemplate, Trash2, ArrowRight, Download, User, Sparkles, Trophy, Swords, Crown, Shield, Star } from 'lucide-react';
 import * as htmlToImage from 'html-to-image';
 import TeamLogo from './TeamLogo';
 import PlayerAvatar from './PlayerAvatar';
@@ -13,6 +13,46 @@ export default function News({ user }: { user: any }) {
   const [teams, setTeams] = useState<any[]>([]);
   const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCardStudio, setShowCardStudio] = useState(false);
+  const [studioTemplate, setStudioTemplate] = useState<'mvp' | 'transfer' | 'comparison' | 'top_openers' | 'roster'>('mvp');
+  const [studioBg, setStudioBg] = useState('/maps/cs2/mirage.jpg');
+  const [p1Name, setP1Name] = useState('s1mple');
+  const [p1Team, setP1Team] = useState('NAVI');
+  const [p1Rating, setP1Rating] = useState('1.38');
+  const [p1Kd, setP1Kd] = useState('1.45');
+  const [p1Photo, setP1Photo] = useState('/assets/so2/DefaultPlayer.png');
+  const [p2Name, setP2Name] = useState('ZywOo');
+  const [p2Team, setP2Team] = useState('Vitality');
+  const [p2Rating, setP2Rating] = useState('1.35');
+  const [p2Kd, setP2Kd] = useState('1.42');
+  const [p2Photo, setP2Photo] = useState('/assets/so2/DefaultPlayer.png');
+  const [studioTeamName, setStudioTeamName] = useState('NAVI Esports');
+
+  const bgGallery = [
+    { name: 'Mirage', url: '/maps/cs2/mirage.jpg' },
+    { name: 'Inferno', url: '/maps/cs2/inferno.jpg' },
+    { name: 'Dust II', url: '/maps/cs2/dust2.jpg' },
+    { name: 'Anubis', url: '/maps/cs2/anubis.jpg' },
+    { name: 'Nuke', url: '/maps/cs2/nuke.jpg' },
+    { name: 'Ancient', url: '/maps/cs2/ancient.jpg' },
+    { name: 'Sandstone (So2)', url: '/maps/so2/sandstone.webp' },
+    { name: 'Rust (So2)', url: '/maps/so2/rust.webp' }
+  ];
+
+  const handleDownloadPromoCard = async () => {
+    const node = document.getElementById('promo-card-preview');
+    if (!node) return;
+    try {
+      const dataUrl = await htmlToImage.toPng(node, { cacheBust: true, pixelRatio: 2 });
+      const link = document.createElement('a');
+      link.download = `esports_card_${studioTemplate}_${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error("Export error", err);
+    }
+  };
+
 
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -386,13 +426,22 @@ export default function News({ user }: { user: any }) {
           </h1>
           <p className="text-white/40 mt-1">Публикуйте анонсы, трансферы и важные события</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          СОЗДАТЬ НОВОСТЬ
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCardStudio(true)}
+            className="px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-purple-600/20 flex items-center gap-2 cursor-pointer"
+          >
+            <Trophy className="w-4 h-4 text-yellow-300" />
+            🎨 Студия карточек и MVP
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2 cursor-pointer"
+          >
+            <Plus className="w-5 h-5" />
+            СОЗДАТЬ НОВОСТЬ
+          </button>
+        </div>
       </div>
 
       {loading ? (

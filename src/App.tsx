@@ -1,7 +1,7 @@
 import { loadTournaments, compactTournamentForStorage, cleanupTournamentStorageQuota, getCanonicalRoomId } from './components/setka_tourn/storage';
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity, Folder, Flame, Image, Bot, Menu } from 'lucide-react';
+import { MoreVertical, X, Gamepad2, Users, Trophy, BarChart2, Calendar, User, Newspaper, LayoutTemplate, Database, Settings, Layout, LogOut, ChevronDown, Check, Zap, RefreshCw, Sparkles, Eye, EyeOff, Activity, Folder, Flame, Image, Bot, Menu } from 'lucide-react';
 import { auth, logout, db } from './firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from './firebase';
 import { collection, query, where, getDocs, onSnapshot } from './firebase';
@@ -18,6 +18,7 @@ import Matches from './components/Matches';
 import Teams from './components/Teams';
 import Players from './components/Players';
 import News from './components/News';
+import Studio from './components/Studio';
 import SettingsComponent from './components/Settings';
 import MapCenter from './components/MapCenter';
 import Transfers from './components/Transfers';
@@ -54,6 +55,7 @@ function NavPanel({
     { icon: Calendar, label: 'Матчи', path: '/matches', color: 'text-amber-400' },
     { icon: Trophy, label: 'Турниры', path: '/tournaments', color: 'text-purple-400' },
     { icon: Sparkles, label: 'Турниры Бета', path: '/tournaments-beta', color: 'text-orange-400' },
+    { icon: LayoutTemplate, label: 'Студия', path: '/studio', color: 'text-pink-400' },
   ];
 
   const adminItems = isBamepAdmin ? [
@@ -63,7 +65,7 @@ function NavPanel({
   const secondaryItems = [
     { icon: Users, label: 'Команды', path: '/teams' },
     { icon: User, label: 'Игроки', path: '/players' },
-    { icon: Bot, label: 'Нейросеть', path: '/ai-negotiator', color: 'text-purple-400' },
+
     { icon: Settings, label: 'Настройки', path: '/settings' },
   ];
 
@@ -751,6 +753,7 @@ export default function App() {
               <Route path="/teams" element={<Teams user={user} />} />
               <Route path="/players" element={<Players user={user} />} />
               <Route path="/news" element={<News user={user} />} />
+              <Route path="/studio" element={<Studio user={user} />} />
               <Route path="/transfers" element={<Transfers user={user} />} />
               <Route path="/ai-negotiator" element={<AiNegotiator user={user} />} />
               <Route path="/map-center" element={<AiNegotiator user={user} />} />

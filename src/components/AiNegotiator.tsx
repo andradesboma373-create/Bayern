@@ -232,7 +232,8 @@ export default function AiNegotiator({ user }: { user: any }) {
     loadData();
     window.addEventListener('teams-updated', loadData);
     window.addEventListener('db-user-updated', loadData);
-    return () => {
+
+  return () => {
       window.removeEventListener('teams-updated', loadData);
       window.removeEventListener('db-user-updated', loadData);
     };
@@ -1043,6 +1044,23 @@ export default function AiNegotiator({ user }: { user: any }) {
   };
 
   const isApproved = latestVerdict?.verdict === 'ACCEPTED' || (latestVerdict?.fairnessScore && latestVerdict.fairnessScore >= 70);
+
+  if (!targetTeam || !userTeam) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-[#12121a] rounded-2xl border border-white/5 text-center my-12 max-w-xl mx-auto">
+        <Bot className="w-12 h-12 text-purple-400 mb-4 animate-bounce" />
+        <h2 className="text-xl font-black text-white uppercase mb-2">ИИ Переговорщик загружается...</h2>
+        <p className="text-xs text-white/50 mb-6">Создайте или выберите команды в разделе «Команды» или загрузите состав через JSON.</p>
+        <button 
+          type="button" 
+          onClick={() => handleLoadPepesDirectly('target')}
+          className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase transition-colors cursor-pointer"
+        >
+          Загрузить пример (Pepes)
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div 

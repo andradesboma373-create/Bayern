@@ -1,187 +1,110 @@
 export interface Team {
   id: string;
   name: string;
+  teamName?: string;
   logoUrl?: string;
-  game?: string;
+  logo?: string;
+  rating?: number;
+  seed?: number;
   players?: any[];
+  [key: string]: any;
 }
 
 export interface Match {
-  id: string;
-  round?: number;
-  team1: Team | null;
-  team2: Team | null;
-  score1: number;
-  score2: number;
-  winnerId: string | null;
-  isDraw?: boolean;
+  id?: string;
+  team1?: Team | null;
+  team2?: Team | null;
+  score1?: number;
+  score2?: number;
+  winnerId?: string | null;
   isFinished?: boolean;
-  importance?: 'none' | 'semi' | 'final'; // Important matches (Gold/Silver dots)
+  isDraw?: boolean;
+  importance?: 'final' | 'semi' | 'none' | string;
+  stage?: string;
+  map?: string;
+  date?: string;
+  [key: string]: any;
 }
 
 export interface Group {
-  id: string;
+  id?: string;
   name: string;
-  teams: Team[];
+  teams?: Team[];
   matches: Match[];
+  standings?: any[];
+  [key: string]: any;
 }
 
 export interface GslGroup {
   id: string;
   name: string;
-  teams: Team[];
   upperBracket: Match[][];
   lowerBracket: Match[][];
+  consolidationMatch?: Match;
+  standings?: any[];
+  isGroupFinished?: boolean;
+  [key: string]: any;
 }
 
 export interface TournamentStageConfig {
   id?: string;
   name?: string;
-  type: 'playoff' | 'qualifier' | 'gsl_groups' | 'swiss' | 'groups';
-  teams: Team[];
-  numQuals?: number;
-  advancePerQual?: number;
+  type?: string;
+  eliminationType?: string;
   bracketRounds?: Match[][];
   losersBracketRounds?: Match[][];
   grandFinal?: Match[];
   groups?: Group[];
   gslGroups?: GslGroup[];
   swissRounds?: Match[][];
+  qualifiersBrackets?: any[];
   tieredBracketRounds?: Match[][];
-  qualifiersBrackets?: Match[][][];
-  completed?: boolean;
-  advancingTeams?: Team[];
+  teams?: Team[];
+  [key: string]: any;
 }
 
 export interface TournamentSettings {
-  mode: 'single_stage' | 'two_stage' | 'swiss' | 'multi_stage';
-  numStages?: number;
+  mode?: 'single_stage' | 'two_stage' | 'custom' | string;
+  stage1Type?: 'playoff' | 'groups' | 'gsl_groups' | 'swiss' | 'qualifier' | string;
+  stage2Type?: 'playoff' | 'tiered' | string;
   stages?: TournamentStageConfig[];
-  game?: string;
-  matchFormat?: string;
-  eliminationType?: 'single' | 'double';
-  stage1Type?: 'groups' | 'swiss' | 'playoff' | 'gsl_groups' | 'qualifier';
-  stage2Type?: 'tiered' | 'single' | 'double';
-  hasStage2?: boolean;
-  
-  // Swiss stage settings
+  eliminationType?: 'single' | 'double' | string;
+  matchFormat?: 'bo1' | 'bo3' | 'bo5' | 'BO1' | 'BO3' | 'BO5' | string;
+  bgImage?: string;
+  bgTheme?: string;
   swissWinsToAdvance?: number;
   swissLossesToEliminate?: number;
-  swissLogosOnly?: boolean;
-  
-  // Single elimination
-  singleEliminationTeams?: Team[];
-  
-  // Seeding type
-  seedingType?: 'random' | 'manual' | 'skill';
-  
-  // Group stage settings
-  matchesPerPairing?: 1 | 2;
-  winPoints?: number;
-  drawPoints?: number;
-  lossPoints?: number;
-  advancingPerGroup?: number;
-  numberOfGroups?: number;
-  groupAssignments?: Record<string, string[]>; // groupId -> array of team ids (or team objects)
-  gslAdvanceCount?: 2 | 3 | 4; // 2 = Classic GSL / Major (Top-2), 3 = IEM / BLAST (Top-3), 4 = ESL Pro League (Top-4)
-
-  advancePerQual?: number;
-  numQuals?: number;
-
-  // Bracket mode
+  gslAdvanceCount?: number;
+  game?: 'cs2' | 'so2' | string;
+  cardThemeColor?: string;
+  boxStyle?: string;
+  btnStyle?: string;
   bracketMode?: 'standard' | 'realtime';
-
-  // Custom styling settings
-  boxStyle?: 'classic' | 'minimalist' | 'cyber' | 'retro' | 'dark' | 'neon' | 'glass' | 'brutalist' | 'light' | 'gold';
-  cardThemeColor?: string; // hex or color preset e.g. '#ff8f00', '#00f0ff', '#10b981', '#a855f7', '#ef4444', '#eab308'
-  btnStyle?: 'gradient' | 'neon' | 'solid' | 'brutal';
-  bracketScale?: number; // percentage 50 - 150
-  bgBlur?: number;
-  bgOpacity?: number;
-  bgTheme?: string;
-  bgImage?: string;
-}
-
-export function getBoxStyle(style?: 'classic' | 'minimalist' | 'cyber' | 'retro') {
-  const s = style || 'classic';
-  switch (s) {
-    case 'minimalist':
-      return {
-        outerCard: 'bg-transparent border border-white/10 rounded-lg p-3 hover:border-white/20',
-        winnerText: 'text-white font-black',
-        loserText: 'text-white/30 font-normal',
-        defaultText: 'text-white/70 font-medium',
-        scoreInput: 'bg-transparent text-center text-xs font-bold border border-white/10 rounded focus:border-white/35 outline-none text-white',
-        btnConfirm: 'w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1 cursor-pointer'
-      };
-    case 'cyber':
-      return {
-        outerCard: 'bg-black/45 rounded-xl border border-cyan-500/30 p-3 shadow-[0_0_15px_rgba(6,182,212,0.1)] hover:border-cyan-400/60',
-        winnerText: 'text-cyan-400 font-extrabold drop-shadow-[0_0_5px_rgba(34,211,238,0.3)]',
-        loserText: 'text-white/20 line-through',
-        defaultText: 'text-white/80 font-bold',
-        scoreInput: 'bg-black text-center text-xs font-black font-mono border border-cyan-500/30 rounded focus:border-cyan-400 outline-none text-cyan-400',
-        btnConfirm: 'w-full bg-cyan-950/30 hover:bg-cyan-900/40 text-cyan-400 border border-cyan-500/40 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer'
-      };
-    case 'retro':
-      return {
-        outerCard: 'bg-[#001100] rounded-none border border-green-500/40 p-3 font-mono hover:border-green-400',
-        winnerText: 'text-green-400 font-bold uppercase tracking-widest',
-        loserText: 'text-green-950',
-        defaultText: 'text-green-600',
-        scoreInput: 'bg-black text-center text-xs font-bold border border-green-500/40 rounded-none focus:border-green-400 outline-none text-green-400',
-        btnConfirm: 'w-full bg-black hover:bg-green-950/30 text-green-400 border border-green-500/40 py-1 rounded-none text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1 cursor-pointer'
-      };
-    case 'classic':
-    default:
-      return {
-        outerCard: 'bg-black/35 rounded-xl border border-white/5 p-3 hover:border-white/20',
-        winnerText: 'text-emerald-400 font-extrabold',
-        loserText: 'text-white/40',
-        defaultText: 'text-white/80 font-bold',
-        scoreInput: 'bg-black text-center text-xs font-black font-mono border border-white/10 rounded focus:border-[#ff8f00]/50 outline-none text-white',
-        btnConfirm: 'w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1 cursor-pointer'
-      };
-  }
+  [key: string]: any;
 }
 
 export interface Tournament {
-  channelId?: string;
-  userId?: string;
-  game?: string;
   id: string;
   name: string;
   logoUrl?: string;
-  createdAt: number;
-  status?: 'active' | 'completed' | 'upcoming' | string;
-  settings: TournamentSettings;
-  teams: Team[];
-  winnerName?: string;
-  winnerTeam?: string;
   prizePool?: string;
-  matchIds?: string[];
-  matches?: Match[];
+  game?: 'cs2' | 'so2' | string;
+  channelId?: string;
+  userId?: string;
   completed?: boolean;
-  mvpAward?: any;
-  evpAwards?: any[];
-  awards?: { mvpId?: string; evpIds?: string[] };
-  
-  // State
-  activeStage: number; // 1-based index of the active stage
-  
-  // Stage 1 (Group stage)
-  groups?: Group[];
-  gslGroups?: GslGroup[];
-  
-  // Bracket
+  winnerName?: string;
+  activeStage?: number;
+  settings?: TournamentSettings;
+  teams?: Team[];
   bracketRounds?: Match[][];
   losersBracketRounds?: Match[][];
   grandFinal?: Match[];
-  tieredBracketRounds?: Match[][];
-
-  // Swiss
+  groups?: Group[];
+  gslGroups?: GslGroup[];
   swissRounds?: Match[][];
-
-  // Qualifiers
-  qualifiersBrackets?: Match[][][];
+  qualifiersBrackets?: any[];
+  tieredBracketRounds?: Match[][];
+  matchIds?: string[];
+  createdAt?: string;
+  [key: string]: any;
 }

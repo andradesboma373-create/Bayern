@@ -1,330 +1,133 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function cleanupLocalStorage(aggressive = false) {
-  if (typeof window === 'undefined') return;
+export function safeLocalStorageSet(key: string, value: any): boolean {
   try {
-    const keysToRemove: string[] = [];
-    const oversizedKeysToCompact: { key: string; val: string }[] = [];
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-
-      // 1. Transient / temporary / legacy / preview keys (NEVER delete user assets like tournament_bg_ or player_avatar_)
-      if (
-        key.startsWith('cached_db_user_') ||
-        key.startsWith('temp_') ||
-        key.startsWith('preview_') ||
-        key.startsWith('backup_') ||
-        key.includes('@matchsimulator.com')
-      ) {
-        keysToRemove.push(key);
-        continue;
-      }
-
-      // 3. Isolated duplicate tournament items if aggressive
-      if (aggressive && key.startsWith('tournament_item_')) {
-        keysToRemove.push(key);
-        continue;
-      }
-
-      // 4. Compact oversized keys with embedded base64 data URLs
-      try {
-        const val = localStorage.getItem(key);
-        if (val && val.length > 30000 && val.includes('data:image/')) {
-          oversizedKeysToCompact.push({ key, val });
-        }
-      } catch (e) {}
-    }
-
-    keysToRemove.forEach(k => {
-      try { localStorage.removeItem(k); } catch (e) {}
-    });
-
-    // Compact oversized keys by stripping base64 images
-    for (const { key, val } of oversizedKeysToCompact) {
-      try {
-        const compacted = val.replace(/"data:image\/[^;]+;base64,[^"]+"/g, 'null');
-        localStorage.setItem(key, compacted);
-      } catch (e) {
-        if (aggressive) {
-          try { localStorage.removeItem(key); } catch (err) {}
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("Cleanup localStorage failed:", e);
-  }
-}
-
-export function sanitizeStoragePayload(data: any): any {
-  if (!data) return data;
-  if (typeof data === 'string') {
-    return data;
-  }
-  if (Array.isArray(data)) {
-    return data.map(item => sanitizeStoragePayload(item));
-  }
-  if (typeof data === 'object') {
-    const cleaned: any = {};
-    for (const key of Object.keys(data)) {
-      // Exclude heavy roundLogs from stored objects
-      if (key === 'roundLogs') continue;
-      const val = data[key];
-      // NEVER destroy user avatar, logo, or tournament background images
-      if (key === 'avatarUrl' || key === 'logoUrl' || key === 'bgImage' || key === 'photo') {
-        cleaned[key] = val;
-      } else if (typeof val === 'string' && val.startsWith('data:image/') && val.length > 500000) {
-        cleaned[key] = null;
-      } else {
-        cleaned[key] = sanitizeStoragePayload(val);
-      }
-    }
-    return cleaned;
-  }
-  return data;
-}
-
-export function safeLocalStorageSet(key: string, data: any): boolean {
-  if (typeof window === 'undefined') return false;
-
-  let jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
-
-  // 1. Direct try
-  try {
-    localStorage.setItem(key, jsonStr);
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    localStorage.setItem(key, serialized);
     return true;
   } catch (e) {
-    // Quota reached, continue with cleanup
+    console.warn(`[safeLocalStorageSet] Quota exceeded for key ${key}, attempting cleanup...`, e);
+    try {
+      // Clean up old matches or cache if quota full
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('match_cache_') || k.startsWith('sim_history_') || k.startsWith('temp_'))) {
+          localStorage.removeItem(k);
+        }
+      }
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+      localStorage.setItem(key, serialized);
+      return true;
+    } catch (inner) {
+      console.error(`[safeLocalStorageSet] Failed to write key ${key}:`, inner);
+      return false;
+    }
   }
+}
 
-  // 2. Perform standard cleanup
-  cleanupLocalStorage(false);
-
-  // 3. Sanitize payload (strip large base64 image strings & round logs)
+export function saveMatchesToLocalStorage(matches: any, key: string = 'savedMatches'): void {
   try {
-    const sanitized = sanitizeStoragePayload(data);
-    jsonStr = typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized);
-    localStorage.setItem(key, jsonStr);
-    return true;
-  } catch (e) {}
-
-  // 4. Fast string regex stripping for any embedded data URLs
-  try {
-    const stripped = jsonStr.replace(/"data:image\/[^;]+;base64,[^"]+"/g, 'null');
-    localStorage.setItem(key, stripped);
-    return true;
-  } catch (e) {}
-
-  // 5. Aggressive cleanup of localStorage (remove tournament item caches & old backgrounds)
-  cleanupLocalStorage(true);
-
-  try {
-    const stripped = jsonStr.replace(/"data:image\/[^;]+;base64,[^"]+"/g, 'null');
-    localStorage.setItem(key, stripped);
-    return true;
-  } catch (e) {}
-
-  // 6. If data is an array, try smaller slices
-  if (Array.isArray(data)) {
-    const sliceSteps = [
-      Math.min(25, Math.floor(data.length * 0.7)),
-      Math.min(15, Math.floor(data.length * 0.5)),
-      10,
-      5,
-      2,
-      1
-    ];
-    for (const count of sliceSteps) {
-      if (count <= 0 || count >= data.length) continue;
+    const arrMatches = Array.isArray(matches) ? matches : [matches];
+    const existingStr = localStorage.getItem(key);
+    let existing: any[] = [];
+    if (existingStr) {
       try {
-        const sliced = data.slice(0, count);
-        const sanitized = sanitizeStoragePayload(sliced);
-        const compactStr = JSON.stringify(sanitized).replace(/"data:image\/[^;]+;base64,[^"]+"/g, 'null');
-        localStorage.setItem(key, compactStr);
-        return true;
-      } catch (err) {}
+        existing = JSON.parse(existingStr);
+        if (!Array.isArray(existing)) existing = [];
+      } catch {}
     }
-  }
-
-  return false;
-}
-
-export function saveMatchesToLocalStorage(userId: string, matchesArray: any[]) {
-  if (!userId) return;
-  
-  // Sort by date descending (newest first)
-  const sorted = [...matchesArray].sort((a, b) => {
-    const dA = a && a.date ? new Date(a.date).getTime() : 0;
-    const dB = b && b.date ? new Date(b.date).getTime() : 0;
-    return dB - dA;
-  });
-
-  // Keep up to 500 newest matches. Strip heavy base64 and round logs to guarantee small footprint.
-  const cleaned = sorted.slice(0, 500).map((m: any) => {
-    if (!m) return m;
-    
-    const t1Name = m.team1Name || m.team1?.name || (typeof m.team1 === 'string' ? m.team1 : 'Команда 1');
-    const t2Name = m.team2Name || m.team2?.name || (typeof m.team2 === 'string' ? m.team2 : 'Команда 2');
-    const t1Score = m.team1Score ?? m.score1 ?? 0;
-    const t2Score = m.team2Score ?? m.score2 ?? 0;
-
-    // Strip heavy base64 logos
-    const t1Logo = (m.team1Logo && typeof m.team1Logo === 'string' && m.team1Logo.startsWith('data:image/')) ? null : m.team1Logo;
-    const t2Logo = (m.team2Logo && typeof m.team2Logo === 'string' && m.team2Logo.startsWith('data:image/')) ? null : m.team2Logo;
-
-    // Strip base64 avatars from stats
-    const stripPlayerAvatars = (statsArr: any[]) => {
-      if (!Array.isArray(statsArr)) return [];
-      return statsArr.map(p => {
-        if (!p) return p;
-        const { avatar, photo, ...rest } = p;
-        return rest;
-      });
-    };
-
-    return {
-      ...m,
-      team1Name: t1Name,
-      team2Name: t2Name,
-      team1Score: t1Score,
-      team2Score: t2Score,
-      team1Logo: t1Logo,
-      team2Logo: t2Logo,
-      team1Stats: stripPlayerAvatars(m.team1Stats),
-      team2Stats: stripPlayerAvatars(m.team2Stats),
-      // Strip roundLogs inside maps if present to save space
-      maps: Array.isArray(m.maps) ? m.maps.map((map: any) => {
-        if (!map) return map;
-        const { roundLogs, ...mapRest } = map;
-        return {
-          ...mapRest,
-          mapName: mapRest.mapName || mapRest.name || 'de_inferno',
-          team1Score: mapRest.team1Score ?? mapRest.score1 ?? 0,
-          team2Score: mapRest.team2Score ?? mapRest.score2 ?? 0,
-          team1Stats: stripPlayerAvatars(mapRest.team1Stats),
-          team2Stats: stripPlayerAvatars(mapRest.team2Stats),
-        };
-      }) : []
-    };
-  });
-
-  // Safe fallback writer loop using safeLocalStorageSet
-  const sliceCounts = [500, 300, 200, 100, 50, 30, 20, 15, 10, 5, 2, 1, 0];
-  for (const count of sliceCounts) {
-    const payload = count === 0 ? [] : cleaned.slice(0, count);
-    if (safeLocalStorageSet(`matches_${userId}`, payload)) {
-      break;
-    }
+    const combined = [...arrMatches, ...existing.filter(e => !arrMatches.some(m => m.id === e.id))].slice(0, 500);
+    safeLocalStorageSet(key, combined);
+  } catch (e) {
+    console.error('Error saving matches to localStorage:', e);
   }
 }
 
-/**
- * Color styling for K/D ratio:
- * - > 1.10: green (text-emerald-400 font-bold)
- * - < 0.95: red (text-red-400 font-bold)
- * - 0.95 - 1.10: gray (text-white/60 font-medium)
- */
+export function getKdColorClass(kd: number | string): string {
+  const num = typeof kd === 'string' ? parseFloat(kd) : kd;
+  if (isNaN(num)) return 'text-zinc-400';
+  if (num >= 1.3) return 'text-emerald-400 font-bold';
+  if (num >= 1.05) return 'text-green-400';
+  if (num >= 0.95) return 'text-white/90';
+  if (num >= 0.8) return 'text-amber-400';
+  return 'text-red-400';
+}
+
+export function getSwingColorClass(swing: number | string): string {
+  const num = typeof swing === 'string' ? parseFloat(swing) : swing;
+  if (isNaN(num) || num === 0) return 'text-zinc-400';
+  return num > 0 ? 'text-emerald-400' : 'text-red-400';
+}
+
+export function formatSwing(val: number | string): string {
+  const num = typeof val === 'string' ? parseFloat(val) : val;
+  if (isNaN(num)) return '0.00';
+  return (num > 0 ? '+' : '') + num.toFixed(2);
+}
+
 export function shuffleArray<T>(array: T[]): T[] {
-  const result = [...array];
-  for (let i = result.length - 1; i > 0; i--) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  return result;
+  return arr;
 }
 
-export function getKdColorClass(kd: number | string | undefined | null): string {
-  if (kd === undefined || kd === null || kd === '' || kd === '-') return 'text-white/50 font-mono text-xs';
-  const val = typeof kd === 'number' ? kd : parseFloat(String(kd));
-  if (isNaN(val)) return 'text-white/50 font-mono text-xs';
-  if (val > 1.10) return 'text-emerald-400 font-bold';
-  if (val < 0.95) return 'text-red-400 font-bold';
-  return 'text-white/60 font-medium';
-}
-
-/**
- * Color styling for Round Swing:
- * - >= 1.0%: bright green bold
- * - > 0.05%: noticeable emerald green
- * - <= -1.0%: bright red bold
- * - < -0.05%: noticeable rose red
- * - between -0.05% and +0.05%: neutral gray
- */
-export function getSwingColorClass(swing: number | string | undefined | null): string {
-  if (swing === undefined || swing === null || swing === '' || swing === '-') return 'text-white/40 font-mono text-xs';
-  let val: number;
-  if (typeof swing === 'number') {
-    val = swing;
-  } else {
-    const cleaned = String(swing).replace(/%/g, '').replace(/\+/g, '').replace(/,/g, '.').trim();
-    val = parseFloat(cleaned);
-  }
-  if (isNaN(val)) return 'text-white/40 font-mono text-xs';
-  if (val >= 1.0) return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold';
-  if (val > 0.05) return 'bg-emerald-500/10 text-emerald-400 font-semibold';
-  if (val <= -1.0) return 'bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold';
-  if (val < -0.05) return 'bg-rose-500/10 text-rose-400 font-semibold';
-  return 'text-white/50 bg-white/[0.04] font-medium';
-}
-
-/**
- * Formats Round Swing with exact precision (2 decimal places):
- * e.g. +0.78%, -0.45%, 0.00%
- */
-export function formatSwing(swing: number | string | undefined | null): string {
-  if (swing === undefined || swing === null || swing === '' || swing === '-') return '-';
-  let val: number;
-  if (typeof swing === 'number') {
-    val = swing;
-  } else {
-    const cleaned = String(swing).replace(/%/g, '').replace(/\+/g, '').replace(/,/g, '.').trim();
-    val = parseFloat(cleaned);
-  }
-  if (isNaN(val)) return '-';
-  const formatted = Math.abs(val).toFixed(2);
-  if (val > 0.001) return `+${formatted}%`;
-  if (val < -0.001) return `-${formatted}%`;
-  return `0.00%`;
-}
-
-/**
- * Compresses and resizes an image before upload to avoid payload size issues.
- */
-export async function compressImage(file: File, maxWidth = 1920, quality = 0.8): Promise<Blob> {
+export async function compressImage(
+  dataUrlOrFile: string | File,
+  maxWidth: number = 800,
+  maxHeight: number = 800,
+  quality: number = 0.8
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
+    let src = '';
+    if (typeof dataUrlOrFile === 'string') {
+      src = dataUrlOrFile;
+      processSrc(src);
+    } else {
+      const reader = new FileReader();
+      reader.onload = e => {
+        src = e.target?.result as string;
+        processSrc(src);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(dataUrlOrFile);
+    }
+
+    function processSrc(dataSrc: string) {
       const img = new Image();
-      img.src = event.target?.result as string;
       img.onload = () => {
-        const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
 
         if (width > maxWidth) {
-          height = (maxWidth / width) * height;
+          height = Math.round((height * maxWidth) / width);
           width = maxWidth;
         }
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
 
+        const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Canvas toBlob failed'));
-        }, 'image/jpeg', quality);
+        if (!ctx) {
+          resolve(dataSrc);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/webp', quality));
       };
-      img.onerror = (err) => reject(err);
-    };
-    reader.onerror = (err) => reject(err);
+      img.onerror = () => resolve(dataSrc);
+      img.src = dataSrc;
+    }
   });
 }
